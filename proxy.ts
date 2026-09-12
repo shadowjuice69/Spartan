@@ -19,10 +19,17 @@ export async function proxy(request: NextRequest) {
 
   const discordUserId = response.headers.get('x-spartan-discord-id')
 
-  // Unauthenticated visitors may see the shell, but an authenticated identity
-  // must pass the full Spartan security gate before reaching command systems.
+  // The command root is protected too. Discord OAuth must complete before the
+  // command shell can be viewed; the OAuth callback performs the first
+  // authoritative IP/session checkpoint.
   if (path === '/') {
-    if (!discordUserId) return response
+    if (!discordUserId) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/login'
+      url.searchParams.set('error', 'discord-required')
+      return NextResponse.redirect(url)
+    }
+
     try {
       const security = await authorizeDashboard(request, discordUserId)
       if (!security.allowed) return deny(request, security.reason ?? 'security')
