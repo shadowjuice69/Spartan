@@ -26,8 +26,11 @@ export async function updateSession(request: NextRequest) {
   const { data } = await supabase.auth.getUser()
   const user = data.user
   const path = request.nextUrl.pathname
+  const publicShell = path === '/' || path === '/access-denied'
 
-  if (!user && path !== '/login' && !path.startsWith('/auth')) {
+  // Spartan's landing shell is intentionally public. Protected command routes
+  // are enforced by proxy.ts after the Discord identity is resolved.
+  if (!user && !publicShell && path !== '/login' && !path.startsWith('/auth')) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     return NextResponse.redirect(url)
