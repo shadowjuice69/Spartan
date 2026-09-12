@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { extractDiscordId } from '@/lib/spartan/security'
 
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request })
@@ -22,8 +23,8 @@ export async function updateSession(request: NextRequest) {
     }
   )
 
-  const { data } = await supabase.auth.getClaims()
-  const user = data?.claims
+  const { data } = await supabase.auth.getUser()
+  const user = data.user
   const path = request.nextUrl.pathname
 
   if (!user && path !== '/login' && !path.startsWith('/auth')) {
@@ -37,6 +38,9 @@ export async function updateSession(request: NextRequest) {
     url.pathname = '/'
     return NextResponse.redirect(url)
   }
+
+  const discordId = extractDiscordId(user)
+  if (discordId) response.headers.set('x-spartan-discord-id', discordId)
 
   return response
 }
