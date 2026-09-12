@@ -3,37 +3,27 @@ import { createClient as createSupabaseAdmin } from '@supabase/supabase-js'
 export const SPARTAN_OWNER_ID = '653534906277822494'
 export const SPARTAN_TRUSTED_ADMIN_ID = '262745631829786624'
 
-export function isOwner(discordId: string | null | undefined) {
-  return String(discordId ?? '') === SPARTAN_OWNER_ID
-}
-
-export function isTrustedAdmin(discordId: string | null | undefined) {
-  return String(discordId ?? '') === SPARTAN_TRUSTED_ADMIN_ID
-}
-
-export function isProtectedIdentity(discordId: string | null | undefined) {
-  return isOwner(discordId) || isTrustedAdmin(discordId)
-}
+export function isOwner(discordId: string | null | undefined) { return String(discordId ?? '') === SPARTAN_OWNER_ID }
+export function isTrustedAdmin(discordId: string | null | undefined) { return String(discordId ?? '') === SPARTAN_TRUSTED_ADMIN_ID }
+export function isProtectedIdentity(discordId: string | null | undefined) { return isOwner(discordId) || isTrustedAdmin(discordId) }
 
 export function extractDiscordId(user: any): string | null {
-  const candidates = [
-    user?.user_metadata?.discord_user_id,
-    user?.app_metadata?.discord_user_id,
-    user?.user_metadata?.provider_id,
-    user?.user_metadata?.sub,
-    user?.identities?.find((identity: any) => identity.provider === 'discord')?.identity_data?.provider_id,
-    user?.identities?.find((identity: any) => identity.provider === 'discord')?.identity_data?.sub,
-  ]
+  const candidates = [user?.user_metadata?.discord_user_id, user?.app_metadata?.discord_user_id, user?.user_metadata?.provider_id, user?.user_metadata?.sub, user?.identities?.find((identity: any) => identity.provider === 'discord')?.identity_data?.provider_id, user?.identities?.find((identity: any) => identity.provider === 'discord')?.identity_data?.sub]
   const id = candidates.find((value) => /^\d{8,30}$/.test(String(value ?? '')))
   return id ? String(id) : null
 }
 
+function normalizeIp(value: string | null | undefined): string | null {
+  const raw = String(value ?? '').trim().replace(/^\[|\]$/g, '')
+  if (!raw || raw.toLowerCase() === 'unknown') return null
+  const ipv4 = /^(?:\d{1,3}\.){3}\d{1,3}$/.test(raw) && raw.split('.').every((part) => Number(part) >= 0 && Number(part) <= 255)
+  const ipv6 = raw.includes(':') && /^[0-9a-f:]+$/i.test(raw)
+  return ipv4 || ipv6 ? raw : null
+}
+
 export function requestIp(request: Request): string | null {
   const headers = request.headers
-  const forwarded = headers.get('x-forwarded-for')?.split(',')[0]?.trim()
-  const real = headers.get('x-real-ip')?.trim()
-  const vercel = headers.get('x-vercel-forwarded-for')?.split(',')[0]?.trim()
-  return forwarded || real || vercel || null
+  return normalizeIp(headers.get('x-forwarded-for')?.split(',')[0]?.trim()) || normalizeIp(headers.get('x-real-ip')?.trim()) || normalizeIp(headers.get('x-vercel-forwarded-for')?.split(',')[0]?.trim())
 }
 
 function adminClient() {
@@ -72,18 +62,17 @@ export async function authorizeDashboard(request: Request, discordUserId: string
   const access = await getSpartanAccess(discordUserId)
   const protectedIdentity = isProtectedIdentity(discordUserId)
   const block = await getActiveIpBlock(ip)
-
-  // Owner is never denied by an IP block. Riven is protected from all bans
-  // except an explicit Owner-created IP block.
+  const ipRecorded = Boolean(ip)
   const ipBlocked = Boolean(block) && (!protectedIdentity || isOwner(String(block?.created_by_discord_id ?? '')))
   const identityAllowed = protectedIdentity || access?.status === 'active'
-  const allowed = identityAllowed && !ipBlocked
+  // Fail closed: Spartan access requires a server-observable client IP.
+  const allowed = identityAllowed && ipRecorded && !ipBlocked
 
   await recordDashboardSession({ discordUserId, sessionId: crypto.randomUUID(), ipAddress: ip, userAgent: request.headers.get('user-agent'), route: new URL(request.url).pathname, success: allowed })
 
   if (!allowed) {
-    await recordSecurityEvent(ipBlocked ? 'dashboard_ip_blocked' : 'dashboard_access_denied', discordUserId, ip, block?.created_by_discord_id ?? null, ipBlocked ? 'Active Spartan IP block' : 'No active Spartan access', { protectedIdentity, role: access?.role ?? null })
+    await recordSecurityEvent(ipBlocked ? 'dashboard_ip_blocked' : !ipRecorded ? 'dashboard_ip_unavailable' : 'dashboard_access_denied', discordUserId, ip, block?.created_by_discord_id ?? null, ipBlocked ? 'Active Spartan IP block' : !ipRecorded ? 'No valid client IP was available; access denied until IP can be recorded.' : 'No active Spartan access', { protectedIdentity, role: access?.role ?? null, ipRecorded })
   }
 
-  return { allowed, ip, access, block, protectedIdentity }
+  return { allowed, ip, ipRecorded, access, block, protectedIdentity, reason: !ipRecorded ? 'ip_unavailable' : ipBlocked ? 'ip_blocked' : !identityAllowed ? 'access_inactive' : null }
 }
