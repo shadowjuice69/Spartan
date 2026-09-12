@@ -1,25 +1,95 @@
+import crypto from 'crypto'
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import type { ProvinceSnapshot, SpartanEvent } from '@/lib/spartan/history'
 
 export const dynamic = 'force-dynamic'
 
+function isServiceRequest(request: Request) {
+  const configured = process.env.SPARTAN_CAPTURE_KEY
+  if (!configured) return false
+  return request.headers.get('x-spartan-capture-key') === configured
+}
+
 export async function POST(request: Request) {
   try {
+    const serviceRequest = isServiceRequest(request)
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+    if (!user && !serviceRequest) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
 
     const body = await request.json() as {
       snapshot?: ProvinceSnapshot
       events?: SpartanEvent[]
+      capture?: {
+        captureId?: string
+        capturedAt?: string
+        source?: string
+        sourceId?: string
+        pageKind?: string
+        url?: string
+        provinceId?: string | null
+        kingdomId?: string | null
+        rawText?: string
+        rawPayload?: unknown
+        parsedPayload?: unknown
+      }
+      userId?: string
+    }
+
+    const ownerId = user?.id ?? (serviceRequest ? body.userId ?? process.env.SPARTAN_CAPTURE_USER_ID ?? null : null)
+    const capture = body.capture
+
+    // Universal Capture is lossless: every page can be stored even when it is
+    // not yet understood well enough to become a typed province snapshot.
+    if (capture) {
+      const rawText = capture.rawText ?? ''
+      const rawPayload = capture.rawPayload ?? {}
+      const parsedPayload = capture.parsedPayload ?? {}
+      const contentHash = crypto
+        .createHash('sha256')
+        .update(JSON.stringify([capture.url ?? '', capture.provinceId ?? null, capture.kingdomId ?? null, rawText, rawPayload, parsedPayload]))
+        .digest('hex')
+
+      const { error } = await supabase.from('spartan_capture_vault').upsert({
+        user_id: ownerId,
+        province_id: capture.provinceId ?? null,
+        kingdom_id: capture.kingdomId ?? null,
+        captured_at: capture.capturedAt ?? new Date().toISOString(),
+        source: capture.source ?? 'universal_capture',
+        source_id: capture.sourceId ?? null,
+        page_kind: capture.pageKind ?? null,
+        url: capture.url ?? null,
+        capture_id: capture.captureId ?? null,
+        raw_text: rawText || null,
+        raw_payload: rawPayload,
+        parsed_payload: parsedPayload,
+        content_hash: contentHash,
+      }, { onConflict: 'content_hash' })
+
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
     const snapshot = body.snapshot
-    if (!snapshot) return NextResponse.json({ error: 'snapshot is required' }, { status: 400 })
+    if (!snapshot) {
+      return NextResponse.json({
+        ok: true,
+        captured: Boolean(capture),
+        storedInVault: Boolean(capture),
+        events: 0,
+        snapshotStored: false,
+      })
+    }
+
+    if (!ownerId) {
+      return NextResponse.json({ error: 'A userId is required for service-authenticated history snapshots' }, { status: 400 })
+    }
 
     const snapshotRow = {
-      user_id: user.id,
+      user_id: ownerId,
       province_id: snapshot.provinceId ?? null,
       kingdom_id: snapshot.kingdomId ?? null,
       observed_at: snapshot.observedAt ?? new Date().toISOString(),
@@ -63,7 +133,7 @@ export async function POST(request: Request) {
 
     if (body.events?.length) {
       const eventRows = body.events.map((event) => ({
-        user_id: user.id,
+        user_id: ownerId,
         province_id: event.provinceId ?? snapshot.provinceId ?? null,
         kingdom_id: event.kingdomId ?? snapshot.kingdomId ?? null,
         occurred_at: event.occurredAt ?? new Date().toISOString(),
@@ -92,7 +162,7 @@ export async function POST(request: Request) {
       if (eventError) return NextResponse.json({ error: eventError.message }, { status: 500 })
     }
 
-    return NextResponse.json({ ok: true, captured: true, events: body.events?.length ?? 0 })
+    return NextResponse.json({ ok: true, captured: true, events: body.events?.length ?? 0, snapshotStored: true, storedInVault: Boolean(capture) })
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Capture failed' }, { status: 500 })
   }
