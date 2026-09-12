@@ -37,6 +37,13 @@ export async function login(formData: FormData) {
   redirect('/')
 }
 
+export async function logout() {
+  const supabase = await createClient()
+  await supabase.auth.signOut()
+  revalidatePath('/', 'layout')
+  redirect('/login?success=signed-out')
+}
+
 export async function loginWithDiscord() {
   const supabase = await createClient()
   const origin = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'
