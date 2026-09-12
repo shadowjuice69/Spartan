@@ -1,8 +1,21 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 
 const nav = ["Command", "Province", "War Room", "Build Lab", "Military", "Magic", "Thievery", "Science", "Wiki", "Tools"];
+const navPaths: Record<string, string> = {
+  Command: "/",
+  Province: "/command/province",
+  "War Room": "/command/war-room",
+  "Build Lab": "/command/build-lab",
+  Military: "/command/military",
+  Magic: "/command/magic",
+  Thievery: "/command/thievery",
+  Science: "/command/science",
+  Wiki: "/command/wiki",
+  Tools: "/command/tools",
+};
 
 type Snapshot = {
   observed_at: string;
@@ -27,25 +40,12 @@ type Snapshot = {
 
 type Event = { id: number; occurred_at: string; event_type: string; raw_text: string | null; payload: Record<string, unknown> | null };
 
-function fmt(value: number | null | undefined, suffix = "") {
-  if (value == null || !Number.isFinite(Number(value))) return "—";
-  return `${Number(value).toLocaleString()}${suffix}`;
-}
-
-function pct(value: number | null | undefined) {
-  if (value == null || !Number.isFinite(Number(value))) return "—";
-  return `${Number(value).toFixed(1)}%`;
-}
-
-function points(values: number[], width = 760, height = 205) {
-  if (values.length < 2) return "";
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const range = max - min || 1;
-  return values.map((value, i) => `${(i / (values.length - 1)) * width},${height - ((value - min) / range) * (height - 20) - 10}`).join(" ");
-}
+function fmt(value: number | null | undefined, suffix = "") { if (value == null || !Number.isFinite(Number(value))) return "—"; return `${Number(value).toLocaleString()}${suffix}`; }
+function pct(value: number | null | undefined) { if (value == null || !Number.isFinite(Number(value))) return "—"; return `${Number(value).toFixed(1)}%`; }
+function points(values: number[], width = 760, height = 205) { if (values.length < 2) return ""; const min = Math.min(...values); const max = Math.max(...values); const range = max - min || 1; return values.map((value, i) => `${(i / (values.length - 1)) * width},${height - ((value - min) / range) * (height - 20) - 10}`).join(" "); }
 
 export default function Home() {
+  const router = useRouter();
   const [active, setActive] = useState("Command");
   const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
   const [events, setEvents] = useState<Event[]>([]);
@@ -55,82 +55,38 @@ export default function Home() {
   useEffect(() => {
     let mounted = true;
     const load = async () => {
-      try {
-        const response = await fetch("/api/history?limit=120", { cache: "no-store" });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.error || "History unavailable");
-        if (mounted) { setSnapshots(data.snapshots || []); setEvents(data.events || []); setError(""); }
-      } catch (err) {
-        if (mounted) setError(err instanceof Error ? err.message : "History unavailable");
-      } finally { if (mounted) setLoading(false); }
+      try { const response = await fetch("/api/history?limit=120", { cache: "no-store" }); const data = await response.json(); if (!response.ok) throw new Error(data.error || "History unavailable"); if (mounted) { setSnapshots(data.snapshots || []); setEvents(data.events || []); setError(""); } }
+      catch (err) { if (mounted) setError(err instanceof Error ? err.message : "History unavailable"); }
+      finally { if (mounted) setLoading(false); }
     };
-    load();
-    const timer = setInterval(load, 15000);
-    return () => { mounted = false; clearInterval(timer); };
+    load(); const timer = setInterval(load, 15000); return () => { mounted = false; clearInterval(timer); };
   }, []);
 
-  const latest = snapshots.at(-1);
-  const previous = snapshots.at(-2);
-  const delta = (key: keyof Snapshot) => {
-    const a = Number(latest?.[key]); const b = Number(previous?.[key]);
-    if (!Number.isFinite(a) || !Number.isFinite(b)) return "—";
-    const d = a - b;
-    return `${d >= 0 ? "+" : ""}${d.toLocaleString()}`;
-  };
-
-  const readiness = useMemo(() => {
-    const values = [latest?.offense, latest?.defense, latest?.mana, latest?.stealth, latest?.build_efficiency].filter(v => v != null).map(Number);
-    if (!values.length) return null;
-    return Math.round(values.reduce((a, b) => a + Math.min(Math.max(b, 0), 100), 0) / values.length);
-  }, [latest]);
-
-  const chartValues = snapshots.map(s => Number(s.acres)).filter(Number.isFinite);
-  const chartPoints = points(chartValues);
+  const latest = snapshots.at(-1); const previous = snapshots.at(-2);
+  const delta = (key: keyof Snapshot) => { const a = Number(latest?.[key]); const b = Number(previous?.[key]); if (!Number.isFinite(a) || !Number.isFinite(b)) return "—"; const d = a - b; return `${d >= 0 ? "+" : ""}${d.toLocaleString()}`; };
+  const readiness = useMemo(() => { const values = [latest?.offense, latest?.defense, latest?.mana, latest?.stealth, latest?.build_efficiency].filter(v => v != null).map(Number); if (!values.length) return null; return Math.round(values.reduce((a, b) => a + Math.min(Math.max(b, 0), 100), 0) / values.length); }, [latest]);
+  const chartValues = snapshots.map(s => Number(s.acres)).filter(Number.isFinite); const chartPoints = points(chartValues);
+  const go = (item: string) => { setActive(item); const path = navPaths[item]; if (path && path !== "/") router.push(path); };
 
   return (
     <main className="app-shell">
       <aside className="sidebar">
         <div className="brand"><div className="brand-mark">S</div><div><strong>SPARTAN</strong><span>UTOPIA COMMAND</span></div></div>
         <div className="side-label">COMMAND SYSTEMS</div>
-        <nav>{nav.map((item, i) => <button key={item} className={active === item ? "nav-item active" : "nav-item"} onClick={() => setActive(item)}><span className="nav-icon">{["⌁", "◈", "⚔", "▦", "♜", "✦", "◉", "⌘", "▤", "⚙"][i]}</span>{item}{item === "Command" && <b>LIVE</b>}</button>)}</nav>
+        <nav>{nav.map((item, i) => <button type="button" key={item} className={active === item ? "nav-item active" : "nav-item"} onClick={() => go(item)}><span className="nav-icon">{["⌁", "◈", "⚔", "▦", "♜", "✦", "◉", "⌘", "▤", "⚙"][i]}</span>{item}{item === "Command" && <b>LIVE</b>}</button>)}</nav>
         <div className="side-status"><div className="pulse-dot" /><div><strong>DATA CORE ONLINE</strong><span>Universal capture connected</span></div></div>
       </aside>
-
       <section className="workspace">
-        <header className="topbar"><div className="crumb"><span>SPARTAN</span><i>/</i> LIVE PROVINCE COMMAND CENTER</div><div className="top-actions"><span className="sync"><i /> LIVE SYNC</span><button className="icon-button">⌕</button><div className="avatar">SH</div></div></header>
-
+        <header className="topbar"><div className="crumb"><span>SPARTAN</span><i>/</i> LIVE PROVINCE COMMAND CENTER</div><div className="top-actions"><span className="sync"><i /> LIVE SYNC</span><button type="button" className="icon-button" aria-label="Search">⌕</button><div className="avatar">SH</div></div></header>
         <div className="content">
-          <section className="hero">
-            <div><div className="eyebrow">SPARTAN // PROVINCE TELEMETRY</div><h1>{latest?.province_id || "Awaiting province capture"}</h1><p>{latest?.kingdom_id ? `Kingdom ${latest.kingdom_id}` : "Universal Capture is feeding the command core"} <span>·</span> {latest ? new Date(latest.observed_at).toLocaleString() : "No live snapshot yet"}</p></div>
-            <div className="hero-status"><span className="status-dot" /> {latest ? "PROVINCE TELEMETRY LIVE" : "WAITING FOR TELEMETRY"}<small>{latest ? "History stream active" : "No fabricated values are shown"}</small></div>
-          </section>
-
+          <section className="hero"><div><div className="eyebrow">SPARTAN // PROVINCE TELEMETRY</div><h1>{latest?.province_id || "Awaiting province capture"}</h1><p>{latest?.kingdom_id ? `Kingdom ${latest.kingdom_id}` : "Universal Capture is feeding the command core"} <span>·</span> {latest ? new Date(latest.observed_at).toLocaleString() : "No live snapshot yet"}</p></div><div className="hero-status"><span className="status-dot" /> {latest ? "PROVINCE TELEMETRY LIVE" : "WAITING FOR TELEMETRY"}<small>{latest ? "History stream active" : "No fabricated values are shown"}</small></div></section>
           {error && <section className="intel-banner"><div className="intel-symbol">!</div><div className="intel-copy"><strong>DATA CORE NOTICE</strong><span>{error}</span></div></section>}
-
-          <section className="stat-grid">
-            {[["Acres", fmt(latest?.acres), delta("acres")], ["Networth", fmt(latest?.networth), delta("networth")], ["Population", fmt(latest?.population), delta("population")], ["Offense", fmt(latest?.offense), delta("offense")], ["Defense", fmt(latest?.defense), delta("defense")], ["Mana", pct(latest?.mana), delta("mana")]].map(([label, value, change]) => <article className="stat-card" key={label}><span>{label}</span><strong>{loading ? "…" : value}</strong><small className="up">{change}</small></article>)}
-          </section>
-
+          <section className="stat-grid">{[["Acres", fmt(latest?.acres), delta("acres")], ["Networth", fmt(latest?.networth), delta("networth")], ["Population", fmt(latest?.population), delta("population")], ["Offense", fmt(latest?.offense), delta("offense")], ["Defense", fmt(latest?.defense), delta("defense")], ["Mana", pct(latest?.mana), delta("mana")]].map(([label, value, change]) => <article className="stat-card" key={label}><span>{label}</span><strong>{loading ? "…" : value}</strong><small className="up">{change}</small></article>)}</section>
           <section className="main-grid">
-            <article className="panel growth-panel">
-              <div className="panel-head"><div><span className="panel-kicker">HISTORICAL TELEMETRY</span><h2>Province trajectory</h2></div><span className="health-score">{snapshots.length} <small>captures</small></span></div>
-              <div className="chart-wrap">
-                {chartValues.length > 1 ? <><div className="y-labels"><span>MAX</span><span>75%</span><span>50%</span><span>25%</span><span>MIN</span></div><svg className="chart" viewBox="0 0 760 250" preserveAspectRatio="none" aria-label="Live province acreage history"><path className="grid-line" d="M0 25H760 M0 82H760 M0 139H760 M0 196H760" /><polyline className="line" points={chartPoints} fill="none" /></svg><div className="x-labels"><span>{new Date(snapshots[0].observed_at).toLocaleDateString()}</span><span>{new Date(snapshots.at(-1)!.observed_at).toLocaleDateString()}</span></div></> : <div className="empty-chart"><strong>AWAITING HISTORICAL SERIES</strong><span>Spartan will draw this graph automatically as Universal Capture records real province state.</span></div>}
-              </div>
-              <div className="chart-legend"><span><i className="legend-land"/> ACRES</span><strong>{latest?.acres != null ? fmt(latest.acres) : "—"}</strong><span className="median"><i/> LOSSLESS HISTORY</span><strong>{snapshots.length} POINTS</strong></div>
-            </article>
-
-            <article className="panel systems-panel">
-              <div className="panel-head"><div><span className="panel-kicker">SYSTEM HEALTH</span><h2>Readiness matrix</h2></div><span className="health-score">{readiness == null ? "—" : readiness} <small>/ 100</small></span></div>
-              <div className="systems-list">{[["Military", latest?.offense, latest?.defense], ["Economy", latest?.networth, latest?.population], ["Magic", latest?.mana, null], ["Thievery", latest?.stealth, null], ["Build Efficiency", latest?.build_efficiency, null]].map(([name, a, b]) => { const value = b != null ? (Number(a) + Number(b)) / 2 : Number(a); const bar = Number.isFinite(value) ? Math.min(Math.max(value, 0), 100) : 0; return <div className="system-row" key={String(name)}><div className="system-title"><strong>{name}</strong><span>{a == null ? "NO DATA" : b == null ? pct(Number(a)) : `${fmt(Number(a))} / ${fmt(Number(b))}`}</span></div><div className="bar"><i style={{width: `${bar}%`}} /></div><em>{a == null ? "WAITING" : "TRACKED"}</em></div>})}</div>
-              <button className="panel-link">VIEW FULL PROVINCE STATE <span>→</span></button>
-            </article>
+            <article className="panel growth-panel"><div className="panel-head"><div><span className="panel-kicker">HISTORICAL TELEMETRY</span><h2>Province trajectory</h2></div><span className="health-score">{snapshots.length} <small>captures</small></span></div><div className="chart-wrap">{chartValues.length > 1 ? <><div className="y-labels"><span>MAX</span><span>75%</span><span>50%</span><span>25%</span><span>MIN</span></div><svg className="chart" viewBox="0 0 760 250" preserveAspectRatio="none" aria-label="Live province acreage history"><path className="grid-line" d="M0 25H760 M0 82H760 M0 139H760 M0 196H760" /><polyline className="line" points={chartPoints} fill="none" /></svg><div className="x-labels"><span>{new Date(snapshots[0].observed_at).toLocaleDateString()}</span><span>{new Date(snapshots.at(-1)!.observed_at).toLocaleDateString()}</span></div></> : <div className="empty-chart"><strong>AWAITING HISTORICAL SERIES</strong><span>Spartan will draw this graph automatically as Universal Capture records real province state.</span></div>}</div><div className="chart-legend"><span><i className="legend-land"/> ACRES</span><strong>{latest?.acres != null ? fmt(latest.acres) : "—"}</strong><span className="median"><i/> LOSSLESS HISTORY</span><strong>{snapshots.length} POINTS</strong></div></article>
+            <article className="panel systems-panel"><div className="panel-head"><div><span className="panel-kicker">SYSTEM HEALTH</span><h2>Readiness matrix</h2></div><span className="health-score">{readiness == null ? "—" : readiness} <small>/ 100</small></span></div><div className="systems-list">{[["Military", latest?.offense, latest?.defense], ["Economy", latest?.networth, latest?.population], ["Magic", latest?.mana, null], ["Thievery", latest?.stealth, null], ["Build Efficiency", latest?.build_efficiency, null]].map(([name, a, b]) => { const value = b != null ? (Number(a) + Number(b)) / 2 : Number(a); const bar = Number.isFinite(value) ? Math.min(Math.max(value, 0), 100) : 0; return <div className="system-row" key={String(name)}><div className="system-title"><strong>{name}</strong><span>{a == null ? "NO DATA" : b == null ? pct(Number(a)) : `${fmt(Number(a))} / ${fmt(Number(b))}`}</span></div><div className="bar"><i style={{width: `${bar}%`}} /></div><em>{a == null ? "WAITING" : "TRACKED"}</em></div>})}</div><button type="button" className="panel-link" onClick={() => go("Province")}>VIEW FULL PROVINCE STATE <span>→</span></button></article>
           </section>
-
-          <section className="bottom-grid">
-            <article className="panel objective"><div className="panel-head"><div><span className="panel-kicker">SPARTAN PRINCIPLE</span><h2>Observe everything. Assume nothing.</h2></div><span className="priority">LOSSLESS</span></div><p>Every captured Utopia page is preserved first. Structured systems can become smarter over time without destroying the original evidence.</p><div className="objective-actions"><button className="primary">BUILD PLAN <span>→</span></button><button className="secondary">ASK SPARTAN</button></div></article>
-            <article className="panel events"><div className="panel-head"><div><span className="panel-kicker">RECENT CHANGES</span><h2>Live event stream</h2></div><span className="more">{events.length}</span></div><div className="event-list">{events.slice(0, 4).map(event => <div key={event.id}><time>{new Date(event.occurred_at).toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"})}</time><span className="event-dot green"/><p><strong>{event.event_type}</strong> {event.raw_text ? event.raw_text.slice(0, 90) : "Recorded by Spartan history core"}</p></div>)}{!events.length && <div><time>—</time><span className="event-dot blue"/><p><strong>No events yet.</strong> Real activity will appear here as captures arrive.</p></div>}</div></article>
-          </section>
+          <section className="bottom-grid"><article className="panel objective"><div className="panel-head"><div><span className="panel-kicker">SPARTAN PRINCIPLE</span><h2>Observe everything. Assume nothing.</h2></div><span className="priority">LOSSLESS</span></div><p>Every captured Utopia page is preserved first. Structured systems can become smarter over time without destroying the original evidence.</p><div className="objective-actions"><button type="button" className="primary" onClick={() => go("Build Lab")}>BUILD PLAN <span>→</span></button><button type="button" className="secondary" onClick={() => go("Tools")}>ASK SPARTAN</button></div></article><article className="panel events"><div className="panel-head"><div><span className="panel-kicker">RECENT CHANGES</span><h2>Live event stream</h2></div><span className="more">{events.length}</span></div><div className="event-list">{events.slice(0, 4).map(event => <div key={event.id}><time>{new Date(event.occurred_at).toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"})}</time><span className="event-dot green"/><p><strong>{event.event_type}</strong> {event.raw_text ? event.raw_text.slice(0, 90) : "Recorded by Spartan history core"}</p></div>)}{!events.length && <div><time>—</time><span className="event-dot blue"/><p><strong>No events yet.</strong> Real activity will appear here as captures arrive.</p></div>}</div></article></section>
         </div>
       </section>
     </main>
