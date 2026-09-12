@@ -1,6 +1,7 @@
 import crypto from 'crypto'
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { runCaptureStewards, runSnapshotSteward } from '@/lib/spartan/stewards'
 import type { ProvinceSnapshot, SpartanEvent } from '@/lib/spartan/history'
 
 export const dynamic = 'force-dynamic'
@@ -17,9 +18,7 @@ export async function POST(request: Request) {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
 
-    if (!user && !serviceRequest) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    if (!user && !serviceRequest) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const body = await request.json() as {
       snapshot?: ProvinceSnapshot
@@ -43,9 +42,11 @@ export async function POST(request: Request) {
     const ownerId = user?.id ?? (serviceRequest ? body.userId ?? process.env.SPARTAN_CAPTURE_USER_ID ?? null : null)
     const capture = body.capture
 
-    // Universal Capture is lossless: every page can be stored even when it is
-    // not yet understood well enough to become a typed province snapshot.
+    // LOSSLESS FIRST: the raw observation always enters the vault before any steward decision.
+    // A failed steward can quarantine the observation, but can never erase the evidence.
+    let captureSteward: ReturnType<typeof runCaptureStewards> | null = null
     if (capture) {
+      captureSteward = runCaptureStewards(capture)
       const rawText = capture.rawText ?? ''
       const rawPayload = capture.rawPayload ?? {}
       const parsedPayload = capture.parsedPayload ?? {}
@@ -69,23 +70,65 @@ export async function POST(request: Request) {
         parsed_payload: parsedPayload,
         content_hash: contentHash,
       }, { onConflict: 'content_hash' })
-
       if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+      const failed = captureSteward.results.filter((r) => !r.ok)
+      if (failed.length) {
+        const { error: quarantineError } = await supabase.from('spartan_data_quarantine').insert({
+          capture_id: capture.captureId ?? null,
+          source: capture.source ?? 'universal_capture',
+          source_id: capture.sourceId ?? null,
+          page_kind: capture.pageKind ?? null,
+          url: capture.url ?? null,
+          province_id: capture.provinceId ?? null,
+          kingdom_id: capture.kingdomId ?? null,
+          steward: failed.map((r) => r.steward).join(','),
+          severity: failed.some((r) => r.severity === 'critical') ? 'critical' : 'high',
+          reason: failed.map((r) => r.reason ?? 'validation failure').join('; '),
+          field_name: failed.find((r) => r.fieldName)?.fieldName ?? null,
+          observed_value: failed.find((r) => r.details?.observed !== undefined)?.details?.observed ?? null,
+          raw_payload: rawPayload,
+          parsed_payload: parsedPayload,
+          validation_details: { results: captureSteward.results, confidence: captureSteward.confidence },
+          fingerprint: captureSteward.fingerprint,
+        })
+        if (quarantineError) return NextResponse.json({ error: quarantineError.message }, { status: 500 })
+      }
+
+      await supabase.from('spartan_steward_runs').insert({
+        capture_id: capture.captureId ?? null,
+        source: capture.source ?? 'universal_capture',
+        page_kind: capture.pageKind ?? null,
+        province_id: capture.provinceId ?? null,
+        kingdom_id: capture.kingdomId ?? null,
+        decision: captureSteward.decision,
+        confidence: captureSteward.confidence,
+        steward_results: captureSteward.results,
+        canonical_payload: captureSteward.decision === 'accept' ? parsedPayload : {},
+      })
+
+      if (captureSteward.decision === 'quarantine') {
+        return NextResponse.json({
+          ok: true,
+          captured: true,
+          storedInVault: true,
+          stewardDecision: 'quarantine',
+          historyWritten: false,
+          reason: 'Observation retained in the Capture Vault but withheld from canonical history.',
+        }, { status: 202 })
+      }
     }
 
     const snapshot = body.snapshot
     if (!snapshot) {
-      return NextResponse.json({
-        ok: true,
-        captured: Boolean(capture),
-        storedInVault: Boolean(capture),
-        events: 0,
-        snapshotStored: false,
-      })
+      return NextResponse.json({ ok: true, captured: Boolean(capture), storedInVault: Boolean(capture), events: 0, snapshotStored: false, stewardDecision: captureSteward?.decision ?? 'not_applicable' })
     }
 
-    if (!ownerId) {
-      return NextResponse.json({ error: 'A userId is required for service-authenticated history snapshots' }, { status: 400 })
+    if (!ownerId) return NextResponse.json({ error: 'A userId is required for service-authenticated history snapshots' }, { status: 400 })
+
+    const snapshotSteward = runSnapshotSteward(snapshot as unknown as Record<string, unknown>)
+    if (snapshotSteward.decision === 'quarantine') {
+      return NextResponse.json({ ok: true, captured: Boolean(capture), storedInVault: Boolean(capture), snapshotStored: false, stewardDecision: 'quarantine', stewardResults: snapshotSteward.results }, { status: 202 })
     }
 
     const snapshotRow = {
@@ -162,7 +205,7 @@ export async function POST(request: Request) {
       if (eventError) return NextResponse.json({ error: eventError.message }, { status: 500 })
     }
 
-    return NextResponse.json({ ok: true, captured: true, events: body.events?.length ?? 0, snapshotStored: true, storedInVault: Boolean(capture) })
+    return NextResponse.json({ ok: true, captured: true, events: body.events?.length ?? 0, snapshotStored: true, storedInVault: Boolean(capture), stewardDecision: captureSteward?.decision ?? snapshotSteward.decision })
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Capture failed' }, { status: 500 })
   }
