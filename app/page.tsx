@@ -17,27 +17,7 @@ const navPaths: Record<string, string> = {
   Tools: "/command/tools",
 };
 
-type Snapshot = {
-  observed_at: string;
-  province_id: string | null;
-  kingdom_id: string | null;
-  acres: number | null;
-  networth: number | null;
-  population: number | null;
-  soldiers: number | null;
-  off_specs: number | null;
-  def_specs: number | null;
-  elites: number | null;
-  thieves: number | null;
-  wizards: number | null;
-  offense: number | null;
-  defense: number | null;
-  mana: number | null;
-  stealth: number | null;
-  build_efficiency: number | null;
-  wages: number | null;
-};
-
+type Snapshot = { observed_at: string; province_id: string | null; kingdom_id: string | null; acres: number | null; networth: number | null; population: number | null; soldiers: number | null; off_specs: number | null; def_specs: number | null; elites: number | null; thieves: number | null; wizards: number | null; offense: number | null; defense: number | null; mana: number | null; stealth: number | null; build_efficiency: number | null; wages: number | null; };
 type Event = { id: number; occurred_at: string; event_type: string; raw_text: string | null; payload: Record<string, unknown> | null };
 
 function fmt(value: number | null | undefined, suffix = "") { if (value == null || !Number.isFinite(Number(value))) return "—"; return `${Number(value).toLocaleString()}${suffix}`; }
@@ -51,6 +31,8 @@ export default function Home() {
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [ipRecorded, setIpRecorded] = useState(false);
+  const [recordedIp, setRecordedIp] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -62,6 +44,15 @@ export default function Home() {
     load(); const timer = setInterval(load, 15000); return () => { mounted = false; clearInterval(timer); };
   }, []);
 
+  useEffect(() => {
+    let mounted = true;
+    fetch("/api/security-status", { cache: "no-store" })
+      .then(async response => ({ ok: response.ok, data: await response.json() }))
+      .then(({ ok, data }) => { if (mounted && ok && data.recorded) { setIpRecorded(true); setRecordedIp(data.ip ?? null); } })
+      .catch(() => {});
+    return () => { mounted = false; };
+  }, []);
+
   const latest = snapshots.at(-1); const previous = snapshots.at(-2);
   const delta = (key: keyof Snapshot) => { const a = Number(latest?.[key]); const b = Number(previous?.[key]); if (!Number.isFinite(a) || !Number.isFinite(b)) return "—"; const d = a - b; return `${d >= 0 ? "+" : ""}${d.toLocaleString()}`; };
   const readiness = useMemo(() => { const values = [latest?.offense, latest?.defense, latest?.mana, latest?.stealth, latest?.build_efficiency].filter(v => v != null).map(Number); if (!values.length) return null; return Math.round(values.reduce((a, b) => a + Math.min(Math.max(b, 0), 100), 0) / values.length); }, [latest]);
@@ -70,6 +61,7 @@ export default function Home() {
 
   return (
     <main className="app-shell">
+      {ipRecorded && <div role="status" aria-live="polite" style={{position:"fixed",inset:0,zIndex:1000,display:"grid",placeItems:"center",background:"rgba(2,6,12,.78)",backdropFilter:"blur(8px)"}}><div style={{width:"min(440px,90vw)",padding:"32px",border:"1px solid rgba(78,240,168,.45)",borderRadius:"18px",background:"#071018",boxShadow:"0 24px 80px rgba(0,0,0,.55)",textAlign:"center"}}><div style={{fontSize:"42px",marginBottom:"12px"}}>✓</div><div style={{fontSize:"12px",letterSpacing:".18em",color:"#67f0b0",fontWeight:700}}>SPARTAN SECURITY</div><h2 style={{margin:"10px 0 8px",fontSize:"28px"}}>IP RECORDED</h2><p style={{margin:"0 0 18px",color:"#aebcc8",lineHeight:1.6}}>Your dashboard visit was recorded by Spartan security. Your IP address is now attached to your verified Spartan identity.</p><div style={{padding:"12px",borderRadius:"10px",background:"rgba(255,255,255,.04)",fontFamily:"monospace",fontSize:"13px",color:"#dce7ee"}}>{recordedIp || "IP captured securely"}</div><button type="button" onClick={() => setIpRecorded(false)} style={{marginTop:"20px",width:"100%",padding:"12px 16px",borderRadius:"10px",border:"1px solid rgba(103,240,176,.35)",background:"rgba(103,240,176,.1)",color:"#67f0b0",fontWeight:800,cursor:"pointer"}}>CONTINUE TO COMMAND</button></div></div>}
       <aside className="sidebar">
         <div className="brand"><div className="brand-mark">S</div><div><strong>SPARTAN</strong><span>UTOPIA COMMAND</span></div></div>
         <div className="side-label">COMMAND SYSTEMS</div>
