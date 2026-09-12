@@ -48,68 +48,39 @@ function numeric(value: unknown): number | null {
 
 export function fingerprintCapture(capture: CaptureForStewardship): string {
   return crypto.createHash('sha256').update(JSON.stringify([
-    capture.captureId ?? null,
-    capture.source ?? null,
-    capture.sourceId ?? null,
-    capture.url ?? null,
-    capture.provinceId ?? null,
-    capture.kingdomId ?? null,
-    capture.rawText ?? '',
-    capture.rawPayload ?? {},
-    capture.parsedPayload ?? {},
+    capture.captureId ?? null, capture.source ?? null, capture.sourceId ?? null,
+    capture.url ?? null, capture.provinceId ?? null, capture.kingdomId ?? null,
+    capture.rawText ?? '', capture.rawPayload ?? {}, capture.parsedPayload ?? {},
   ])).digest('hex')
 }
 
-export function runCaptureStewards(capture: CaptureForStewardship): {
-  decision: 'accept' | 'quarantine'
-  confidence: number
-  fingerprint: string
-  results: StewardResult[]
-} {
+export function runCaptureStewards(capture: CaptureForStewardship) {
   const results: StewardResult[] = []
   const parsed = getObject(capture.parsedPayload)
   const raw = getObject(capture.rawPayload)
 
-  // Identity Steward: never allow a structured record with a malformed identity.
   if (capture.provinceId && !ID_RE.test(capture.provinceId)) {
     results.push(result('identity', false, 'critical', { reason: 'Malformed province identity', fieldName: 'provinceId' }))
   } else if (capture.kingdomId && !ID_RE.test(capture.kingdomId)) {
     results.push(result('identity', false, 'critical', { reason: 'Malformed kingdom identity', fieldName: 'kingdomId' }))
-  } else {
-    results.push(result('identity', true))
-  }
+  } else results.push(result('identity', true))
 
-  // Provenance Steward: every structured observation needs a source or capture id.
   if (!capture.source && !capture.captureId && !capture.url) {
     results.push(result('provenance', false, 'high', { reason: 'No traceable capture provenance' }))
-  } else {
-    results.push(result('provenance', true))
-  }
+  } else results.push(result('provenance', true))
 
-  // Temporal Steward: future-dated observations are quarantined rather than merged.
   if (capture.capturedAt) {
     const ts = Date.parse(capture.capturedAt)
-    if (!Number.isFinite(ts)) {
-      results.push(result('temporal', false, 'high', { reason: 'Invalid capture timestamp', fieldName: 'capturedAt' }))
-    } else if (ts > Date.now() + MAX_FUTURE_MS) {
-      results.push(result('temporal', false, 'high', { reason: 'Capture timestamp is materially in the future', fieldName: 'capturedAt' }))
-    } else {
-      results.push(result('temporal', true))
-    }
-  } else {
-    results.push(result('temporal', true, 'low', { reason: 'Timestamp absent; server time will be used' }))
-  }
+    if (!Number.isFinite(ts)) results.push(result('temporal', false, 'high', { reason: 'Invalid capture timestamp', fieldName: 'capturedAt' }))
+    else if (ts > Date.now() + MAX_FUTURE_MS) results.push(result('temporal', false, 'high', { reason: 'Capture timestamp is materially in the future', fieldName: 'capturedAt' }))
+    else results.push(result('temporal', true))
+  } else results.push(result('temporal', true, 'low', { reason: 'Timestamp absent; server time will be used' }))
 
-  // Shape Steward: raw/parsed payloads must remain JSON-compatible objects/arrays.
   const rawValid = capture.rawPayload === undefined || capture.rawPayload === null || typeof capture.rawPayload === 'object'
   const parsedValid = capture.parsedPayload === undefined || capture.parsedPayload === null || typeof capture.parsedPayload === 'object'
-  if (!rawValid || !parsedValid) {
-    results.push(result('shape', false, 'high', { reason: 'Payload is not JSON-structured data' }))
-  } else {
-    results.push(result('shape', true))
-  }
+  if (!rawValid || !parsedValid) results.push(result('shape', false, 'high', { reason: 'Payload is not JSON-structured data' }))
+  else results.push(result('shape', true))
 
-  // Consistency Steward: envelope identity must not contradict common parsed identity fields.
   const parsedProvince = parsed?.provinceId ?? parsed?.province ?? parsed?.province_name
   const parsedKingdom = parsed?.kingdomId ?? parsed?.kingdom ?? parsed?.kd_code
   const provinceConflict = capture.provinceId && parsedProvince && String(parsedProvince) !== String(capture.provinceId)
@@ -119,44 +90,30 @@ export function runCaptureStewards(capture: CaptureForStewardship): {
       reason: 'Capture envelope identity conflicts with parsed identity',
       details: { envelopeProvince: capture.provinceId, parsedProvince, envelopeKingdom: capture.kingdomId, parsedKingdom },
     }))
-  } else {
-    results.push(result('consistency', true))
-  }
+  } else results.push(result('consistency', true))
 
-  // Plausibility Steward: reject impossible negative state values, but never reject unknown fields.
   const candidates = [
-    ['acres', parsed?.acres ?? raw?.acres],
-    ['land', parsed?.land ?? raw?.land],
-    ['population', parsed?.population ?? raw?.population],
-    ['peasants', parsed?.peasants ?? raw?.peasants],
-    ['soldiers', parsed?.soldiers ?? raw?.soldiers],
-    ['off_specs', parsed?.offSpecs ?? parsed?.off_specs],
-    ['def_specs', parsed?.defSpecs ?? parsed?.def_specs],
-    ['elites', parsed?.elites],
-    ['thieves', parsed?.thieves],
-    ['wizards', parsed?.wizards],
+    ['acres', parsed?.acres ?? raw?.acres], ['land', parsed?.land ?? raw?.land],
+    ['population', parsed?.population ?? raw?.population], ['peasants', parsed?.peasants ?? raw?.peasants],
+    ['soldiers', parsed?.soldiers ?? raw?.soldiers], ['off_specs', parsed?.offSpecs ?? parsed?.off_specs],
+    ['def_specs', parsed?.defSpecs ?? parsed?.def_specs], ['elites', parsed?.elites],
+    ['thieves', parsed?.thieves], ['wizards', parsed?.wizards],
   ] as const
   const invalid = candidates.find(([name, value]) => {
     const n = numeric(value)
     if (n === null) return false
     if (n < 0) return true
-    if ((name === 'acres' || name === 'land') && n > MAX_PLAUSIBLE_ACRES) return true
-    return false
+    return (name === 'acres' || name === 'land') && n > MAX_PLAUSIBLE_ACRES
   })
-  if (invalid) {
-    results.push(result('plausibility', false, 'critical', { reason: 'Impossible numeric state value', fieldName: invalid[0], observedValue: undefined as never }))
-  } else {
-    results.push(result('plausibility', true))
-  }
+  if (invalid) results.push(result('plausibility', false, 'critical', { reason: 'Impossible numeric state value', fieldName: invalid[0], details: { observed: invalid[1] } }))
+  else results.push(result('plausibility', true))
 
   const failed = results.filter((r) => !r.ok)
   const critical = failed.some((r) => r.severity === 'critical')
   const high = failed.some((r) => r.severity === 'high')
-  const confidence = failed.length === 0 ? 1 : Math.max(0, 1 - failed.length * 0.2)
-
   return {
-    decision: critical || high ? 'quarantine' : 'accept',
-    confidence,
+    decision: critical || high ? 'quarantine' as const : 'accept' as const,
+    confidence: failed.length === 0 ? 1 : Math.max(0, 1 - failed.length * 0.2),
     fingerprint: fingerprintCapture(capture),
     results,
   }
@@ -167,13 +124,7 @@ export function runSnapshotSteward(snapshot: Record<string, unknown>) {
   const numericFields = ['acres','networth','population','peons','soldiers','offSpecs','defSpecs','elites','thieves','wizards','generals','prisoners','warHorses','offense','defense','defenseHome','mana','stealth','rTpa','oTpa','dTpa','rWpa','oWpa','dWpa','buildEfficiency','wages']
   for (const field of numericFields) {
     const value = numeric(snapshot[field])
-    if (value !== null && value < 0) {
-      results.push(result('snapshot_plausibility', false, 'critical', { reason: 'Negative numeric state value', fieldName: field }))
-    }
+    if (value !== null && value < 0) results.push(result('snapshot_plausibility', false, 'critical', { reason: 'Negative numeric state value', fieldName: field }))
   }
-  return {
-    decision: results.length ? 'quarantine' as const : 'accept' as const,
-    confidence: results.length ? 0 : 1,
-    results,
-  }
+  return { decision: results.length ? 'quarantine' as const : 'accept' as const, confidence: results.length ? 0 : 1, results }
 }
