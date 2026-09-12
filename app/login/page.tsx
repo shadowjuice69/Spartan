@@ -9,7 +9,19 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
 
   return (
     <main className="login-shell">
-      <div className="login-art" aria-hidden="true" />
+      <div className="login-art" aria-hidden="true">
+        <div className="login-soldier">
+          <div className="soldier-glow" />
+          <div className="soldier-helmet" />
+          <div className="soldier-head" />
+          <div className="soldier-body" />
+          <div className="soldier-armor" />
+          <div className="soldier-shield"><span>S</span></div>
+          <div className="soldier-spear" />
+        </div>
+        <div className="login-grid" />
+        <div className="login-scan" />
+      </div>
       <div className="login-overlay" />
 
       <section className="login-panel">
