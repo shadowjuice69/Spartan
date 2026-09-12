@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { extractDiscordId } from '@/lib/spartan/security'
+import { authorizeDashboard, extractDiscordId } from '@/lib/spartan/security'
 
 export async function GET(request: Request) {
   const url = new URL(request.url)
@@ -17,6 +17,13 @@ export async function GET(request: Request) {
   if (!discordId) {
     await supabase.auth.signOut()
     return NextResponse.redirect(new URL('/login?error=discord-required', request.url))
+  }
+
+  // Record and authorize the dashboard connection immediately after Discord
+  // authentication. This is the authoritative IP/session checkpoint.
+  const security = await authorizeDashboard(request, discordId)
+  if (!security.allowed) {
+    return NextResponse.redirect(new URL(`/access-denied?reason=${encodeURIComponent(security.reason ?? 'security')}`, request.url))
   }
 
   return NextResponse.redirect(new URL('/', request.url))
