@@ -2,7 +2,14 @@ import { type NextRequest, NextResponse } from 'next/server'
 import { updateSession } from '@/lib/supabase/proxy'
 import { authorizeDashboard } from '@/lib/spartan/security'
 
-const PUBLIC_PATHS = new Set(['/','/access-denied'])
+const PUBLIC_PATHS = new Set(['/access-denied'])
+
+function deny(request: NextRequest, reason: string) {
+  const url = request.nextUrl.clone()
+  url.pathname = '/access-denied'
+  url.searchParams.set('reason', reason)
+  return NextResponse.redirect(url)
+}
 
 export async function proxy(request: NextRequest) {
   const path = request.nextUrl.pathname
@@ -10,22 +17,25 @@ export async function proxy(request: NextRequest) {
 
   if (response.redirected || path === '/login' || path.startsWith('/auth')) return response
 
-  // The command landing page is always visible. It is the public Spartan shell.
-  // Everything beyond it is protected by the registered Discord identity.
-  if (PUBLIC_PATHS.has(path)) {
-    const discordUserId = response.headers.get('x-spartan-discord-id')
+  const discordUserId = response.headers.get('x-spartan-discord-id')
+
+  // Unauthenticated visitors may see the shell, but an authenticated identity
+  // must pass the full Spartan security gate before reaching command systems.
+  if (path === '/') {
     if (!discordUserId) return response
     try {
       const security = await authorizeDashboard(request, discordUserId)
-      response.headers.set('x-spartan-access', security.allowed ? 'active' : 'denied')
+      if (!security.allowed) return deny(request, security.reason ?? 'security')
       response.headers.set('x-spartan-role', security.access?.role ?? (security.protectedIdentity ? 'protected' : 'member'))
+      response.headers.set('x-spartan-access', 'active')
+      return response
     } catch {
-      response.headers.set('x-spartan-access', 'denied')
+      return deny(request, 'security')
     }
-    return response
   }
 
-  const discordUserId = response.headers.get('x-spartan-discord-id')
+  if (PUBLIC_PATHS.has(path)) return response
+
   if (!discordUserId) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
@@ -35,20 +45,13 @@ export async function proxy(request: NextRequest) {
 
   try {
     const security = await authorizeDashboard(request, discordUserId)
-    if (!security.allowed) {
-      const url = request.nextUrl.clone()
-      url.pathname = '/access-denied'
-      return NextResponse.redirect(url)
-    }
+    if (!security.allowed) return deny(request, security.reason ?? 'security')
 
     response.headers.set('x-spartan-role', security.access?.role ?? (security.protectedIdentity ? 'protected' : 'member'))
     response.headers.set('x-spartan-access', 'active')
     return response
   } catch {
-    const url = request.nextUrl.clone()
-    url.pathname = '/access-denied'
-    url.searchParams.set('error', 'security')
-    return NextResponse.redirect(url)
+    return deny(request, 'security')
   }
 }
 
