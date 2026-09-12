@@ -1,4 +1,5 @@
 import { createClient as createSupabaseAdmin } from '@supabase/supabase-js'
+import { checkIpReputation } from './ip-reputation'
 
 export const SPARTAN_OWNER_ID = '653534906277822494'
 export const SPARTAN_TRUSTED_ADMIN_ID = '262745631829786624'
@@ -63,16 +64,31 @@ export async function authorizeDashboard(request: Request, discordUserId: string
   const protectedIdentity = isProtectedIdentity(discordUserId)
   const block = await getActiveIpBlock(ip)
   const ipRecorded = Boolean(ip)
+  const ipReputation = protectedIdentity ? null : await checkIpReputation(ip)
   const ipBlocked = Boolean(block) && (!protectedIdentity || isOwner(String(block?.created_by_discord_id ?? '')))
+  const reputationBlocked = !protectedIdentity && Boolean(ipReputation?.blocked)
+  const reputationUnavailable = !protectedIdentity && ipRecorded && ipReputation?.reason === 'ip_reputation_unavailable'
   const identityAllowed = protectedIdentity || access?.status === 'active'
-  // Fail closed: Spartan access requires a server-observable client IP.
-  const allowed = identityAllowed && ipRecorded && !ipBlocked
+  // Owner and Riven are absolute protected identities. Everyone else must have
+  // a server-observable IP and a successful privacy/IP reputation check.
+  const allowed = identityAllowed && ipRecorded && !ipBlocked && !reputationBlocked && !reputationUnavailable
 
   await recordDashboardSession({ discordUserId, sessionId: crypto.randomUUID(), ipAddress: ip, userAgent: request.headers.get('user-agent'), route: new URL(request.url).pathname, success: allowed })
 
   if (!allowed) {
-    await recordSecurityEvent(ipBlocked ? 'dashboard_ip_blocked' : !ipRecorded ? 'dashboard_ip_unavailable' : 'dashboard_access_denied', discordUserId, ip, block?.created_by_discord_id ?? null, ipBlocked ? 'Active Spartan IP block' : !ipRecorded ? 'No valid client IP was available; access denied until IP can be recorded.' : 'No active Spartan access', { protectedIdentity, role: access?.role ?? null, ipRecorded })
+    const eventType = ipBlocked ? 'dashboard_ip_blocked' : reputationBlocked ? 'dashboard_ip_masking_blocked' : reputationUnavailable ? 'dashboard_ip_reputation_unavailable' : !ipRecorded ? 'dashboard_ip_unavailable' : 'dashboard_access_denied'
+    const reason = ipBlocked ? 'Active Spartan IP block' : reputationBlocked ? (ipReputation?.reason || 'IP masking detected') : reputationUnavailable ? 'IP reputation could not be verified; access denied until verification is available.' : !ipRecorded ? 'No valid client IP was available; access denied until IP can be recorded.' : 'No active Spartan access'
+    await recordSecurityEvent(eventType, discordUserId, ip, block?.created_by_discord_id ?? null, reason, { protectedIdentity, role: access?.role ?? null, ipRecorded, reputation: ipReputation })
   }
 
-  return { allowed, ip, ipRecorded, access, block, protectedIdentity, reason: !ipRecorded ? 'ip_unavailable' : ipBlocked ? 'ip_blocked' : !identityAllowed ? 'access_inactive' : null }
+  return {
+    allowed,
+    ip,
+    ipRecorded,
+    access,
+    block,
+    protectedIdentity,
+    ipReputation,
+    reason: !ipRecorded ? 'ip_unavailable' : ipBlocked ? 'ip_blocked' : reputationBlocked ? 'ip_masking_detected' : reputationUnavailable ? 'ip_reputation_unavailable' : !identityAllowed ? 'access_inactive' : null,
+  }
 }
