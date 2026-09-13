@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { updateSession } from '@/lib/supabase/proxy'
-import { authorizeDashboard } from '@/lib/spartan/security'
+import { authorizeDashboardForAuthUser } from '@/lib/spartan/security'
 
 const PUBLIC_PATHS = new Set(['/access-denied'])
 
@@ -18,42 +18,21 @@ export async function proxy(request: NextRequest) {
   if (response.redirected || path === '/login' || path.startsWith('/auth')) return response
 
   const discordUserId = response.headers.get('x-spartan-discord-id')
+  const authUserId = response.headers.get('x-spartan-auth-user-id')
 
-  // The command root is protected too. Discord OAuth must complete before the
-  // command shell can be viewed; the OAuth callback performs the first
-  // authoritative IP/session checkpoint.
-  if (path === '/') {
-    if (!discordUserId) {
-      const url = request.nextUrl.clone()
-      url.pathname = '/login'
-      url.searchParams.set('error', 'discord-required')
-      return NextResponse.redirect(url)
-    }
-
-    try {
-      const security = await authorizeDashboard(request, discordUserId)
-      if (!security.allowed) return deny(request, security.reason ?? 'security')
-      response.headers.set('x-spartan-role', security.access?.role ?? (security.protectedIdentity ? 'protected' : 'member'))
-      response.headers.set('x-spartan-access', 'active')
-      return response
-    } catch {
-      return deny(request, 'security')
-    }
+  // The Supabase auth user is the durable session identity. Discord metadata is
+  // useful for authorization, but provider/session refreshes can legitimately
+  // omit it. Resolve the stored Spartan account by auth_user_id first, then use
+  // its canonical Discord ID for access checks.
+  if (!authUserId) {
+    return deny(request, 'security_identity')
   }
 
   if (PUBLIC_PATHS.has(path)) return response
 
-  if (!discordUserId) {
-    const url = request.nextUrl.clone()
-    url.pathname = '/login'
-    url.searchParams.set('error', 'discord-required')
-    return NextResponse.redirect(url)
-  }
-
   try {
-    const security = await authorizeDashboard(request, discordUserId)
+    const security = await authorizeDashboardForAuthUser(request, authUserId, discordUserId)
     if (!security.allowed) return deny(request, security.reason ?? 'security')
-
     response.headers.set('x-spartan-role', security.access?.role ?? (security.protectedIdentity ? 'protected' : 'member'))
     response.headers.set('x-spartan-access', 'active')
     return response
