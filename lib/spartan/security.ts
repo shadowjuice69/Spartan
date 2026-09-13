@@ -41,6 +41,41 @@ export async function recordDashboardSession({ discordUserId, sessionId, ipAddre
   if (error) throw new Error(`Spartan security session recording failed: ${error.message}`)
 }
 
+export async function recordLoginCheckpoint({ discordUserId, authUserId, request }: { discordUserId: string; authUserId: string; request: Request }) {
+  const ip = requestIp(request)
+  if (!ip) throw new Error('No valid client IP was available for Spartan login recording.')
+
+  const supabase = adminClient()
+  const now = new Date().toISOString()
+  const { error: accountError } = await supabase
+    .from('spartan_accounts')
+    .update({ last_login_ip: ip, last_login_at: now, updated_at: now })
+    .eq('auth_user_id', authUserId)
+    .eq('discord_user_id', discordUserId)
+
+  if (accountError) throw new Error(`Spartan login IP recording failed: ${accountError.message}`)
+
+  await recordDashboardSession({
+    discordUserId,
+    sessionId: crypto.randomUUID(),
+    ipAddress: ip,
+    userAgent: request.headers.get('user-agent'),
+    route: '/login',
+    success: true,
+  })
+
+  await recordSecurityEvent(
+    'login_ip_recorded',
+    discordUserId,
+    ip,
+    null,
+    'IP successfully recorded at Spartan login checkpoint.',
+    { authUserId, ipRecorded: true, route: '/login' },
+  )
+
+  return { ip, recordedAt: now }
+}
+
 export async function getActiveIpBlock(ipAddress: string | null) {
   if (!ipAddress) return null
   const supabase = adminClient()
