@@ -3,11 +3,11 @@ import { NextResponse } from 'next/server'
 export const dynamic = 'force-dynamic'
 
 const UTOPIA_TICK_MINUTE = 3
-const ANCHOR_REAL_MS = Date.parse('2026-09-13T04:53:00.000Z')
+const ANCHOR_REAL_MS = Date.parse('2026-09-13T05:03:00.000Z')
 const ANCHOR_UTOPIA_YEAR = 6
 const ANCHOR_UTOPIA_MONTH = 7
-const ANCHOR_UTOPIA_DAY = 11
-const ANCHOR_UTOPIA_TICK = 24
+const ANCHOR_UTOPIA_DAY = 12
+const ANCHOR_UTOPIA_TICK = 1
 const TICKS_PER_DAY = 24
 const TICKS_PER_MONTH = 31 * TICKS_PER_DAY
 const TICKS_PER_YEAR = 12 * TICKS_PER_MONTH
