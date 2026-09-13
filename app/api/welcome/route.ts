@@ -22,17 +22,14 @@ async function verifiedAccount() {
   const discordId = extractDiscordId(user)
   const db = adminClient()
 
-  // The dashboard is already authenticated by Supabase. Discord metadata can be
-  // absent after a provider/session refresh, so do not make Jeeves disappear just
-  // because one optional metadata field is missing. We still bind the account to
-  // the authenticated Supabase user, and use Discord ID when it is available.
-  let query = db.from('spartan_accounts').select('screen_name,discord_user_id,province_name,province_location,previous_login_at,last_login_at,created_at,role').eq('auth_user_id', user.id)
-  if (discordId) query = query.eq('discord_user_id', discordId)
-  const { data: account, error } = await query.maybeSingle()
+  // Supabase auth_user_id is the durable account key. Discord metadata can be
+  // absent or refreshed independently, so never require the session's Discord
+  // value to equal the stored account value just to render Jeeves.
+  const { data: account, error } = await db.from('spartan_accounts').select('screen_name,discord_user_id,province_name,province_location,previous_login_at,last_login_at,created_at,role').eq('auth_user_id', user.id).maybeSingle()
   if (error) throw error
   if (!account) return { error: NextResponse.json({ error: 'Spartan account identity not found.' }, { status: 404 }) }
 
-  const effectiveDiscordId = discordId || String(account.discord_user_id || '') || null
+  const effectiveDiscordId = String(account.discord_user_id || discordId || '') || null
   const { data: jeeves, error: jeevesError } = await db.from('spartan_jeeves_profiles').select('*').eq('auth_user_id', user.id).maybeSingle()
   if (jeevesError) throw jeevesError
   return { db, account, discordId: effectiveDiscordId, authUserId: user.id, jeeves }
