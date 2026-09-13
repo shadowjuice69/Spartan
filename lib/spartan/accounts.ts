@@ -26,7 +26,7 @@ export async function registerSpartanAccount({
 }) {
   const name = screenName.trim()
   const province = provinceName.trim()
-  const location = provinceLocation.trim()
+  const location = provinceLocation.trim().replace(/\s+/g, '')
 
   if (!/^[A-Za-z0-9_\-]{3,32}$/.test(name)) throw new Error('Screen name must be 3-32 characters using letters, numbers, _ or - only.')
   if (password.length < 10) throw new Error('Password must be at least 10 characters.')
@@ -34,15 +34,25 @@ export async function registerSpartanAccount({
   if (province.length < 2 || province.length > 80) throw new Error('Enter your registered province name.')
 
   const supabase = adminClient()
-  const { data: provinceRow, error: provinceError } = await supabase
+
+  // Keep the verification query deliberately simple. The Utopia province table
+  // stores the kingdom/province location in kd_code; location may be null.
+  // Avoid a compound PostgREST OR expression here because it has been causing
+  // gateway timeouts in the server action.
+  const { data: provinceRows, error: provinceError } = await supabase
     .from('provinces')
     .select('name,location,kd_code,discord_id,user_id')
     .eq('name', province)
-    .or(`location.eq.${location},kd_code.eq.${location}`)
     .not('discord_id', 'is', null)
-    .maybeSingle()
+    .limit(20)
 
   if (provinceError) throw new Error(`Province verification failed: ${provinceError.message}`)
+
+  const provinceRow = (provinceRows ?? []).find((row) =>
+    String(row.location ?? '').replace(/\s+/g, '') === location ||
+    String(row.kd_code ?? '').replace(/\s+/g, '') === location
+  )
+
   if (!provinceRow?.discord_id) throw new Error('That province name and location are not registered with the Spartan bot.')
 
   const discordUserId = String(provinceRow.discord_id)
