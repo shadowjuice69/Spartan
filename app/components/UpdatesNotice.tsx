@@ -8,7 +8,8 @@ const updates = [
   { title: "Live Utopia Clock", detail: "The command clock runs live with a countdown to the next tick.", status: "LIVE" },
   { title: "Wiki Knowledge Layer", detail: "Stewards now carry authoritative Age 116 Wiki context when they process captures.", status: "LIVE" },
   { title: "Lossless Province History", detail: "Province snapshots and event history feed the Command Center trends and briefings.", status: "LIVE" },
-  { title: "Next: Identity Linking", detail: "New accounts will be matched to their known province identity using the verified identity chain.", status: "BUILDING" },
+  { title: "First-Entry Spartan Name", detail: "On first entry, Spartan asks what you want to be called and saves your personal call sign.", status: "LIVE" },
+  { title: "Identity Linking", detail: "Verified Discord identity is used to connect an authenticated account to its known Spartan province.", status: "LIVE" },
 ];
 
 export default function UpdatesNotice() {
