@@ -20,14 +20,22 @@ async function verifiedAccount() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) }
   const discordId = extractDiscordId(user)
-  if (!discordId) return { error: NextResponse.json({ error: 'Security identity unavailable.' }, { status: 403 }) }
   const db = adminClient()
-  const { data: account, error } = await db.from('spartan_accounts').select('screen_name,discord_user_id,province_name,province_location,previous_login_at,last_login_at,created_at,role').eq('auth_user_id', user.id).eq('discord_user_id', discordId).maybeSingle()
+
+  // The dashboard is already authenticated by Supabase. Discord metadata can be
+  // absent after a provider/session refresh, so do not make Jeeves disappear just
+  // because one optional metadata field is missing. We still bind the account to
+  // the authenticated Supabase user, and use Discord ID when it is available.
+  let query = db.from('spartan_accounts').select('screen_name,discord_user_id,province_name,province_location,previous_login_at,last_login_at,created_at,role').eq('auth_user_id', user.id)
+  if (discordId) query = query.eq('discord_user_id', discordId)
+  const { data: account, error } = await query.maybeSingle()
   if (error) throw error
   if (!account) return { error: NextResponse.json({ error: 'Spartan account identity not found.' }, { status: 404 }) }
+
+  const effectiveDiscordId = discordId || String(account.discord_user_id || '') || null
   const { data: jeeves, error: jeevesError } = await db.from('spartan_jeeves_profiles').select('*').eq('auth_user_id', user.id).maybeSingle()
   if (jeevesError) throw jeevesError
-  return { db, account, discordId, authUserId: user.id, jeeves }
+  return { db, account, discordId: effectiveDiscordId, authUserId: user.id, jeeves }
 }
 
 export async function POST(request: Request) {
@@ -39,8 +47,15 @@ export async function POST(request: Request) {
     if (!screenName) return NextResponse.json({ error: 'A Spartan name is required.' }, { status: 400 })
     if (screenName.length > 40) return NextResponse.json({ error: 'Keep your Spartan name to 40 characters or fewer.' }, { status: 400 })
 
-    const { data: province, error: provinceError } = await verified.db.from('provinces').select('id').eq('discord_id', verified.discordId).limit(1).maybeSingle()
+    let provinceQuery = verified.db.from('provinces').select('id').eq('name', verified.account.province_name || '')
+    if (verified.account.province_location) provinceQuery = provinceQuery.eq('kd_code', verified.account.province_location)
+    let { data: province, error: provinceError } = await provinceQuery.limit(1).maybeSingle()
     if (provinceError) throw provinceError
+    if (!province && verified.discordId) {
+      const fallback = await verified.db.from('provinces').select('id').eq('discord_id', verified.discordId).limit(1).maybeSingle()
+      if (fallback.error) throw fallback.error
+      province = fallback.data
+    }
 
     const now = new Date().toISOString()
     const { data: profile, error: profileError } = await verified.db.from('spartan_jeeves_profiles').upsert({
@@ -55,7 +70,7 @@ export async function POST(request: Request) {
     }, { onConflict: 'auth_user_id' }).select('*').single()
     if (profileError) throw profileError
 
-    const { error: accountError } = await verified.db.from('spartan_accounts').update({ screen_name: screenName }).eq('auth_user_id', verified.authUserId).eq('discord_user_id', verified.discordId)
+    const { error: accountError } = await verified.db.from('spartan_accounts').update({ screen_name: screenName }).eq('auth_user_id', verified.authUserId)
     if (accountError) throw accountError
 
     return NextResponse.json({ ok: true, jeeves: profile, screenName })
@@ -69,8 +84,16 @@ export async function GET() {
     const verified = await verifiedAccount()
     if ('error' in verified) return verified.error
     const { db, account, discordId, jeeves } = verified
-    const { data: province, error: provinceError } = await db.from('provinces').select('*').eq('discord_id', discordId).limit(1).maybeSingle()
+
+    let provinceQuery = db.from('provinces').select('*').eq('name', account.province_name || '')
+    if (account.province_location) provinceQuery = provinceQuery.eq('kd_code', account.province_location)
+    let { data: province, error: provinceError } = await provinceQuery.limit(1).maybeSingle()
     if (provinceError) throw provinceError
+    if (!province && discordId) {
+      const fallback = await db.from('provinces').select('*').eq('discord_id', discordId).limit(1).maybeSingle()
+      if (fallback.error) throw fallback.error
+      province = fallback.data
+    }
     if (!province) return NextResponse.json({ error: 'Your Spartan account is verified, but your province record is not currently available.' }, { status: 404 })
 
     const since = jeeves?.last_briefing_at || account.previous_login_at || account.created_at
@@ -85,61 +108,16 @@ export async function GET() {
     const latest = (historyRows[0] ?? null) as HistoryRow | null
     const previous = (historyRows[1] ?? null) as HistoryRow | null
     const eventRows = (events ?? []) as EventRow[]
-
-    // History may legitimately be empty for a newly connected province. Jeeves must
-    // still report the real canonical province state instead of rendering an empty briefing.
-    const currentState: HistoryRow = {
-      observed_at: province.updated_at,
-      province_id: province.id,
-      kingdom_id: province.kingdom_id,
-      acres: number(province.acres),
-      networth: number(province.nw),
-      population: number(province.peons),
-      soldiers: number(province.soldiers),
-      off_specs: number(province.off_specs),
-      def_specs: number(province.def_specs),
-      elites: number(province.elites),
-      thieves: number(province.thieves),
-      wizards: number(province.wizards),
-      offense: number(province.off),
-      defense: number(province.def),
-      mana: number(province.mana),
-      stealth: number(province.stlth),
-      build_efficiency: number(province.be),
-      wages: number(province.wages),
-      source: 'canonical_province',
-    }
+    const currentState: HistoryRow = { observed_at: province.updated_at, province_id: province.id, kingdom_id: province.kingdom_id, acres:number(province.acres), networth:number(province.nw), population:number(province.peons), soldiers:number(province.soldiers), off_specs:number(province.off_specs), def_specs:number(province.def_specs), elites:number(province.elites), thieves:number(province.thieves), wizards:number(province.wizards), offense:number(province.off), defense:number(province.def), mana:number(province.mana), stealth:number(province.stlth), build_efficiency:number(province.be), wages:number(province.wages), source:'canonical_province' }
     const reportLatest = latest ?? currentState
-    const delta = (key: string) => { const a = number(latest?.[key]); const b = number(previous?.[key]); return a != null && b != null ? a - b : null }
-    const totals = (key: string) => eventRows.reduce((sum, event) => sum + (number(event[key]) ?? 0), 0)
-    const criticalEvents = eventRows.filter((event) => /attack|war|ambush|plague|failed|loss|destroy|raze/i.test(`${event.event_type ?? ''} ${event.raw_text ?? ''}`))
-    const alerts: string[] = []
-    const currentDefense = number(reportLatest.defense)
-    if (currentDefense != null && currentDefense < 0) alerts.push('Your current defensive state needs attention.')
-    if (criticalEvents.length) alerts.push(`${criticalEvents.length} combat or loss event${criticalEvents.length === 1 ? '' : 's'} occurred while you were away.`)
-
-    const firstArrival = !jeeves?.introduced_at
-    const currentName = jeeves?.preferred_name || account.screen_name || ''
-    return NextResponse.json({
-      ok: true,
-      firstArrival,
-      jeeves: {
-        name: 'Jeeves',
-        title: 'Personal Steward',
-        introducedAt: jeeves?.introduced_at ?? null,
-        preferredName: currentName,
-        lastBriefingAt: jeeves?.last_briefing_at ?? null,
-        briefingCount: jeeves?.briefing_count ?? 0,
-      },
-      firstLogin: firstArrival,
-      identity: { screenName: currentName, discordId, role: account.role, provinceId: province.id, provinceName: province.name, provinceLocation: province.location || province.slot || account.province_location, kingdom: province.kd_code, race: province.race, personality: province.personality, lastLoginAt: account.previous_login_at, currentLoginAt: account.last_login_at },
-      province,
-      latest: reportLatest,
-      historyAvailable,
-      changes: { acres: delta('acres'), networth: delta('networth'), population: delta('population'), soldiers: delta('soldiers'), off_specs: delta('off_specs'), def_specs: delta('def_specs'), elites: delta('elites'), thieves: delta('thieves'), wizards: delta('wizards'), offense: delta('offense'), defense: delta('defense'), mana: delta('mana'), stealth: delta('stealth') },
-      away: { since, eventCount: eventRows.length, acresChange: totals('acres_change'), troopsLost: totals('troops_lost'), thievesLost: totals('thieves_lost'), wizardsLost: totals('wizards_lost'), peasantsChange: totals('peasants_change'), goldChange: totals('gold_change'), foodChange: totals('food_change'), runesChange: totals('runes_change'), manaChange: totals('mana_change'), events: eventRows, alerts },
-    })
-  } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : 'Jeeves briefing failed' }, { status: 500 })
-  }
+    const delta = (key: string) => { const a=number(latest?.[key]); const b=number(previous?.[key]); return a!=null&&b!=null?a-b:null }
+    const totals = (key: string) => eventRows.reduce((sum,event)=>sum+(number(event[key])??0),0)
+    const criticalEvents = eventRows.filter(event=>/attack|war|ambush|plague|failed|loss|destroy|raze/i.test(`${event.event_type??''} ${event.raw_text??''}`))
+    const alerts:string[]=[]
+    if (number(reportLatest.defense)!=null && number(reportLatest.defense)!<0) alerts.push('Your current defensive state needs attention.')
+    if (criticalEvents.length) alerts.push(`${criticalEvents.length} combat or loss event${criticalEvents.length===1?'':'s'} occurred while you were away.`)
+    const firstArrival=!jeeves?.introduced_at
+    const currentName=jeeves?.preferred_name||account.screen_name||''
+    return NextResponse.json({ ok:true, firstArrival, jeeves:{name:'Jeeves',title:'Personal Steward',introducedAt:jeeves?.introduced_at??null,preferredName:currentName,lastBriefingAt:jeeves?.last_briefing_at??null,briefingCount:jeeves?.briefing_count??0}, firstLogin:firstArrival, identity:{screenName:currentName,discordId,role:account.role,provinceId:province.id,provinceName:province.name,provinceLocation:province.location||province.slot||account.province_location,kingdom:province.kd_code,race:province.race,personality:province.personality,lastLoginAt:account.previous_login_at,currentLoginAt:account.last_login_at}, province, latest:reportLatest, historyAvailable, changes:{acres:delta('acres'),networth:delta('networth'),population:delta('population'),soldiers:delta('soldiers'),off_specs:delta('off_specs'),def_specs:delta('def_specs'),elites:delta('elites'),thieves:delta('thieves'),wizards:delta('wizards'),offense:delta('offense'),defense:delta('defense'),mana:delta('mana'),stealth:delta('stealth')}, away:{since,eventCount:eventRows.length,acresChange:totals('acres_change'),troopsLost:totals('troops_lost'),thievesLost:totals('thieves_lost'),wizardsLost:totals('wizards_lost'),peasantsChange:totals('peasants_change'),goldChange:totals('gold_change'),foodChange:totals('food_change'),runesChange:totals('runes_change'),manaChange:totals('mana_change'),events:eventRows,alerts} })
+  } catch (error) { return NextResponse.json({ error:error instanceof Error?error.message:'Jeeves briefing failed' },{status:500}) }
 }
