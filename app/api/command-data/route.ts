@@ -13,22 +13,63 @@ function adminClient() {
 const allowed = new Set(['kingdom','war-room','build-lab','military','magic','thievery','science','tools'])
 const sectionKinds: Record<string,string[]> = { 'war-room':['som','news','throne','universal'], 'build-lab':['survey'], military:['som','throne'], magic:['magic'], thievery:['thievery'], science:['science'], tools:['bot_event','universal'], kingdom:['kingdom','throne','som','survey','science','magic','thievery','news','universal'] }
 
+function payloadData(capture:any) {
+  let value = capture?.parsed_payload ?? capture?.raw_payload ?? {}
+  for (let i=0;i<5;i++) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
+    const next = value.data ?? value.throne ?? value.state ?? value.payload
+    if (!next || typeof next !== 'object' || Array.isArray(next)) return value
+    value = next
+  }
+  return value && typeof value === 'object' && !Array.isArray(value) ? value : {}
+}
+function value(d:any, ...keys:string[]) {
+  for (const key of keys) if (d?.[key] !== undefined && d?.[key] !== null) return d[key]
+  return null
+}
 function mergeCapture(province: any, capture: any) {
   if (!capture) return province
-  const payload = capture.parsed_payload?.data ?? capture.parsed_payload?.throne ?? capture.parsed_payload ?? {}
-  const d = payload.data ?? payload
+  const d = payloadData(capture)
   return {
     ...province,
-    name: province.name || d.name || capture.province_id,
-    kd_code: province.kd_code || d.coordinates || capture.kingdom_id,
-    acres: province.acres ?? d.acres,
-    nw: province.nw ?? d.nw,
-    off: province.off ?? d.off,
-    def: province.def ?? d.def,
-    peons: province.peons ?? d.peons,
-    thieves: province.thieves ?? d.thieves,
-    wizards: province.wizards ?? d.wizards,
-    race: province.race || d.race,
+    name: province.name || value(d,'name','province') || capture.province_id,
+    kd_code: province.kd_code || value(d,'coordinates','kd_code') || capture.kingdom_id,
+    race: province.race || value(d,'race'),
+    personality: province.personality || value(d,'personality'),
+    acres: province.acres ?? value(d,'acres','land'),
+    nw: province.nw ?? value(d,'nw','networth'),
+    off: province.off ?? value(d,'off','offense','offence'),
+    def: province.def ?? value(d,'def','defense','defence'),
+    population: province.population ?? value(d,'population'),
+    peons: province.peons ?? value(d,'peons','peasants'),
+    soldiers: province.soldiers ?? value(d,'soldiers'),
+    off_specs: province.off_specs ?? value(d,'off_specs','offSpecs'),
+    def_specs: province.def_specs ?? value(d,'def_specs','defSpecs'),
+    elites: province.elites ?? value(d,'elites'),
+    thieves: province.thieves ?? value(d,'thieves'),
+    wizards: province.wizards ?? value(d,'wizards'),
+    generals: province.generals ?? value(d,'generals'),
+    prisoners: province.prisoners ?? value(d,'prisoners'),
+    war_horses: province.war_horses ?? value(d,'war_horses','warHorses'),
+    horses: province.horses ?? value(d,'war_horses','warHorses'),
+    gold: province.gold ?? value(d,'gold'),
+    food: province.food ?? value(d,'food'),
+    runes: province.runes ?? value(d,'runes'),
+    mana: province.mana ?? value(d,'mana'),
+    stealth: province.stealth ?? value(d,'stealth','stlth'),
+    build_efficiency: province.build_efficiency ?? value(d,'build_efficiency','buildEfficiency','be'),
+    wages: province.wages ?? value(d,'wages'),
+    game_year: province.game_year ?? value(d,'game_year','gameYear','year'),
+    game_tick: province.game_tick ?? value(d,'game_tick','gameTick','tick'),
+    latest_capture_at: capture.captured_at ?? null,
+    latest_capture_source: capture.source ?? null,
+  }
+}
+function captureIdentity(c:any) {
+  const d=payloadData(c)
+  return {
+    name:String(value(d,'name','province') ?? c.province_id ?? '').trim().toLowerCase(),
+    id:String(c.province_id ?? '').trim().toLowerCase(),
   }
 }
 
@@ -66,16 +107,34 @@ export async function GET(request: Request) {
     const selectedVault=(vault.data||[]).filter((row:any)=>kinds.includes(row.page_kind)).slice(0,100)
     const selectedFlows=(flows.data||[]).filter((row:any)=>kinds.includes(row.page_kind)).slice(0,100)
 
-    // The canonical province row may intentionally keep legacy columns NULL. Overlay the newest
-    // Throne capture so Command Center always reflects the actual captured game state.
-    const latestThroneByProvince=new Map<string,any>()
+    // Captures are allowed to arrive keyed by province name while the canonical provinces table uses UUIDs.
+    // Build both identity indexes so the Command Center never loses a fresh Throne overlay because of that mismatch.
+    const latestThroneByName=new Map<string,any>(), latestThroneById=new Map<string,any>()
     for(const c of (vault.data||[]).filter((x:any)=>x.page_kind==='throne')) {
-      const key=String(c.province_id||'').toLowerCase(); if(!latestThroneByProvince.has(key)) latestThroneByProvince.set(key,c)
+      const identity=captureIdentity(c)
+      if(identity.name && !latestThroneByName.has(identity.name)) latestThroneByName.set(identity.name,c)
+      if(identity.id && !latestThroneById.has(identity.id)) latestThroneById.set(identity.id,c)
     }
-    const enrichedProvinces=(provinces.data||[]).map((p:any)=>mergeCapture(p,latestThroneByProvince.get(String(p.name||'').toLowerCase())||latestThroneByProvince.get(String(p.id||'').toLowerCase())))
-    const currentCapture=latestThroneByProvince.get(String(province.name||'').toLowerCase()) || latestThroneByProvince.get(String(province.id||'').toLowerCase())
+    const captureFor=(p:any)=>latestThroneById.get(String(p.id||'').toLowerCase()) || latestThroneByName.get(String(p.name||'').toLowerCase())
+    const enrichedProvinces=(provinces.data||[]).map((p:any)=>mergeCapture(p,captureFor(p)))
+    const currentCapture=captureFor(province)
     const current=mergeCapture(province,currentCapture)
+    const currentHistory=(history.data||[]).map((row:any)=>({
+      ...row,
+      province_id:row.province_id || province.id,
+      acres:row.acres ?? current.acres,
+      networth:row.networth ?? current.nw,
+      population:row.population ?? current.population,
+      soldiers:row.soldiers ?? current.soldiers,
+      off_specs:row.off_specs ?? current.off_specs,
+      def_specs:row.def_specs ?? current.def_specs,
+      elites:row.elites ?? current.elites,
+      thieves:row.thieves ?? current.thieves,
+      wizards:row.wizards ?? current.wizards,
+      offense:row.offense ?? current.off,
+      defense:row.defense ?? current.def,
+    }))
 
-    return NextResponse.json({ok:true,section,kingdom,province:current,provinces:enrichedProvinces,history:history.data||[],flows:flows.data||[],captures:selectedFlows,vault:selectedVault,pageKinds,wikiCounts:counts,stewards:steward.data||[],account,generatedAt:new Date().toISOString()})
+    return NextResponse.json({ok:true,section,kingdom,province:current,provinces:enrichedProvinces,history:currentHistory,flows:flows.data||[],captures:selectedFlows,vault:selectedVault,pageKinds,wikiCounts:counts,stewards:steward.data||[],account,generatedAt:new Date().toISOString(),dataContract:{canonicalState:'provinces.state_data.throne',captureOverlay:Boolean(currentCapture),historyRows:currentHistory.length}})
   } catch(error) { return NextResponse.json({error:error instanceof Error?error.message:'Command data query failed'},{status:500}) }
 }
