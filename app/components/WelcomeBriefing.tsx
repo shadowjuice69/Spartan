@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 type Welcome = {
   firstLogin: boolean;
@@ -17,12 +17,41 @@ export default function WelcomeBriefing() {
   const [data, setData] = useState<Welcome | null>(null);
   const [open, setOpen] = useState(false);
 
-  useEffect(() => {
-    if (window.location.pathname !== "/") return;
-    fetch("/api/welcome", { cache: "no-store" }).then(async r => r.ok ? r.json() : null).then(result => {
-      if (result?.ok) { setData(result); setOpen(true); }
-    }).catch(() => {});
+  const load = useCallback(async (afterIdentity = false) => {
+    try {
+      const response = await fetch("/api/welcome", { cache: "no-store" });
+      if (!response.ok) return;
+      const result = (await response.json()) as Welcome;
+      // On first entry, the identity prompt must be completed before the
+      // briefing opens so the briefing uses the user's chosen call sign.
+      if (result.ok !== true) return;
+      if (result.firstLogin && !afterIdentity && !result.identity.screenName) return;
+      setData(result);
+      setOpen(true);
+    } catch {
+      // Authentication/data may still be settling immediately after login.
+    }
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/welcome", { cache: "no-store" })
+      .then(async response => response.ok ? response.json() : null)
+      .then(result => {
+        if (cancelled || !result?.ok) return;
+        if (result.firstLogin) return;
+        setData(result);
+        setOpen(true);
+      })
+      .catch(() => {});
+
+    const onIdentityUpdated = () => { void load(true); };
+    window.addEventListener("spartan:identity-updated", onIdentityUpdated);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("spartan:identity-updated", onIdentityUpdated);
+    };
+  }, [load]);
 
   if (!data || !open) return null;
   const d = data.away;
@@ -35,7 +64,7 @@ export default function WelcomeBriefing() {
       <div className="wb-kicker">SPARTAN // PERSONAL COMMAND BRIEFING</div>
       <h2>{title}</h2>
       <div className="wb-identity"><strong>{i.provinceName}</strong><span>{i.provinceLocation || "Province location pending"}</span>{i.kingdom && <span>Kingdom {i.kingdom}</span>} {i.race && <span>{i.race}</span>} {i.personality && <span>{i.personality}</span>}</div>
-      {!data.firstLogin && <p className="wb-away">You were last here <strong>{new Date(i.lastLoginAt!).toLocaleString()}</strong>. Here’s what changed while you were away.</p>}
+      {!data.firstLogin && i.lastLoginAt && <p className="wb-away">You were last here <strong>{new Date(i.lastLoginAt).toLocaleString()}</strong>. Here’s what changed while you were away.</p>}
       {data.firstLogin && <p className="wb-away">Your province is already connected to your Spartan identity. Here’s the current state of your command.</p>}
       <div className="wb-grid">
         {stat("ACRES", data.changes.acres)}
