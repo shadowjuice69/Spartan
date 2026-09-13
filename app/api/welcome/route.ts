@@ -80,14 +80,41 @@ export async function GET() {
     if (eventError) throw eventError
 
     const number = (value: unknown) => { const n = Number(value); return Number.isFinite(n) ? n : null }
-    const latest = (snapshots?.[0] ?? null) as HistoryRow | null
-    const previous = (snapshots?.[1] ?? null) as HistoryRow | null
+    const historyRows = (snapshots ?? []) as HistoryRow[]
+    const historyAvailable = historyRows.length > 0
+    const latest = (historyRows[0] ?? null) as HistoryRow | null
+    const previous = (historyRows[1] ?? null) as HistoryRow | null
     const eventRows = (events ?? []) as EventRow[]
+
+    // History may legitimately be empty for a newly connected province. Jeeves must
+    // still report the real canonical province state instead of rendering an empty briefing.
+    const currentState: HistoryRow = {
+      observed_at: province.updated_at,
+      province_id: province.id,
+      kingdom_id: province.kingdom_id,
+      acres: number(province.acres),
+      networth: number(province.nw),
+      population: number(province.peons),
+      soldiers: number(province.soldiers),
+      off_specs: number(province.off_specs),
+      def_specs: number(province.def_specs),
+      elites: number(province.elites),
+      thieves: number(province.thieves),
+      wizards: number(province.wizards),
+      offense: number(province.off),
+      defense: number(province.def),
+      mana: number(province.mana),
+      stealth: number(province.stlth),
+      build_efficiency: number(province.be),
+      wages: number(province.wages),
+      source: 'canonical_province',
+    }
+    const reportLatest = latest ?? currentState
     const delta = (key: string) => { const a = number(latest?.[key]); const b = number(previous?.[key]); return a != null && b != null ? a - b : null }
     const totals = (key: string) => eventRows.reduce((sum, event) => sum + (number(event[key]) ?? 0), 0)
     const criticalEvents = eventRows.filter((event) => /attack|war|ambush|plague|failed|loss|destroy|raze/i.test(`${event.event_type ?? ''} ${event.raw_text ?? ''}`))
     const alerts: string[] = []
-    const currentDefense = number(latest?.defense)
+    const currentDefense = number(reportLatest.defense)
     if (currentDefense != null && currentDefense < 0) alerts.push('Your current defensive state needs attention.')
     if (criticalEvents.length) alerts.push(`${criticalEvents.length} combat or loss event${criticalEvents.length === 1 ? '' : 's'} occurred while you were away.`)
 
@@ -107,7 +134,8 @@ export async function GET() {
       firstLogin: firstArrival,
       identity: { screenName: currentName, discordId, role: account.role, provinceId: province.id, provinceName: province.name, provinceLocation: province.location || province.slot || account.province_location, kingdom: province.kd_code, race: province.race, personality: province.personality, lastLoginAt: account.previous_login_at, currentLoginAt: account.last_login_at },
       province,
-      latest,
+      latest: reportLatest,
+      historyAvailable,
       changes: { acres: delta('acres'), networth: delta('networth'), population: delta('population'), soldiers: delta('soldiers'), off_specs: delta('off_specs'), def_specs: delta('def_specs'), elites: delta('elites'), thieves: delta('thieves'), wizards: delta('wizards'), offense: delta('offense'), defense: delta('defense'), mana: delta('mana'), stealth: delta('stealth') },
       away: { since, eventCount: eventRows.length, acresChange: totals('acres_change'), troopsLost: totals('troops_lost'), thievesLost: totals('thieves_lost'), wizardsLost: totals('wizards_lost'), peasantsChange: totals('peasants_change'), goldChange: totals('gold_change'), foodChange: totals('food_change'), runesChange: totals('runes_change'), manaChange: totals('mana_change'), events: eventRows, alerts },
     })
