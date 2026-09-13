@@ -34,35 +34,38 @@ export async function GET(request: Request) {
     if (!allowed.has(section)) return NextResponse.json({ error: 'Unknown command section' }, { status: 400 })
     const db = adminClient()
 
-    const { data: account } = await db.from('spartan_accounts')
-      .select('province_name,province_location,discord_user_id,screen_name,role')
+    const { data: account, error: accountError } = await db.from('spartan_accounts')
+      .select('auth_user_id,province_name,province_location,discord_user_id,screen_name,role')
       .eq('auth_user_id', user.id).maybeSingle()
+    if (accountError) throw accountError
+    if (!account) return NextResponse.json({ error: 'Your Spartan account identity is not linked to this session.' }, { status: 403 })
 
-    const provinceName = account?.province_name || null
-    const kdCode = account?.province_location || null
+    const provinceName = account.province_name || null
+    const kdCode = account.province_location || null
     let province: any = null
     if (provinceName && kdCode) {
       const r = await db.from('provinces').select('*').eq('name', provinceName).eq('kd_code', kdCode).maybeSingle()
       if (r.error) throw r.error
       province = r.data
     }
-    if (!province && account?.discord_user_id) {
-      const r = await db.from('provinces').select('*').eq('discord_id', String(account.discord_user_id)).maybeSingle()
+    if (!province && provinceName) {
+      const r = await db.from('provinces').select('*').eq('name', provinceName).order('updated_at', { ascending: false }).limit(1).maybeSingle()
       if (r.error) throw r.error
       province = r.data
     }
-    if (!province) {
-      const r = await db.from('provinces').select('*').order('updated_at', { ascending: false }).limit(1).maybeSingle()
+    if (!province && account.discord_user_id) {
+      const r = await db.from('provinces').select('*').eq('discord_id', String(account.discord_user_id)).order('updated_at', { ascending: false }).limit(1).maybeSingle()
       if (r.error) throw r.error
       province = r.data
     }
+    if (!province) return NextResponse.json({ error: 'Your Spartan account is verified, but its province is not currently linked to captured data.' }, { status: 404 })
 
-    const kingdom = province?.kd_code || kdCode || '6:9'
+    const kingdom = province.kd_code || kdCode || '6:9'
     const kinds = sectionKinds[section] || []
 
     const [provinces, history, flows, vault, wiki, steward] = await Promise.all([
       db.from('provinces').select('*').eq('kd_code', kingdom).order('slot', { ascending: true }),
-      province ? db.from('spartan_province_history').select('*').eq('province_id', province.id).order('observed_at', { ascending: true }).limit(200) : Promise.resolve({ data: [], error: null }),
+      db.from('spartan_province_history').select('*').eq('province_id', province.id).order('observed_at', { ascending: true }).limit(200),
       db.from('spartan_data_flow').select('flow_id,page_kind,province_id,kingdom_id,received_at,status,processed_at,payload').eq('kingdom_id', kingdom).order('received_at', { ascending: false }).limit(250),
       db.from('spartan_capture_vault').select('id,capture_id,page_kind,province_id,kingdom_id,captured_at,source,url,parsed_payload,raw_payload').eq('kingdom_id', kingdom).order('captured_at', { ascending: false }).limit(250),
       db.from('wiki_entries').select('category', { count: 'exact', head: false }).limit(500),
@@ -72,6 +75,7 @@ export async function GET(request: Request) {
     if (history.error) throw history.error
     if (flows.error) throw flows.error
     if (vault.error) throw vault.error
+    if (wiki.error) throw wiki.error
     if (steward.error) throw steward.error
 
     const counts: Record<string, number> = {}
@@ -96,7 +100,7 @@ export async function GET(request: Request) {
       pageKinds,
       wikiCounts: counts,
       stewards: steward.data || [],
-      account: account || null,
+      account,
       generatedAt: new Date().toISOString(),
     })
   } catch (error) {
