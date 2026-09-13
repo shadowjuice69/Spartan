@@ -34,7 +34,7 @@ function adminClient() {
   return createSupabaseAdmin(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
 }
 
-export async function recordDashboardSession({ discordUserId, sessionId, ipAddress, userAgent, route, success }: { discordUserId: string; sessionId: string; ipAddress: string | null; userAgent: string | null; route: string; success: boolean }) {
+export async function recordDashboardSession({ discordUserId, sessionId, ipAddress, userAgent, route, success }: { discordUserId: string | null; sessionId: string; ipAddress: string | null; userAgent: string | null; route: string; success: boolean }) {
   if (!ipAddress) throw new Error('No valid client IP was available for Spartan session recording.')
   const supabase = adminClient()
   const { error } = await supabase.from('spartan_security_sessions').insert({ discord_user_id: discordUserId, session_id: sessionId, ip_address: ipAddress, user_agent: userAgent, dashboard_route: route, success })
@@ -53,9 +53,9 @@ export async function recordLoginCheckpoint({ authUserId, request }: { authUserI
     .eq('auth_user_id', authUserId)
     .maybeSingle()
   if (lookupError) throw new Error(`Spartan login history lookup failed: ${lookupError.message}`)
-  if (!account?.discord_user_id) throw new Error('Spartan account identity is not linked to the authenticated account.')
+  if (!account) throw new Error('Spartan account identity is not linked to the authenticated account.')
 
-  const discordUserId = String(account.discord_user_id)
+  const discordUserId = account.discord_user_id ? String(account.discord_user_id) : null
   const { error: accountError } = await supabase
     .from('spartan_accounts')
     .update({ last_login_ip: ip, previous_login_at: account.last_login_at ?? null, last_login_at: now, updated_at: now })
@@ -78,7 +78,7 @@ export async function recordLoginCheckpoint({ authUserId, request }: { authUserI
     ip,
     null,
     'IP successfully recorded at Spartan login checkpoint.',
-    { authUserId, ipRecorded: true, route: '/login', previousLoginAt: account.last_login_at ?? null },
+    { authUserId, ipRecorded: true, route: '/login', previousLoginAt: account.last_login_at ?? null, discordOptional: true },
   )
 
   return { ip, recordedAt: now, previousLoginAt: account.last_login_at ?? null, discordUserId }
@@ -97,6 +97,30 @@ export async function getSpartanAccess(discordUserId: string) {
   const { data, error } = await supabase.from('spartan_access').select('discord_user_id,username,status,role,metadata').eq('discord_user_id', discordUserId).maybeSingle()
   if (error) throw new Error(`Spartan access lookup failed: ${error.message}`)
   return data ?? null
+}
+
+export async function getSpartanAccessForAuthUser(authUserId: string) {
+  const supabase = adminClient()
+  const { data: account, error } = await supabase
+    .from('spartan_accounts')
+    .select('auth_user_id,screen_name,province_name,province_location,role,discord_user_id')
+    .eq('auth_user_id', authUserId)
+    .maybeSingle()
+  if (error) throw new Error(`Spartan account access lookup failed: ${error.message}`)
+  if (!account) return null
+
+  const role = account.role || 'member'
+  return {
+    auth_user_id: account.auth_user_id,
+    username: account.screen_name,
+    status: 'active',
+    role,
+    metadata: {
+      province_name: account.province_name,
+      province_location: account.province_location,
+      discord_user_id: account.discord_user_id ?? null,
+    },
+  }
 }
 
 export async function resolveDashboardIdentity(authUserId: string, sessionDiscordId?: string | null) {
@@ -138,22 +162,30 @@ export async function authorizeDashboard(request: Request, discordUserId: string
 
   await recordSecurityEvent(eventType, discordUserId, ip, block?.created_by_discord_id ?? null, reason, { protectedIdentity, role: access?.role ?? null, ipRecorded, reputation: ipReputation, route: new URL(request.url).pathname })
 
-  return {
-    allowed,
-    ip,
-    ipRecorded,
-    access,
-    block,
-    protectedIdentity,
-    ipReputation,
-    reason: !ipRecorded ? 'ip_unavailable' : ipBlocked ? 'ip_blocked' : reputationBlocked ? 'ip_masking_detected' : reputationUnavailable ? 'ip_reputation_unavailable' : !identityAllowed ? 'access_inactive' : null,
-  }
+  return { allowed, ip, ipRecorded, access, block, protectedIdentity, ipReputation, reason: !ipRecorded ? 'ip_unavailable' : ipBlocked ? 'ip_blocked' : reputationBlocked ? 'ip_masking_detected' : reputationUnavailable ? 'ip_reputation_unavailable' : !identityAllowed ? 'access_inactive' : null }
 }
 
 export async function authorizeDashboardForAuthUser(request: Request, authUserId: string, sessionDiscordId?: string | null) {
   const identity = await resolveDashboardIdentity(authUserId, sessionDiscordId)
-  if (!identity.discordUserId) {
+  if (!identity.account) {
     return { allowed: false, reason: 'security_identity_unavailable', access: null, protectedIdentity: false, ipRecorded: Boolean(requestIp(request)) }
   }
-  return authorizeDashboard(request, identity.discordUserId)
+
+  const ip = requestIp(request)
+  const block = await getActiveIpBlock(ip)
+  const ipRecorded = Boolean(ip)
+  const discordUserId = identity.discordUserId
+  const protectedIdentity = isProtectedIdentity(discordUserId)
+  const access = await getSpartanAccessForAuthUser(authUserId)
+  const ipReputation = protectedIdentity ? null : await checkIpReputation(ip)
+  const ipBlocked = Boolean(block) && (!protectedIdentity || isOwner(String(block?.created_by_discord_id ?? '')))
+  const reputationBlocked = !protectedIdentity && Boolean(ipReputation?.blocked)
+  const reputationUnavailable = !protectedIdentity && ipRecorded && ipReputation?.reason === 'ip_reputation_unavailable'
+  const identityAllowed = Boolean(access && access.status === 'active')
+  const allowed = identityAllowed && ipRecorded && !ipBlocked && !reputationBlocked && !reputationUnavailable
+
+  await recordDashboardSession({ discordUserId, sessionId: crypto.randomUUID(), ipAddress: ip, userAgent: request.headers.get('user-agent'), route: new URL(request.url).pathname, success: allowed })
+  await recordSecurityEvent(allowed ? 'dashboard_ip_recorded' : ipBlocked ? 'dashboard_ip_blocked' : reputationBlocked ? 'dashboard_ip_masking_blocked' : reputationUnavailable ? 'dashboard_ip_reputation_unavailable' : 'dashboard_access_denied', discordUserId, ip, block?.created_by_discord_id ?? null, allowed ? 'Spartan website identity authenticated independently of Discord.' : ipBlocked ? 'Active Spartan IP block' : reputationBlocked ? (ipReputation?.reason || 'IP masking detected') : reputationUnavailable ? 'IP reputation could not be verified; access denied until verification is available.' : 'No active Spartan account access', { authUserId, discordOptional: true, role: access?.role ?? null, ipRecorded, reputation: ipReputation, route: new URL(request.url).pathname })
+
+  return { allowed, ip, ipRecorded, access, block, protectedIdentity, ipReputation, reason: !ipRecorded ? 'ip_unavailable' : ipBlocked ? 'ip_blocked' : reputationBlocked ? 'ip_masking_detected' : reputationUnavailable ? 'ip_reputation_unavailable' : !identityAllowed ? 'access_inactive' : null }
 }
