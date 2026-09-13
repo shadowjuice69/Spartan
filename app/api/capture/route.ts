@@ -7,7 +7,7 @@ import type { ProvinceSnapshot, SpartanEvent } from '@/lib/spartan/history'
 
 export const dynamic = 'force-dynamic'
 function isServiceRequest(request: Request) { const configured=process.env.SPARTAN_CAPTURE_KEY; return Boolean(configured&&request.headers.get('x-spartan-capture-key')===configured) }
-function object(value:unknown):Record<string,any>{return value&&typeof value==='object'&&!Array.isArray(value)?value as Record<string,any>:{}}
+function object(value:unknown):Record<string,any>{return value&&typeof value==='object'&&!Array.isArray(value)?value as Record<string,any>: {}}
 function number(value:unknown):number|null{if(typeof value==='number'&&Number.isFinite(value))return value;if(typeof value==='string'&&value.trim()){const n=Number(value.replace(/,/g,''));return Number.isFinite(n)?n:null}return null}
 function firstNumber(...values:unknown[]){for(const value of values){const n=number(value);if(n!==null)return n}return null}
 function unwrapPayload(payload:unknown):Record<string,any>{let current=object(payload);for(let i=0;i<4;i++){const next=object(current.data??current.payload??current.throne??current.state??current.parsed);if(!Object.keys(next).length)break;current=next}return current}
@@ -16,23 +16,41 @@ function normalizeSnapshotFromCapture(capture:any,provinceId:string|null,kingdom
  const v=(...keys:string[])=>firstNumber(...keys.flatMap(key=>[state[key],p[key]]))
  return {provinceId,kingdomId,observedAt:capture?.capturedAt??new Date().toISOString(),age:number(state.age??p.age),gameYear:number(state.gameYear??state.year??p.gameYear??p.year),gameTick:(number(state.gameTick??state.tick??p.gameTick??p.tick)??null)?.toString()??null,source:capture?.source??'universal_capture',sourceId:capture?.sourceId??capture?.captureId??null,acres:v('acres','land'),networth:v('networth','nw'),population:v('population'),peons:v('peons','peasants'),soldiers:v('soldiers'),offSpecs:v('offSpecs','off_specs'),defSpecs:v('defSpecs','def_specs'),elites:v('elites'),thieves:v('thieves'),wizards:v('wizards'),generals:v('generals'),prisoners:v('prisoners'),warHorses:v('warHorses','war_horses'),offense:v('offense','offence','off'),defense:v('defense','defence','def'),defenseHome:v('defenseHome','defense_home'),mana:v('mana'),stealth:v('stealth'),rTpa:v('rTpa','r_tpa'),oTpa:v('oTpa','o_tpa'),dTpa:v('dTpa','d_tpa'),rWpa:v('rWpa','r_wpa'),oWpa:v('oWpa','o_wpa'),dWpa:v('dWpa','d_wpa'),buildEfficiency:v('buildEfficiency','build_efficiency','be'),wages:v('wages'),rawState:capture?.rawPayload??{},changes:{}}
 }
+
+async function canonicalCaptureIdentity(supabase:any,capture:any){
+ const p=unwrapPayload(capture?.parsedPayload??capture?.rawPayload)
+ const state=unwrapPayload(p.throne??p.state??p.data??p)
+ const provinceName=String(state.name??state.province??state.province_name??capture?.provinceId??'').trim()
+ const kingdomCode=String(state.coordinates??state.kd_code??state.kingdomId??capture?.kingdomId??'').trim()
+ let province:any=null
+ if(provinceName){
+   let q=kingdomCode?await supabase.from('provinces').select('id,name,kd_code').eq('name',provinceName).eq('kd_code',kingdomCode).maybeSingle():await supabase.from('provinces').select('id,name,kd_code').eq('name',provinceName).order('updated_at',{ascending:false}).limit(1).maybeSingle()
+   if(q.error) throw new Error(q.error.message)
+   province=q.data??null
+ }
+ if(!province&&capture?.provinceId){
+   const q=await supabase.from('provinces').select('id,name,kd_code').eq('id',capture.provinceId).maybeSingle();if(q.error)throw new Error(q.error.message);province=q.data??null
+ }
+ return {capture:{...capture,provinceId:province?.id??capture?.provinceId??null,kingdomId:province?.kd_code??kingdomCode??capture?.kingdomId??null},province}
+}
+
 export async function POST(request:Request){
  try{
   const serviceRequest=isServiceRequest(request),supabase=await createClient(),{data:{user}}=await supabase.auth.getUser(); if(!user&&!serviceRequest)return NextResponse.json({error:'Unauthorized'},{status:401})
-  const body=await request.json() as {snapshot?:ProvinceSnapshot;events?:SpartanEvent[];capture?:Record<string,any>;userId?:string}; const ownerId=user?.id??(serviceRequest?body.userId??process.env.SPARTAN_CAPTURE_USER_ID??null:null),capture=body.capture
+  const body=await request.json() as {snapshot?:ProvinceSnapshot;events?:SpartanEvent[];capture?:Record<string,any>;userId?:string}; const ownerId=user?.id??(serviceRequest?body.userId??process.env.SPARTAN_CAPTURE_USER_ID??null:null)
+  let capture=body.capture
   let captureSteward:ReturnType<typeof runCaptureStewards>|null=null,captureKnowledge:Awaited<ReturnType<typeof resolveWikiKnowledge>>|null=null
   if(capture){
-   captureKnowledge=await resolveWikiKnowledge(supabase,{provinceId:capture.provinceId});captureSteward=runCaptureStewards(capture,captureKnowledge)
+   const canonical=await canonicalCaptureIdentity(supabase,capture);capture=canonical.capture;body.capture=capture
+   captureKnowledge=await resolveWikiKnowledge(supabase,{provinceId:capture.provinceId})
+   captureSteward=runCaptureStewards(capture,captureKnowledge)
    const rawText=capture.rawText??'',rawPayload=capture.rawPayload??{},parsedPayload=capture.parsedPayload??{},contentHash=crypto.createHash('sha256').update(JSON.stringify([capture.url??'',capture.provinceId??null,capture.kingdomId??null,rawText,rawPayload,parsedPayload])).digest('hex')
    const {error}=await supabase.from('spartan_capture_vault').upsert({user_id:ownerId,province_id:capture.provinceId??null,kingdom_id:capture.kingdomId??null,captured_at:capture.capturedAt??new Date().toISOString(),source:capture.source??'universal_capture',source_id:capture.sourceId??null,page_kind:capture.pageKind??null,url:capture.url??null,capture_id:capture.captureId??null,raw_text:rawText||null,raw_payload:rawPayload,parsed_payload:parsedPayload,content_hash:contentHash},{onConflict:'content_hash'}); if(error)return NextResponse.json({error:error.message},{status:500})
    const failed=captureSteward.results.filter(r=>!r.ok&&r.severity!=='medium'); if(failed.length){const {error:q}=await supabase.from('spartan_data_quarantine').insert({capture_id:capture.captureId??null,source:capture.source??'universal_capture',source_id:capture.sourceId??null,page_kind:capture.pageKind??null,url:capture.url??null,province_id:capture.provinceId??null,kingdom_id:capture.kingdomId??null,steward:failed.map(r=>r.steward).join(','),severity:failed.some(r=>r.severity==='critical')?'critical':'high',reason:failed.map(r=>r.reason??'validation failure').join('; '),field_name:failed.find(r=>r.fieldName)?.fieldName??null,observed_value:failed.find(r=>r.details?.observed!==undefined)?.details?.observed??null,raw_payload:rawPayload,parsed_payload:parsedPayload,validation_details:{results:captureSteward.results,confidence:captureSteward.confidence,wikiKnowledge:captureKnowledge},fingerprint:captureSteward.fingerprint});if(q)return NextResponse.json({error:q.message},{status:500})}
-   await supabase.from('spartan_steward_runs').insert({capture_id:capture.captureId??null,source:capture.source??'universal_capture',page_kind:capture.pageKind??null,province_id:capture.provinceId??null,kingdom_id:capture.kingdomId??null,decision:captureSteward.decision,confidence:captureSteward.confidence,steward_results:captureSteward.results,canonical_payload:captureSteward.decision==='accept'?parsedPayload:{},knowledge_source:captureKnowledge?.sourceKey??'utopia_wiki_age_116',knowledge_age:captureKnowledge?.age??116,knowledge_refs:captureKnowledge?.refs??[]})
+   const {error:stewardError}=await supabase.from('spartan_steward_runs').insert({capture_id:capture.captureId??null,source:capture.source??'universal_capture',page_kind:capture.pageKind??null,province_id:capture.provinceId??null,kingdom_id:capture.kingdomId??null,decision:captureSteward.decision,confidence:captureSteward.confidence,steward_results:captureSteward.results,canonical_payload:captureSteward.decision==='accept'?parsedPayload:{},knowledge_source:captureKnowledge?.sourceKey??'utopia_wiki_age_116',knowledge_age:captureKnowledge?.age??116,knowledge_refs:captureKnowledge?.refs??[]});if(stewardError)return NextResponse.json({error:stewardError.message},{status:500})
    if(captureSteward.decision==='quarantine')return NextResponse.json({ok:true,captured:true,storedInVault:true,stewardDecision:'quarantine',historyWritten:false},{status:202})
    if(['throne','throne-room','province','overview'].includes(String(capture.pageKind??'').toLowerCase())){
-    const p=unwrapPayload(capture.parsedPayload??capture.rawPayload),state=unwrapPayload(p.throne??p.state??p.data??p),provinceName=String(state.name??state.province??capture.provinceId??'').trim(),kingdomCode=String(state.coordinates??state.kingdomId??capture.kingdomId??'').trim();let resolvedId:string|null=null
-    if(provinceName){const q=await supabase.from('provinces').select('id,name,kd_code').eq('name',provinceName).eq('kd_code',kingdomCode).maybeSingle();if(q.error)return NextResponse.json({error:q.error.message},{status:500});resolvedId=q.data?.id??null}
-    if(!resolvedId&&provinceName){const q=await supabase.from('provinces').select('id,name,kd_code').eq('name',provinceName).order('updated_at',{ascending:false}).limit(1).maybeSingle();if(q.error)return NextResponse.json({error:q.error.message},{status:500});resolvedId=q.data?.id??null}
-    const derived=normalizeSnapshotFromCapture(capture,resolvedId??capture.provinceId??null,kingdomCode||capture.kingdomId??null);if(derived)body.snapshot=derived
+    const derived=normalizeSnapshotFromCapture(capture,capture.provinceId??null,capture.kingdomId??null);if(derived)body.snapshot=derived
    }
   }
   const snapshot=body.snapshot;if(!snapshot)return NextResponse.json({ok:true,captured:Boolean(capture),storedInVault:Boolean(capture),events:0,snapshotStored:false,stewardDecision:captureSteward?.decision??'not_applicable'});if(!ownerId)return NextResponse.json({error:'A userId is required for service-authenticated history snapshots'},{status:400})
