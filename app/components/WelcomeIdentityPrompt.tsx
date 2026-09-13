@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 
+type WelcomeIdentity = { firstLogin?: boolean; identity?: { screenName?: string | null } };
+
 export default function WelcomeIdentityPrompt() {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
@@ -12,9 +14,15 @@ export default function WelcomeIdentityPrompt() {
     let mounted = true;
     fetch("/api/welcome", { cache: "no-store" })
       .then(async (response) => {
-        const data = await response.json();
-        if (!response.ok) return;
-        if (mounted && !data.identity?.screenName) setOpen(true);
+        const data = (await response.json().catch(() => null)) as WelcomeIdentity | null;
+        if (!response.ok || !data || !mounted) return;
+        const existing = data.identity?.screenName?.trim() || "";
+        // First entry must always ask the user for their preferred Spartan name,
+        // even if an older/default name was already attached to the account.
+        if (data.firstLogin || !existing) {
+          setName(existing);
+          setOpen(true);
+        }
       })
       .catch(() => {});
     return () => { mounted = false; };
