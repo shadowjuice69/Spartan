@@ -49,7 +49,7 @@ export async function recordLoginCheckpoint({ discordUserId, authUserId, request
   const now = new Date().toISOString()
   const { error: accountError } = await supabase
     .from('spartan_accounts')
-    .update({ last_login_ip: ip, last_login_at: now, updated_at: now })
+    .update({ last_login_ip: ip, updated_at: now })
     .eq('auth_user_id', authUserId)
     .eq('discord_user_id', discordUserId)
 
@@ -110,8 +110,6 @@ export async function authorizeDashboard(request: Request, discordUserId: string
   const identityAllowed = protectedIdentity || access?.status === 'active'
   const allowed = identityAllowed && ipRecorded && !ipBlocked && !reputationBlocked && !reputationUnavailable
 
-  // This insert is the authoritative proof that Spartan received and stored the
-  // client IP. Database errors are intentionally surfaced instead of swallowed.
   await recordDashboardSession({ discordUserId, sessionId: crypto.randomUUID(), ipAddress: ip, userAgent: request.headers.get('user-agent'), route: new URL(request.url).pathname, success: allowed })
 
   const eventType = allowed ? 'dashboard_ip_recorded' : ipBlocked ? 'dashboard_ip_blocked' : reputationBlocked ? 'dashboard_ip_masking_blocked' : reputationUnavailable ? 'dashboard_ip_reputation_unavailable' : !ipRecorded ? 'dashboard_ip_unavailable' : 'dashboard_access_denied'
