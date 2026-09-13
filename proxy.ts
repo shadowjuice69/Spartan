@@ -11,6 +11,13 @@ function deny(request: NextRequest, reason: string) {
   return NextResponse.redirect(url)
 }
 
+function login(request: NextRequest, reason = 'discord-required') {
+  const url = request.nextUrl.clone()
+  url.pathname = '/login'
+  url.searchParams.set('error', reason)
+  return NextResponse.redirect(url)
+}
+
 export async function proxy(request: NextRequest) {
   const path = request.nextUrl.pathname
   const response = await updateSession(request)
@@ -20,16 +27,14 @@ export async function proxy(request: NextRequest) {
   const discordUserId = response.headers.get('x-spartan-discord-id')
   const authUserId = response.headers.get('x-spartan-auth-user-id')
 
+  if (PUBLIC_PATHS.has(path)) return response
+
+  if (!authUserId) return login(request)
+
   // The Supabase auth user is the durable session identity. Discord metadata is
   // useful for authorization, but provider/session refreshes can legitimately
   // omit it. Resolve the stored Spartan account by auth_user_id first, then use
   // its canonical Discord ID for access checks.
-  if (!authUserId) {
-    return deny(request, 'security_identity')
-  }
-
-  if (PUBLIC_PATHS.has(path)) return response
-
   try {
     const security = await authorizeDashboardForAuthUser(request, authUserId, discordUserId)
     if (!security.allowed) return deny(request, security.reason ?? 'security')
