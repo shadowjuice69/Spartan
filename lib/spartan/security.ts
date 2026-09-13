@@ -47,9 +47,17 @@ export async function recordLoginCheckpoint({ discordUserId, authUserId, request
 
   const supabase = adminClient()
   const now = new Date().toISOString()
+  const { data: account, error: lookupError } = await supabase
+    .from('spartan_accounts')
+    .select('last_login_at')
+    .eq('auth_user_id', authUserId)
+    .eq('discord_user_id', discordUserId)
+    .maybeSingle()
+  if (lookupError) throw new Error(`Spartan login history lookup failed: ${lookupError.message}`)
+
   const { error: accountError } = await supabase
     .from('spartan_accounts')
-    .update({ last_login_ip: ip, updated_at: now })
+    .update({ last_login_ip: ip, previous_login_at: account?.last_login_at ?? null, last_login_at: now, updated_at: now })
     .eq('auth_user_id', authUserId)
     .eq('discord_user_id', discordUserId)
 
@@ -70,10 +78,10 @@ export async function recordLoginCheckpoint({ discordUserId, authUserId, request
     ip,
     null,
     'IP successfully recorded at Spartan login checkpoint.',
-    { authUserId, ipRecorded: true, route: '/login' },
+    { authUserId, ipRecorded: true, route: '/login', previousLoginAt: account?.last_login_at ?? null },
   )
 
-  return { ip, recordedAt: now }
+  return { ip, recordedAt: now, previousLoginAt: account?.last_login_at ?? null }
 }
 
 export async function getActiveIpBlock(ipAddress: string | null) {
