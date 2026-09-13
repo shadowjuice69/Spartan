@@ -5,6 +5,8 @@ import { extractDiscordId } from '@/lib/spartan/security'
 
 export const dynamic = 'force-dynamic'
 
+type HistoryRow = Record<string, any>
+
 function adminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -17,7 +19,7 @@ function number(v: unknown) {
   return Number.isFinite(n) ? n : null
 }
 
-function canonicalState(province: any) {
+function canonicalState(province: any): HistoryRow {
   const throne = province?.state_data?.throne ?? {}
   const state = province?.state_data ?? {}
   return {
@@ -45,9 +47,9 @@ function canonicalState(province: any) {
   }
 }
 
-function normalizeSnapshot(row: any, province: any) {
+function normalizeSnapshot(row: HistoryRow, province: any): HistoryRow {
   const fallback = canonicalState(province)
-  const normalized = { ...fallback, ...row }
+  const normalized: HistoryRow = { ...fallback, ...row }
   for (const key of ['acres','networth','population','soldiers','off_specs','def_specs','elites','thieves','wizards','offense','defense','mana','stealth','build_efficiency','wages']) {
     if (normalized[key] == null) normalized[key] = fallback[key]
   }
@@ -67,10 +69,8 @@ export async function GET(request: Request) {
     const discordId = extractDiscordId(user)
 
     const { data: account, error: accountError } = await db
-      .from('spartan_accounts')
-      .select('auth_user_id,discord_user_id,screen_name,province_name,province_location,role')
-      .eq('auth_user_id', user.id)
-      .maybeSingle()
+      .from('spartan_accounts').select('auth_user_id,discord_user_id,screen_name,province_name,province_location,role')
+      .eq('auth_user_id', user.id).maybeSingle()
     if (accountError) throw accountError
 
     const accountDiscordId = account?.discord_user_id ? String(account.discord_user_id) : discordId
