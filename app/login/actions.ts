@@ -4,7 +4,7 @@ import { headers } from 'next/headers'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { registerSpartanAccount, resolveSpartanLoginEmail } from '@/lib/spartan/accounts'
+import { accountEmail, registerSpartanAccount } from '@/lib/spartan/accounts'
 import { recordLoginCheckpoint } from '@/lib/spartan/security'
 
 export async function createSpartanAccount(formData: FormData) {
@@ -33,15 +33,10 @@ export async function login(formData: FormData) {
 
   if (!screenName || !password) redirect('/login?error=missing')
 
-  let email: string | null = null
-  try {
-    email = await resolveSpartanLoginEmail(screenName)
-  } catch {
-    redirect('/login?error=invalid')
-  }
-  if (!email) redirect('/login?error=invalid')
-
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email: accountEmail(screenName),
+    password,
+  })
   if (error || !data.user) redirect('/login?error=invalid')
 
   try {
