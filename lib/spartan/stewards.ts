@@ -1,4 +1,5 @@
 import crypto from 'crypto'
+import type { WikiKnowledgeContext } from './wiki-knowledge'
 
 type Severity = 'low' | 'medium' | 'high' | 'critical'
 
@@ -46,6 +47,26 @@ function numeric(value: unknown): number | null {
   return null
 }
 
+function attachWikiKnowledge(results: StewardResult[], knowledge?: WikiKnowledgeContext) {
+  if (!knowledge) {
+    results.push(result('wiki_knowledge', false, 'medium', { reason: 'No authoritative Wiki context was resolved for this run' }))
+    return
+  }
+
+  results.push(result('wiki_knowledge', true, 'low', {
+    reason: `Using authoritative Utopia Wiki Age ${knowledge.age} knowledge layer`,
+    details: {
+      sourceKey: knowledge.sourceKey,
+      sourceUrl: knowledge.sourceUrl,
+      authoritative: knowledge.authoritative,
+      wikiEntryCount: knowledge.wikiEntryCount,
+      ruleCounts: knowledge.ruleCounts,
+      province: knowledge.province ?? null,
+      refs: knowledge.refs,
+    },
+  }))
+}
+
 export function fingerprintCapture(capture: CaptureForStewardship): string {
   return crypto.createHash('sha256').update(JSON.stringify([
     capture.captureId ?? null, capture.source ?? null, capture.sourceId ?? null,
@@ -54,7 +75,7 @@ export function fingerprintCapture(capture: CaptureForStewardship): string {
   ])).digest('hex')
 }
 
-export function runCaptureStewards(capture: CaptureForStewardship) {
+export function runCaptureStewards(capture: CaptureForStewardship, knowledge?: WikiKnowledgeContext) {
   const results: StewardResult[] = []
   const parsed = getObject(capture.parsedPayload)
   const raw = getObject(capture.rawPayload)
@@ -108,6 +129,8 @@ export function runCaptureStewards(capture: CaptureForStewardship) {
   if (invalid) results.push(result('plausibility', false, 'critical', { reason: 'Impossible numeric state value', fieldName: invalid[0], details: { observed: invalid[1] } }))
   else results.push(result('plausibility', true))
 
+  attachWikiKnowledge(results, knowledge)
+
   const failed = results.filter((r) => !r.ok)
   const critical = failed.some((r) => r.severity === 'critical')
   const high = failed.some((r) => r.severity === 'high')
@@ -119,12 +142,13 @@ export function runCaptureStewards(capture: CaptureForStewardship) {
   }
 }
 
-export function runSnapshotSteward(snapshot: Record<string, unknown>) {
+export function runSnapshotSteward(snapshot: Record<string, unknown>, knowledge?: WikiKnowledgeContext) {
   const results: StewardResult[] = []
   const numericFields = ['acres','networth','population','peons','soldiers','offSpecs','defSpecs','elites','thieves','wizards','generals','prisoners','warHorses','offense','defense','defenseHome','mana','stealth','rTpa','oTpa','dTpa','rWpa','oWpa','dWpa','buildEfficiency','wages']
   for (const field of numericFields) {
     const value = numeric(snapshot[field])
     if (value !== null && value < 0) results.push(result('snapshot_plausibility', false, 'critical', { reason: 'Negative numeric state value', fieldName: field }))
   }
-  return { decision: results.length ? 'quarantine' as const : 'accept' as const, confidence: results.length ? 0 : 1, results }
+  attachWikiKnowledge(results, knowledge)
+  return { decision: results.some((r) => !r.ok && r.severity !== 'medium') ? 'quarantine' as const : 'accept' as const, confidence: results.some((r) => !r.ok && r.severity !== 'medium') ? 0 : 1, results }
 }
