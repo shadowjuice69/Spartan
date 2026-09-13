@@ -50,9 +50,13 @@ export async function GET() {
   if (nextTick.getTime() <= networkNow) nextTick.setTime(nextTick.getTime() + 3_600_000)
 
   const currentDate = new Date(networkNow)
-  const yearEndAnchorTicks = (7 - 1) * TICKS_PER_YEAR + (12 - 1) * TICKS_PER_MONTH + 31 * TICKS_PER_DAY
-  const currentAbsoluteTicks = (ANCHOR_UTOPIA_YEAR - 1) * TICKS_PER_YEAR + (ANCHOR_UTOPIA_MONTH - 1) * TICKS_PER_MONTH + (ANCHOR_UTOPIA_DAY - 1) * TICKS_PER_DAY + (ANCHOR_UTOPIA_TICK - 1) + elapsedTicks
-  const ticksUntilEndYr7 = yearEndAnchorTicks - currentAbsoluteTicks
+  const currentYearStart = (utopia.year - 1) * TICKS_PER_YEAR
+  const nextYearStart = currentYearStart + TICKS_PER_YEAR
+  const currentAbsoluteTicks = currentYearStart
+    + (utopia.month - 1) * TICKS_PER_MONTH
+    + (utopia.day - 1) * TICKS_PER_DAY
+    + (utopia.tick - 1)
+  const ticksUntilNextYear = Math.max(0, nextYearStart - currentAbsoluteTicks)
 
   return NextResponse.json({
     now: new Date(networkNow).toISOString(),
@@ -61,7 +65,9 @@ export async function GET() {
     source,
     utopia,
     nextTickAt: nextTick.toISOString(),
-    ticksUntilEndYr7,
+    ticksUntilNextYear,
+    ticksUntilEndYr7: utopia.month === 7 ? ticksUntilNextYear : null,
+    boundaryLabel: utopia.month === 7 ? `YR${utopia.year + 1} BOUNDARY` : `NEXT YEAR BOUNDARY`,
     sync: source !== 'local-fallback',
   }, { headers: { 'Cache-Control': 'no-store, max-age=0' } })
 }
