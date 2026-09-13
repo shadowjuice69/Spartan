@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import CommandClockMount from "./components/CommandClockMount";
 import UpdatesNotice from "./components/UpdatesNotice";
+import WelcomeBriefing from "./components/WelcomeBriefing";
 import WelcomeIdentityPrompt from "./components/WelcomeIdentityPrompt";
 
 export const metadata: Metadata = {
@@ -12,7 +13,13 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
-      <body><CommandClockMount /><UpdatesNotice /><WelcomeIdentityPrompt />{children}</body>
+      <body>
+        <CommandClockMount />
+        <UpdatesNotice />
+        <WelcomeBriefing />
+        <WelcomeIdentityPrompt />
+        {children}
+      </body>
     </html>
   );
 }
