@@ -41,7 +41,7 @@ export async function recordDashboardSession({ discordUserId, sessionId, ipAddre
   if (error) throw new Error(`Spartan security session recording failed: ${error.message}`)
 }
 
-export async function recordLoginCheckpoint({ discordUserId, authUserId, request }: { discordUserId: string; authUserId: string; request: Request }) {
+export async function recordLoginCheckpoint({ authUserId, request }: { authUserId: string; request: Request }) {
   const ip = requestIp(request)
   if (!ip) throw new Error('No valid client IP was available for Spartan login recording.')
 
@@ -49,19 +49,17 @@ export async function recordLoginCheckpoint({ discordUserId, authUserId, request
   const now = new Date().toISOString()
   const { data: account, error: lookupError } = await supabase
     .from('spartan_accounts')
-    .select('last_login_at')
+    .select('discord_user_id,last_login_at')
     .eq('auth_user_id', authUserId)
-    .eq('discord_user_id', discordUserId)
     .maybeSingle()
   if (lookupError) throw new Error(`Spartan login history lookup failed: ${lookupError.message}`)
+  if (!account?.discord_user_id) throw new Error('Spartan account identity is not linked to the authenticated account.')
 
-  if (!account) throw new Error('Spartan account identity does not match the authenticated Discord identity.')
-
+  const discordUserId = String(account.discord_user_id)
   const { error: accountError } = await supabase
     .from('spartan_accounts')
     .update({ last_login_ip: ip, previous_login_at: account.last_login_at ?? null, last_login_at: now, updated_at: now })
     .eq('auth_user_id', authUserId)
-    .eq('discord_user_id', discordUserId)
 
   if (accountError) throw new Error(`Spartan login IP recording failed: ${accountError.message}`)
 
@@ -83,7 +81,7 @@ export async function recordLoginCheckpoint({ discordUserId, authUserId, request
     { authUserId, ipRecorded: true, route: '/login', previousLoginAt: account.last_login_at ?? null },
   )
 
-  return { ip, recordedAt: now, previousLoginAt: account.last_login_at ?? null }
+  return { ip, recordedAt: now, previousLoginAt: account.last_login_at ?? null, discordUserId }
 }
 
 export async function getActiveIpBlock(ipAddress: string | null) {
