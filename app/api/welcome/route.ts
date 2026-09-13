@@ -144,7 +144,8 @@ export async function GET() {
     const totals = (key: string) => eventRows.reduce((sum, event) => sum + (number(event[key]) ?? 0), 0)
     const criticalEvents = eventRows.filter(event => /attack|war|ambush|plague|failed|loss|destroy|raze/i.test(`${event.event_type ?? ''} ${event.raw_text ?? ''}`))
     const alerts: string[] = []
-    if (number(latest.defense) != null && number(latest.defense) < 0) alerts.push('Your current defensive state needs attention.')
+    const currentDefense = number(latest.defense)
+    if (currentDefense != null && currentDefense < 0) alerts.push('Your current defensive state needs attention.')
     if (criticalEvents.length) alerts.push(`${criticalEvents.length} combat or loss event${criticalEvents.length === 1 ? '' : 's'} occurred while you were away.`)
     const firstArrival = !jeeves?.introduced_at
     const currentName = jeeves?.preferred_name || account.screen_name || ''
