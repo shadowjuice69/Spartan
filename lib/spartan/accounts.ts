@@ -36,9 +36,9 @@ export async function registerSpartanAccount({
   const supabase = adminClient()
   const { data: provinceRow, error: provinceError } = await supabase
     .from('provinces')
-    .select('name,location,discord_id')
+    .select('name,location,kd_code,discord_id,user_id')
     .eq('name', province)
-    .eq('location', location)
+    .or(`location.eq.${location},kd_code.eq.${location}`)
     .not('discord_id', 'is', null)
     .maybeSingle()
 
