@@ -1,9 +1,11 @@
 'use server'
 
+import { headers } from 'next/headers'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { accountEmail, registerSpartanAccount } from '@/lib/spartan/accounts'
+import { extractDiscordId, recordLoginCheckpoint } from '@/lib/spartan/security'
 
 export async function createSpartanAccount(formData: FormData) {
   const screenName = String(formData.get('screenName') ?? '')
@@ -30,8 +32,21 @@ export async function login(formData: FormData) {
   const password = String(formData.get('password') ?? '')
 
   if (!screenName || !password) redirect('/login?error=missing')
-  const { error } = await supabase.auth.signInWithPassword({ email: accountEmail(screenName), password })
-  if (error) redirect('/login?error=invalid')
+  const { data, error } = await supabase.auth.signInWithPassword({ email: accountEmail(screenName), password })
+  if (error || !data.user) redirect('/login?error=invalid')
+
+  const discordUserId = extractDiscordId(data.user)
+  if (!discordUserId) redirect('/login?error=security-identity')
+
+  try {
+    const requestHeaders = await headers()
+    const request = new Request('https://spartan.local/login', { headers: requestHeaders })
+    await recordLoginCheckpoint({ discordUserId, authUserId: data.user.id, request })
+  } catch (error) {
+    await supabase.auth.signOut()
+    const message = error instanceof Error ? error.message : 'security-check-failed'
+    redirect(`/login?error=${encodeURIComponent(message)}`)
+  }
 
   revalidatePath('/', 'layout')
   redirect('/')
