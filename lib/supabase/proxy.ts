@@ -28,8 +28,6 @@ export async function updateSession(request: NextRequest) {
   const path = request.nextUrl.pathname
   const publicShell = path === '/' || path === '/access-denied'
 
-  // Spartan's landing shell is intentionally public. Protected command routes
-  // are enforced by proxy.ts after the Discord identity is resolved.
   if (!user && !publicShell && path !== '/login' && !path.startsWith('/auth')) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
@@ -44,6 +42,7 @@ export async function updateSession(request: NextRequest) {
 
   const discordId = extractDiscordId(user)
   if (discordId) response.headers.set('x-spartan-discord-id', discordId)
+  if (user?.id) response.headers.set('x-spartan-auth-user-id', user.id)
 
   return response
 }
