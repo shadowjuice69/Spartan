@@ -12,6 +12,48 @@ function adminClient() {
   return createSupabaseAdmin(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
 }
 
+function number(v: unknown) {
+  const n = Number(v)
+  return Number.isFinite(n) ? n : null
+}
+
+function canonicalState(province: any) {
+  const throne = province?.state_data?.throne ?? {}
+  const state = province?.state_data ?? {}
+  return {
+    observed_at: province?.state_data?.throne_captured_at ?? province?.updated_at ?? new Date().toISOString(),
+    province_id: province?.id ?? null,
+    kingdom_id: province?.kd_code ?? province?.kingdom_id ?? null,
+    acres: number(throne.acres ?? province?.acres),
+    networth: number(throne.nw ?? province?.nw),
+    population: number(throne.peons ?? province?.peons),
+    soldiers: number(throne.soldiers ?? province?.soldiers),
+    off_specs: number(throne.off_specs ?? province?.off_specs),
+    def_specs: number(throne.def_specs ?? province?.def_specs),
+    elites: number(throne.elites ?? province?.elites),
+    thieves: number(throne.thieves ?? province?.thieves),
+    wizards: number(throne.wizards ?? province?.wizards),
+    offense: number(throne.off ?? province?.off),
+    defense: number(throne.def ?? province?.def),
+    mana: number(throne.mana ?? province?.mana),
+    stealth: number(throne.stlth ?? province?.stlth),
+    build_efficiency: number(throne.be ?? province?.be),
+    wages: number(throne.wages ?? province?.wages),
+    source: 'canonical_province',
+    canonical: true,
+    state_data: state,
+  }
+}
+
+function normalizeSnapshot(row: any, province: any) {
+  const fallback = canonicalState(province)
+  const normalized = { ...fallback, ...row }
+  for (const key of ['acres','networth','population','soldiers','off_specs','def_specs','elites','thieves','wizards','offense','defense','mana','stealth','build_efficiency','wages']) {
+    if (normalized[key] == null) normalized[key] = fallback[key]
+  }
+  return normalized
+}
+
 export async function GET(request: Request) {
   try {
     const supabase = await createClient()
@@ -32,15 +74,9 @@ export async function GET(request: Request) {
     if (accountError) throw accountError
 
     const accountDiscordId = account?.discord_user_id ? String(account.discord_user_id) : discordId
-    let province = null
+    let province: any = null
     if (account?.province_name && account?.province_location) {
-      const result = await db
-        .from('provinces')
-        .select('*')
-        .eq('name', account.province_name)
-        .eq('kd_code', account.province_location)
-        .limit(1)
-        .maybeSingle()
+      const result = await db.from('provinces').select('*').eq('name', account.province_name).eq('kd_code', account.province_location).limit(1).maybeSingle()
       if (result.error) throw result.error
       province = result.data
     }
@@ -52,44 +88,16 @@ export async function GET(request: Request) {
     if (!province) return NextResponse.json({ error: 'Your Spartan account is not linked to a province yet.' }, { status: 404 })
 
     const resolvedProvinceId = provinceId || province.id
-
     const { data: snapshotRows, error: snapshotError } = await db
-      .from('spartan_province_history')
-      .select('*')
-      .eq('province_id', resolvedProvinceId)
-      .order('observed_at', { ascending: true })
-      .limit(limit)
+      .from('spartan_province_history').select('*').eq('province_id', resolvedProvinceId).order('observed_at', { ascending: true }).limit(limit)
     if (snapshotError) throw snapshotError
 
     const { data: eventRows, error: eventError } = await db
-      .from('spartan_event_history')
-      .select('*')
-      .eq('province_id', resolvedProvinceId)
-      .order('occurred_at', { ascending: false })
-      .limit(100)
+      .from('spartan_event_history').select('*').eq('province_id', resolvedProvinceId).order('occurred_at', { ascending: false }).limit(100)
     if (eventError) throw eventError
 
-    const snapshots = snapshotRows?.length ? snapshotRows : [{
-      observed_at: province.updated_at,
-      province_id: province.id,
-      kingdom_id: province.kd_code,
-      acres: Number(province.acres) || null,
-      networth: Number(province.nw) || null,
-      population: Number(province.peons) || null,
-      soldiers: Number(province.soldiers) || null,
-      off_specs: Number(province.off_specs) || null,
-      def_specs: Number(province.def_specs) || null,
-      elites: Number(province.elites) || null,
-      thieves: Number(province.thieves) || null,
-      wizards: Number(province.wizards) || null,
-      offense: Number(province.off) || null,
-      defense: Number(province.def) || null,
-      mana: Number(province.mana) || null,
-      stealth: Number(province.stlth) || null,
-      build_efficiency: Number(province.be) || null,
-      wages: Number(province.wages) || null,
-      source: 'canonical_province',
-    }]
+    const rawSnapshots = snapshotRows ?? []
+    const snapshots = rawSnapshots.length ? rawSnapshots.map((row: any) => normalizeSnapshot(row, province)) : [canonicalState(province)]
 
     return NextResponse.json({
       ok: true,
@@ -107,7 +115,7 @@ export async function GET(request: Request) {
         snapshotCount: snapshots.length,
         eventCount: eventRows?.length ?? 0,
         latestObservedAt: snapshots.at(-1)?.observed_at ?? null,
-        source: snapshotRows?.length ? 'province_history' : 'canonical_province',
+        source: rawSnapshots.length ? 'province_history+canonical_fallback' : 'canonical_province',
       },
     })
   } catch (error) {
