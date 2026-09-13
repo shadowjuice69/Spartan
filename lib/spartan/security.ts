@@ -55,9 +55,11 @@ export async function recordLoginCheckpoint({ discordUserId, authUserId, request
     .maybeSingle()
   if (lookupError) throw new Error(`Spartan login history lookup failed: ${lookupError.message}`)
 
+  if (!account) throw new Error('Spartan account identity does not match the authenticated Discord identity.')
+
   const { error: accountError } = await supabase
     .from('spartan_accounts')
-    .update({ last_login_ip: ip, previous_login_at: account?.last_login_at ?? null, last_login_at: now, updated_at: now })
+    .update({ last_login_ip: ip, previous_login_at: account.last_login_at ?? null, last_login_at: now, updated_at: now })
     .eq('auth_user_id', authUserId)
     .eq('discord_user_id', discordUserId)
 
@@ -78,10 +80,10 @@ export async function recordLoginCheckpoint({ discordUserId, authUserId, request
     ip,
     null,
     'IP successfully recorded at Spartan login checkpoint.',
-    { authUserId, ipRecorded: true, route: '/login', previousLoginAt: account?.last_login_at ?? null },
+    { authUserId, ipRecorded: true, route: '/login', previousLoginAt: account.last_login_at ?? null },
   )
 
-  return { ip, recordedAt: now, previousLoginAt: account?.last_login_at ?? null }
+  return { ip, recordedAt: now, previousLoginAt: account.last_login_at ?? null }
 }
 
 export async function getActiveIpBlock(ipAddress: string | null) {
@@ -97,6 +99,19 @@ export async function getSpartanAccess(discordUserId: string) {
   const { data, error } = await supabase.from('spartan_access').select('discord_user_id,username,status,role,metadata').eq('discord_user_id', discordUserId).maybeSingle()
   if (error) throw new Error(`Spartan access lookup failed: ${error.message}`)
   return data ?? null
+}
+
+export async function resolveDashboardIdentity(authUserId: string, sessionDiscordId?: string | null) {
+  const supabase = adminClient()
+  const { data: account, error } = await supabase
+    .from('spartan_accounts')
+    .select('auth_user_id,discord_user_id,screen_name,province_name,province_location,role')
+    .eq('auth_user_id', authUserId)
+    .maybeSingle()
+  if (error) throw new Error(`Spartan account identity lookup failed: ${error.message}`)
+  const accountDiscordId = account?.discord_user_id ? String(account.discord_user_id) : null
+  const discordUserId = accountDiscordId || (sessionDiscordId && /^\d{8,30}$/.test(sessionDiscordId) ? sessionDiscordId : null)
+  return { account, discordUserId }
 }
 
 export async function recordSecurityEvent(eventType: string, discordUserId: string | null, ipAddress: string | null, actorDiscordId: string | null, reason: string, metadata: Record<string, unknown> = {}) {
@@ -135,4 +150,12 @@ export async function authorizeDashboard(request: Request, discordUserId: string
     ipReputation,
     reason: !ipRecorded ? 'ip_unavailable' : ipBlocked ? 'ip_blocked' : reputationBlocked ? 'ip_masking_detected' : reputationUnavailable ? 'ip_reputation_unavailable' : !identityAllowed ? 'access_inactive' : null,
   }
+}
+
+export async function authorizeDashboardForAuthUser(request: Request, authUserId: string, sessionDiscordId?: string | null) {
+  const identity = await resolveDashboardIdentity(authUserId, sessionDiscordId)
+  if (!identity.discordUserId) {
+    return { allowed: false, reason: 'security_identity_unavailable', access: null, protectedIdentity: false, ipRecorded: Boolean(requestIp(request)) }
+  }
+  return authorizeDashboard(request, identity.discordUserId)
 }
