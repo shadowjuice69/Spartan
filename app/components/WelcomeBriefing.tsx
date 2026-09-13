@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 type Welcome = {
+  ok?: boolean;
   firstLogin: boolean;
   identity: { screenName: string; provinceName: string; provinceLocation: string | null; kingdom: string | null; race: string | null; personality: string | null; lastLoginAt: string | null };
   latest: Record<string, unknown> | null;
@@ -22,8 +23,6 @@ export default function WelcomeBriefing() {
       const response = await fetch("/api/welcome", { cache: "no-store" });
       if (!response.ok) return;
       const result = (await response.json()) as Welcome;
-      // On first entry, the identity prompt must be completed before the
-      // briefing opens so the briefing uses the user's chosen call sign.
       if (result.ok !== true) return;
       if (result.firstLogin && !afterIdentity && !result.identity.screenName) return;
       setData(result);
@@ -37,7 +36,7 @@ export default function WelcomeBriefing() {
     let cancelled = false;
     fetch("/api/welcome", { cache: "no-store" })
       .then(async response => response.ok ? response.json() : null)
-      .then(result => {
+      .then((result: Welcome | null) => {
         if (cancelled || !result?.ok) return;
         if (result.firstLogin) return;
         setData(result);
