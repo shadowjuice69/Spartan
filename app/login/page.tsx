@@ -36,7 +36,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
               <label>SCREEN NAME<input name="screenName" autoComplete="username" placeholder="3–32 characters" required /></label>
               <div className="two-col">
                 <label>PROVINCE NAME<input name="provinceName" placeholder="Province name" required /></label>
-                <label>LOCATION<input name="provinceLocation" type="text" inputMode="text" autoCapitalize="off" autoCorrect="off" spellCheck={false} placeholder="6:5" pattern="\\d+\\s*:\\s*\\d+" title="Enter your province location like 6:9" required /></label>
+                <label>LOCATION<input name="provinceLocation" type="text" inputMode="text" autoCapitalize="off" autoCorrect="off" spellCheck={false} placeholder="6:5" pattern="[0-9]+[ ]*:[ ]*[0-9]+" title="Enter your province location like 6:9" required /></label>
               </div>
               <label>PASSWORD<input name="password" type="password" autoComplete="new-password" placeholder="10+ characters" required /></label>
               <label>CONFIRM PASSWORD<input name="confirmPassword" type="password" autoComplete="new-password" placeholder="Repeat password" required /></label>
