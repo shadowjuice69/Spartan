@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import CommandClockMount from "./components/CommandClockMount";
+import WelcomeBriefing from "./components/WelcomeBriefing";
 
 export const metadata: Metadata = {
   title: "Spartan — Province Command Center",
@@ -10,7 +11,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
-      <body><CommandClockMount />{children}</body>
+      <body><CommandClockMount /><WelcomeBriefing />{children}</body>
     </html>
   );
 }
