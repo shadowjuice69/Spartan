@@ -5,6 +5,9 @@ import { extractDiscordId } from '@/lib/spartan/security'
 
 export const dynamic = 'force-dynamic'
 
+type HistoryRow = Record<string, unknown>
+type EventRow = Record<string, unknown>
+
 function adminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -43,7 +46,6 @@ export async function GET() {
       .limit(1)
       .maybeSingle()
     if (provinceError) throw provinceError
-
     if (!province) return NextResponse.json({ error: 'Your Spartan account is verified, but your province record is not currently available.' }, { status: 404 })
 
     const since = account.previous_login_at || account.created_at
@@ -64,15 +66,16 @@ export async function GET() {
       .limit(100)
     if (eventError) throw eventError
 
-    const latest = snapshots?.[0] ?? null
-    const previous = snapshots?.[1] ?? null
+    const latest = (snapshots?.[0] ?? null) as HistoryRow | null
+    const previous = (snapshots?.[1] ?? null) as HistoryRow | null
+    const eventRows = (events ?? []) as EventRow[]
     const delta = (key: string) => {
       const a = number(latest?.[key])
       const b = number(previous?.[key])
       return a != null && b != null ? a - b : null
     }
 
-    const totals = (key: string) => (events ?? []).reduce((sum, event) => sum + (number(event[key]) ?? 0), 0)
+    const totals = (key: string) => eventRows.reduce((sum, event) => sum + (number(event[key]) ?? 0), 0)
     const changes = {
       acres: delta('acres'),
       networth: delta('networth'),
@@ -89,7 +92,7 @@ export async function GET() {
       stealth: delta('stealth'),
     }
 
-    const criticalEvents = (events ?? []).filter((event) => /attack|war|ambush|plague|failed|loss|destroy|raze/i.test(`${event.event_type} ${event.raw_text ?? ''}`))
+    const criticalEvents = eventRows.filter((event) => /attack|war|ambush|plague|failed|loss|destroy|raze/i.test(`${event.event_type ?? ''} ${event.raw_text ?? ''}`))
     const alerts: string[] = []
     if (number(latest?.defense) != null && number(latest?.defense) < 0) alerts.push('Your current defensive state needs attention.')
     if (criticalEvents.length) alerts.push(`${criticalEvents.length} combat or loss event${criticalEvents.length === 1 ? '' : 's'} occurred while you were away.`)
@@ -115,7 +118,7 @@ export async function GET() {
       changes,
       away: {
         since,
-        eventCount: events?.length ?? 0,
+        eventCount: eventRows.length,
         acresChange: totals('acres_change'),
         troopsLost: totals('troops_lost'),
         thievesLost: totals('thieves_lost'),
@@ -125,7 +128,7 @@ export async function GET() {
         foodChange: totals('food_change'),
         runesChange: totals('runes_change'),
         manaChange: totals('mana_change'),
-        events: events ?? [],
+        events: eventRows,
         alerts,
       },
     })
