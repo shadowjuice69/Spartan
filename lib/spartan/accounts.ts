@@ -34,35 +34,26 @@ export async function registerSpartanAccount({
   if (province.length < 2 || province.length > 80) throw new Error('Enter your registered province name.')
 
   const supabase = adminClient()
-
-  // Keep the verification query deliberately simple. The Utopia province table
-  // stores the kingdom/province location in kd_code; location may be null.
-  // Avoid a compound PostgREST OR expression here because it has been causing
-  // gateway timeouts in the server action.
   const { data: provinceRows, error: provinceError } = await supabase
     .from('provinces')
     .select('name,location,kd_code,discord_id,user_id')
     .eq('name', province)
     .not('discord_id', 'is', null)
     .limit(20)
-
   if (provinceError) throw new Error(`Province verification failed: ${provinceError.message}`)
 
   const provinceRow = (provinceRows ?? []).find((row) =>
     String(row.location ?? '').replace(/\s+/g, '') === location ||
     String(row.kd_code ?? '').replace(/\s+/g, '') === location
   )
-
   if (!provinceRow?.discord_id) throw new Error('That province name and location are not registered with the Spartan bot.')
 
   const discordUserId = String(provinceRow.discord_id)
-
   const { data: access, error: accessError } = await supabase
     .from('spartan_access')
     .select('discord_user_id,status,role')
     .eq('discord_user_id', discordUserId)
     .maybeSingle()
-
   if (accessError) throw new Error(`Spartan registration verification failed: ${accessError.message}`)
   if (!access || access.status !== 'active') throw new Error('Your Discord identity is not currently authorized by Spartan.')
 
@@ -72,7 +63,6 @@ export async function registerSpartanAccount({
     .or(`discord_user_id.eq.${discordUserId},screen_name.eq.${name}`)
     .limit(1)
     .maybeSingle()
-
   if (existing) throw new Error('That Discord identity or screen name already has a Spartan account.')
 
   const ip = requestIp(new Request('https://spartan.local', { headers: await headers() }))
@@ -83,7 +73,6 @@ export async function registerSpartanAccount({
     app_metadata: { discord_user_id: discordUserId, provider: 'spartan-password' },
     user_metadata: { screen_name: name, province_name: province, province_location: location },
   })
-
   if (authError || !authUser.user) throw new Error(authError?.message || 'Could not create Spartan credentials.')
 
   const { error: accountError } = await supabase.from('spartan_accounts').insert({
@@ -95,7 +84,6 @@ export async function registerSpartanAccount({
     registration_ip: ip,
     role: access.role || 'member',
   })
-
   if (accountError) {
     await supabase.auth.admin.deleteUser(authUser.user.id)
     throw new Error(`Spartan account record failed: ${accountError.message}`)
@@ -106,10 +94,25 @@ export async function registerSpartanAccount({
     .update({ username: name, updated_at: new Date().toISOString() })
     .eq('discord_user_id', discordUserId)
   if (accessUpdateError) throw new Error(`Spartan access profile update failed: ${accessUpdateError.message}`)
-
   return { screenName: name, discordUserId, provinceName: province, provinceLocation: location, ip }
 }
 
 export function accountEmail(screenName: string) {
   return internalEmail(screenName.trim())
+}
+
+export async function resolveSpartanLoginEmail(screenName: string) {
+  const name = screenName.trim()
+  if (!name) return null
+  const supabase = adminClient()
+  const { data: account, error } = await supabase
+    .from('spartan_accounts')
+    .select('auth_user_id')
+    .ilike('screen_name', name)
+    .maybeSingle()
+  if (error) throw new Error(`Spartan login account lookup failed: ${error.message}`)
+  if (!account?.auth_user_id) return null
+  const { data, error: authError } = await supabase.auth.admin.getUserById(account.auth_user_id)
+  if (authError) throw new Error(`Spartan credential lookup failed: ${authError.message}`)
+  return data.user?.email ?? null
 }
