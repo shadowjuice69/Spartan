@@ -2,6 +2,7 @@ import crypto from 'crypto'
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { runCaptureStewards, runSnapshotSteward } from '@/lib/spartan/stewards'
+import { resolveWikiKnowledge } from '@/lib/spartan/wiki-knowledge'
 import type { ProvinceSnapshot, SpartanEvent } from '@/lib/spartan/history'
 
 export const dynamic = 'force-dynamic'
@@ -45,8 +46,10 @@ export async function POST(request: Request) {
     // LOSSLESS FIRST: the raw observation always enters the vault before any steward decision.
     // A failed steward can quarantine the observation, but can never erase the evidence.
     let captureSteward: ReturnType<typeof runCaptureStewards> | null = null
+    let captureKnowledge: Awaited<ReturnType<typeof resolveWikiKnowledge>> | null = null
     if (capture) {
-      captureSteward = runCaptureStewards(capture)
+      captureKnowledge = await resolveWikiKnowledge(supabase, { provinceId: capture.provinceId })
+      captureSteward = runCaptureStewards(capture, captureKnowledge)
       const rawText = capture.rawText ?? ''
       const rawPayload = capture.rawPayload ?? {}
       const parsedPayload = capture.parsedPayload ?? {}
@@ -72,7 +75,7 @@ export async function POST(request: Request) {
       }, { onConflict: 'content_hash' })
       if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-      const failed = captureSteward.results.filter((r) => !r.ok)
+      const failed = captureSteward.results.filter((r) => !r.ok && r.severity !== 'medium')
       if (failed.length) {
         const { error: quarantineError } = await supabase.from('spartan_data_quarantine').insert({
           capture_id: capture.captureId ?? null,
@@ -89,7 +92,7 @@ export async function POST(request: Request) {
           observed_value: failed.find((r) => r.details?.observed !== undefined)?.details?.observed ?? null,
           raw_payload: rawPayload,
           parsed_payload: parsedPayload,
-          validation_details: { results: captureSteward.results, confidence: captureSteward.confidence },
+          validation_details: { results: captureSteward.results, confidence: captureSteward.confidence, wikiKnowledge: captureKnowledge },
           fingerprint: captureSteward.fingerprint,
         })
         if (quarantineError) return NextResponse.json({ error: quarantineError.message }, { status: 500 })
@@ -105,6 +108,9 @@ export async function POST(request: Request) {
         confidence: captureSteward.confidence,
         steward_results: captureSteward.results,
         canonical_payload: captureSteward.decision === 'accept' ? parsedPayload : {},
+        knowledge_source: captureKnowledge?.sourceKey ?? 'utopia_wiki_age_116',
+        knowledge_age: captureKnowledge?.age ?? 116,
+        knowledge_refs: captureKnowledge?.refs ?? [],
       })
 
       if (captureSteward.decision === 'quarantine') {
@@ -115,6 +121,7 @@ export async function POST(request: Request) {
           stewardDecision: 'quarantine',
           historyWritten: false,
           reason: 'Observation retained in the Capture Vault but withheld from canonical history.',
+          knowledgeSource: captureKnowledge?.sourceKey ?? 'utopia_wiki_age_116',
         }, { status: 202 })
       }
     }
@@ -126,9 +133,13 @@ export async function POST(request: Request) {
 
     if (!ownerId) return NextResponse.json({ error: 'A userId is required for service-authenticated history snapshots' }, { status: 400 })
 
-    const snapshotSteward = runSnapshotSteward(snapshot as unknown as Record<string, unknown>)
+    const snapshotKnowledge = captureKnowledge ?? await resolveWikiKnowledge(supabase, {
+      provinceId: snapshot.provinceId ?? null,
+      snapshot: snapshot as unknown as Record<string, unknown>,
+    })
+    const snapshotSteward = runSnapshotSteward(snapshot as unknown as Record<string, unknown>, snapshotKnowledge)
     if (snapshotSteward.decision === 'quarantine') {
-      return NextResponse.json({ ok: true, captured: Boolean(capture), storedInVault: Boolean(capture), snapshotStored: false, stewardDecision: 'quarantine', stewardResults: snapshotSteward.results }, { status: 202 })
+      return NextResponse.json({ ok: true, captured: Boolean(capture), storedInVault: Boolean(capture), snapshotStored: false, stewardDecision: 'quarantine', stewardResults: snapshotSteward.results, knowledgeSource: snapshotKnowledge.sourceKey }, { status: 202 })
     }
 
     const snapshotRow = {
@@ -205,7 +216,7 @@ export async function POST(request: Request) {
       if (eventError) return NextResponse.json({ error: eventError.message }, { status: 500 })
     }
 
-    return NextResponse.json({ ok: true, captured: true, events: body.events?.length ?? 0, snapshotStored: true, storedInVault: Boolean(capture), stewardDecision: captureSteward?.decision ?? snapshotSteward.decision })
+    return NextResponse.json({ ok: true, captured: true, events: body.events?.length ?? 0, snapshotStored: true, storedInVault: Boolean(capture), stewardDecision: captureSteward?.decision ?? snapshotSteward.decision, knowledgeSource: snapshotKnowledge.sourceKey, knowledgeAge: snapshotKnowledge.age })
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Capture failed' }, { status: 500 })
   }
