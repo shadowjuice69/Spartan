@@ -22,20 +22,33 @@ export default function Jeeves() {
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
 
   async function load() {
     try {
       const response = await fetch("/api/welcome", { cache: "no-store" });
-      if (!response.ok) return;
-      const result = (await response.json()) as Briefing;
-      if (result.ok !== true) return;
-      setData(result);
-      setName(result.jeeves.preferredName || "");
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        if (response.status === 401) throw new Error("Your Spartan session has expired. Please sign in again.");
+        throw new Error(result.error || "Jeeves could not reach the Spartan data core.");
+      }
+      if (result.ok !== true) throw new Error(result.error || "Jeeves returned an invalid briefing.");
+      setData(result as Briefing);
+      setName(result.jeeves?.preferredName || "");
+      setError("");
       setOpen(true);
-    } catch {}
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Jeeves could not load your briefing.");
+    } finally {
+      setLoading(false);
+    }
   }
 
-  useEffect(() => { void load(); }, []);
+  useEffect(() => {
+    void load();
+    const timer = setInterval(() => { void load(); }, 15000);
+    return () => clearInterval(timer);
+  }, []);
 
   async function introduce() {
     const value = name.trim().replace(/\s+/g, " ");
@@ -48,7 +61,7 @@ export default function Jeeves() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ screenName: value }),
       });
-      const result = await response.json();
+      const result = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(result.error || "Jeeves could not establish your profile.");
       await load();
     } catch (err) {
@@ -56,7 +69,10 @@ export default function Jeeves() {
     } finally { setSaving(false); }
   }
 
-  if (!open || !data) return null;
+  if (!open || !data) {
+    if (loading || !error) return null;
+    return <div className="jeeves-status" role="status"><strong>JEEVES // DATA CORE NOTICE</strong><span>{error}</span><button onClick={() => { setLoading(true); void load(); }}>RETRY</button><style>{`.jeeves-status{position:fixed;right:18px;bottom:18px;z-index:1500;display:flex;align-items:center;gap:10px;flex-wrap:wrap;max-width:min(560px,calc(100vw - 36px));padding:12px 14px;border:1px solid rgba(255,120,120,.3);border-radius:10px;background:rgba(7,13,19,.96);color:#ffb1b1;font:11px Inter,system-ui,sans-serif;box-shadow:0 16px 50px rgba(0,0,0,.45)}.jeeves-status strong{color:#d8ff54;font-size:9px;letter-spacing:.12em}.jeeves-status span{flex:1}.jeeves-status button{border:1px solid rgba(216,255,84,.35);border-radius:7px;background:rgba(216,255,84,.08);color:#d8ff54;padding:7px 10px;font-size:9px;font-weight:900;cursor:pointer}`}</style></div>;
+  }
   const first = data.firstArrival;
   const hasHistory = data.historyAvailable === true;
   const a = data.away;
