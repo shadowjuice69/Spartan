@@ -102,15 +102,15 @@ function extractCaptureIdentity(capture: AnyRecord) {
     capture.provinceName,
     capture.province_name,
     capture.name,
-    capture.province,
+    typeof capture.province === 'string' ? capture.province : null,
     state.provinceName,
     state.province_name,
     state.name,
-    state.province,
+    typeof state.province === 'string' ? state.province : null,
     parsed.provinceName,
     parsed.province_name,
     parsed.name,
-    parsed.province,
+    typeof parsed.province === 'string' ? parsed.province : null,
     ...nested.flatMap((item) => [item.name, item.provinceName, item.province_name, item.currentProvinceName])
   )
 
@@ -155,6 +155,48 @@ function extractCaptureIdentity(capture: AnyRecord) {
 
   const anyCoordinate = rawText.match(/\b(\d{1,3}:\d{1,3})\b/)
   return { provinceName, kingdomCode: anyCoordinate?.[1] ?? '', parsed, state }
+}
+
+async function findProvinceByCaptureIdentity(supabase: any, capture: AnyRecord) {
+  const identity = extractCaptureIdentity(capture)
+  const provinceName = identity.provinceName
+  const kingdomCode = identity.kingdomCode
+
+  if (capture.provinceId && isUuid(capture.provinceId)) {
+    const byId = await supabase
+      .from('provinces')
+      .select('id,name,kd_code,kingdom_id')
+      .eq('id', capture.provinceId)
+      .maybeSingle()
+    if (byId.error) throw new Error(byId.error.message)
+    if (byId.data) return byId.data
+  }
+
+  if (provinceName && kingdomCode) {
+    const byIdentity = await supabase
+      .from('provinces')
+      .select('id,name,kd_code,kingdom_id')
+      .ilike('name', provinceName)
+      .eq('kd_code', kingdomCode)
+      .limit(1)
+      .maybeSingle()
+    if (byIdentity.error) throw new Error(byIdentity.error.message)
+    if (byIdentity.data) return byIdentity.data
+  }
+
+  if (provinceName) {
+    const byName = await supabase
+      .from('provinces')
+      .select('id,name,kd_code,kingdom_id')
+      .ilike('name', provinceName)
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    if (byName.error) throw new Error(byName.error.message)
+    if (byName.data) return byName.data
+  }
+
+  return null
 }
 
 async function resolveCanonicalKingdomId(
@@ -242,59 +284,23 @@ function normalizeSnapshotFromCapture(
 
 async function canonicalCaptureIdentity(supabase: any, capture: AnyRecord) {
   const identity = extractCaptureIdentity(capture)
-  const provinceName = identity.provinceName
-  const kingdomCode = identity.kingdomCode
-
-  let province: AnyRecord | null = null
-
-  if (provinceName && kingdomCode) {
-    const query = await supabase
-      .from('provinces')
-      .select('id,name,kd_code,kingdom_id')
-      .ilike('name', provinceName)
-      .eq('kd_code', kingdomCode)
-      .limit(1)
-      .maybeSingle()
-    if (query.error) throw new Error(query.error.message)
-    province = query.data ?? null
-  }
-
-  if (!province && provinceName) {
-    const query = await supabase
-      .from('provinces')
-      .select('id,name,kd_code,kingdom_id')
-      .ilike('name', provinceName)
-      .order('updated_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()
-    if (query.error) throw new Error(query.error.message)
-    province = query.data ?? null
-  }
-
-  if (!province && capture.provinceId && isUuid(capture.provinceId)) {
-    const query = await supabase
-      .from('provinces')
-      .select('id,name,kd_code,kingdom_id')
-      .eq('id', capture.provinceId)
-      .maybeSingle()
-    if (query.error) throw new Error(query.error.message)
-    province = query.data ?? null
-  }
-
+  const province = await findProvinceByCaptureIdentity(supabase, capture)
   const canonicalProvinceId = province?.id ?? (isUuid(capture.provinceId) ? capture.provinceId : null)
   const canonicalKingdomId = await resolveCanonicalKingdomId(
     supabase,
     province?.kingdom_id ?? null,
     canonicalProvinceId,
-    kingdomCode,
+    identity.kingdomCode,
   )
 
   return {
     ...capture,
     provinceId: canonicalProvinceId,
-    kingdomId: kingdomCode || extractKingdomCode(capture.kingdomId) || null,
+    kingdomId: identity.kingdomCode || extractKingdomCode(capture.kingdomId) || null,
     canonicalKingdomId,
-    provinceName: firstText(province?.name, provinceName, capture.provinceName) || null,
+    provinceName: firstText(province?.name, identity.provinceName, capture.provinceName) || null,
+    canonicalProvinceName: province?.name ?? null,
+    canonicalProvinceKingdomCode: province?.kd_code ?? identity.kingdomCode ?? null,
   }
 }
 
@@ -302,49 +308,44 @@ async function resolveServiceOwner(supabase: any, capture: AnyRecord) {
   if (process.env.SPARTAN_CAPTURE_USER_ID) return process.env.SPARTAN_CAPTURE_USER_ID
 
   const identity = extractCaptureIdentity(capture)
-  const provinceName = firstText(capture.provinceName, identity.provinceName)
-  const kingdomCode = firstText(capture.kingdomId, identity.kingdomCode)
+  const province = await findProvinceByCaptureIdentity(supabase, capture)
+  const provinceId = province?.id ?? (isUuid(capture.provinceId) ? capture.provinceId : null)
+  const provinceName = firstText(province?.name, capture.provinceName, identity.provinceName)
+  const kingdomCode = firstText(province?.kd_code, identity.kingdomCode, capture.kingdomId)
 
-  const queries: Promise<any>[] = []
+  if (provinceId) {
+    const linked = await supabase
+      .from('spartan_accounts')
+      .select('auth_user_id')
+      .ilike('province_name', provinceName || '')
+      .eq('province_location', kingdomCode || '')
+      .limit(1)
+      .maybeSingle()
+    if (linked.error) throw new Error(linked.error.message)
+    if (linked.data?.auth_user_id) return linked.data.auth_user_id
+  }
 
   if (provinceName && kingdomCode) {
-    queries.push(
-      supabase
-        .from('spartan_accounts')
-        .select('auth_user_id')
-        .ilike('province_name', provinceName)
-        .eq('province_location', kingdomCode)
-        .limit(1)
-        .maybeSingle()
-    )
+    const exact = await supabase
+      .from('spartan_accounts')
+      .select('auth_user_id')
+      .ilike('province_name', provinceName)
+      .eq('province_location', kingdomCode)
+      .limit(1)
+      .maybeSingle()
+    if (exact.error) throw new Error(exact.error.message)
+    if (exact.data?.auth_user_id) return exact.data.auth_user_id
   }
 
   if (provinceName) {
-    queries.push(
-      supabase
-        .from('spartan_accounts')
-        .select('auth_user_id')
-        .ilike('province_name', provinceName)
-        .limit(1)
-        .maybeSingle()
-    )
-  }
-
-  if (kingdomCode) {
-    queries.push(
-      supabase
-        .from('spartan_accounts')
-        .select('auth_user_id')
-        .eq('province_location', kingdomCode)
-        .limit(1)
-        .maybeSingle()
-    )
-  }
-
-  for (const pending of queries) {
-    const result = await pending
-    if (result.error) throw new Error(result.error.message)
-    if (result.data?.auth_user_id) return result.data.auth_user_id
+    const byName = await supabase
+      .from('spartan_accounts')
+      .select('auth_user_id')
+      .ilike('province_name', provinceName)
+      .limit(1)
+      .maybeSingle()
+    if (byName.error) throw new Error(byName.error.message)
+    if (byName.data?.auth_user_id) return byName.data.auth_user_id
   }
 
   return null
@@ -432,6 +433,7 @@ export async function POST(request: Request) {
           {
             error: 'Service capture is authenticated but no Spartan owner could be resolved.',
             identity: {
+              provinceId: capture.provinceId || null,
               provinceName: identity.provinceName || null,
               kingdomCode: identity.kingdomCode || null,
             },
@@ -521,7 +523,7 @@ export async function POST(request: Request) {
         return NextResponse.json({ ok: true, captured: true, storedInVault: true, stewardDecision: 'quarantine', historyWritten: false }, { status: 202 })
       }
 
-      if (['throne', 'throne-room', 'province', 'overview'].includes(String(capture.pageKind ?? '').toLowerCase())) {
+      if (['throne', 'throne-room', 'province', 'overview', 'state'].includes(String(capture.pageKind ?? '').toLowerCase())) {
         const derived = normalizeSnapshotFromCapture(capture, capture.provinceId ?? null, canonicalKingdomId)
         if (derived) body.snapshot = derived
       }
