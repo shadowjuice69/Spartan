@@ -35,18 +35,38 @@ export async function registerSpartanAccount({ screenName, password, provinceNam
   })
   if (!provinceRow) throw new Error('That province name and location are not currently registered in Spartan. Have the province send a fresh capture, then try again.')
 
-  const discordUserId = provinceRow.discord_id ? String(provinceRow.discord_id) : null
+  // The province table is the canonical identity when the bot has already linked
+  // a Discord ID. If an older/bot-created province row has not been linked yet,
+  // fall back to the already-authorized Spartan registration username. This keeps
+  // spartan_accounts.discord_user_id non-null without weakening the DB constraint.
+  let discordUserId = provinceRow.discord_id ? String(provinceRow.discord_id) : null
   let role = 'member'
-  if (discordUserId) {
-    const { data: access, error: accessError } = await supabase.from('spartan_access').select('discord_user_id,status,role').eq('discord_user_id', discordUserId).maybeSingle()
-    if (accessError) throw new Error(`Spartan registration verification failed: ${accessError.message}`)
-    if (access?.status !== 'active') throw new Error('The Discord identity associated with this province is not currently authorized by Spartan.')
-    role = access.role || role
+
+  if (!discordUserId) {
+    const { data: namedAccess, error: namedAccessError } = await supabase
+      .from('spartan_access')
+      .select('discord_user_id,status,role')
+      .ilike('username', name)
+      .maybeSingle()
+    if (namedAccessError) throw new Error(`Spartan registration verification failed: ${namedAccessError.message}`)
+    if (namedAccess) {
+      if (namedAccess.status !== 'active') throw new Error('The Discord identity associated with this Spartan registration is not currently authorized.')
+      discordUserId = String(namedAccess.discord_user_id)
+      role = namedAccess.role || role
+    }
   }
 
-  const existingQuery = discordUserId
-    ? supabase.from('spartan_accounts').select('id').or(`discord_user_id.eq.${discordUserId},screen_name.eq.${name}`).limit(1).maybeSingle()
-    : supabase.from('spartan_accounts').select('id').eq('screen_name', name).limit(1).maybeSingle()
+  if (!discordUserId) {
+    throw new Error('This province is registered, but its Discord identity is not linked yet. Use the same Spartan screen name you registered with the Discord bot, or have the province send a fresh capture.')
+  }
+
+  const { data: access, error: accessError } = await supabase
+    .from('spartan_access').select('discord_user_id,status,role').eq('discord_user_id', discordUserId).maybeSingle()
+  if (accessError) throw new Error(`Spartan registration verification failed: ${accessError.message}`)
+  if (access?.status !== 'active') throw new Error('The Discord identity associated with this province is not currently authorized by Spartan.')
+  role = access.role || role
+
+  const existingQuery = supabase.from('spartan_accounts').select('id').or(`discord_user_id.eq.${discordUserId},screen_name.eq.${name}`).limit(1).maybeSingle()
   const { data: existing } = await existingQuery
   if (existing) throw new Error('That identity or screen name already has a Spartan account.')
 
@@ -67,11 +87,10 @@ export async function registerSpartanAccount({ screenName, password, provinceNam
     throw new Error(`Spartan account record failed: ${accountError.message}`)
   }
 
-  if (discordUserId) {
-    const { error: accessUpdateError } = await supabase.from('spartan_access')
-      .update({ username: name, updated_at: new Date().toISOString() }).eq('discord_user_id', discordUserId)
-    if (accessUpdateError) throw new Error(`Spartan access profile update failed: ${accessUpdateError.message}`)
-  }
+  const { error: accessUpdateError } = await supabase.from('spartan_access')
+    .update({ username: name, updated_at: new Date().toISOString() }).eq('discord_user_id', discordUserId)
+  if (accessUpdateError) throw new Error(`Spartan access profile update failed: ${accessUpdateError.message}`)
+
   return { screenName: name, discordUserId, provinceName: province, provinceLocation: location, ip }
 }
 
