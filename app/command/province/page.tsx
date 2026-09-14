@@ -1,13 +1,13 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { Suspense, useEffect, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 
 const nav = [["Command","/"],["Kingdom","/command/kingdom"],["Province","/command/province"],["War Room","/command/war-room"],["Build Lab","/command/build-lab"],["Military","/command/military"],["Magic","/command/magic"],["Thievery","/command/thievery"],["Science","/command/science"],["Wiki","/command/wiki"],["Tools","/command/tools"]]
 const fmt=(v:any)=>v==null||v===""?"—":Number.isFinite(Number(v))?Number(v).toLocaleString():String(v)
 const pct=(v:any)=>v==null||v===""?"—":`${Number(v).toFixed(1)}%`
 
-export default function ProvinceCommand(){
+function ProvinceCommand(){
   const router=useRouter(); const searchParams=useSearchParams(); const provinceId=searchParams.get("id")
   const [data,setData]=useState<any>(null); const [error,setError]=useState("")
   useEffect(()=>{let alive=true; const load=async()=>{try{const query=provinceId?`?provinceId=${encodeURIComponent(provinceId)}`:""; const r=await fetch(`/api/throne${query}`,{cache:"no-store"}); const body=await r.json(); if(!r.ok) throw new Error(body.error||"Province Intel unavailable"); if(alive){setData(body);setError("")}}catch(e){if(alive)setError(e instanceof Error?e.message:"Province Intel unavailable")}}; load(); const t=setInterval(load,15000); return()=>{alive=false;clearInterval(t)}},[provinceId])
@@ -23,4 +23,8 @@ export default function ProvinceCommand(){
       <section style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginTop:16}}><article style={{padding:20,border:"1px solid rgba(255,255,255,.08)",borderRadius:12,background:"#081119"}}><div style={{fontSize:9,color:"#67f0b0",letterSpacing:".16em"}}>CAPTURE SOURCES</div><h2 style={{margin:"7px 0 14px"}}>Canonical Intel state</h2><div style={{fontSize:11,color:"#91a2b0",lineHeight:1.8}}>Source: <strong style={{color:"#e7eef5"}}>{data?.source||"—"}</strong><br/>Captured: <strong style={{color:"#e7eef5"}}>{data?.capturedAt?new Date(data.capturedAt).toLocaleString():"—"}</strong><br/>Province updated: <strong style={{color:"#e7eef5"}}>{p.updated_at?new Date(p.updated_at).toLocaleString():"—"}</strong></div></article><article style={{padding:20,border:"1px solid rgba(255,255,255,.08)",borderRadius:12,background:"#081119"}}><div style={{fontSize:9,color:"#67f0b0",letterSpacing:".16em"}}>SPECIALIZED INTEL</div><h2 style={{margin:"7px 0 14px"}}>What Spartan has captured</h2><div style={{display:"grid",gap:8}}>{[["SCIENCE",p.science],["BUILDINGS",p.buildings],["STATE DATA",state]].map(([n,v])=><div key={String(n)} style={{padding:10,border:"1px solid rgba(255,255,255,.05)",borderRadius:7}}><span style={{fontSize:9,color:"#687686"}}>{n}</span><strong style={{display:"block",marginTop:3,fontSize:12}}>{v&&typeof v==="object"?`${Object.keys(v).length} fields captured`:v?String(v):"No data yet"}</strong></div>)}</div></article></section>
     </section>
   </main>
+}
+
+export default function Page(){
+  return <Suspense fallback={<main style={{minHeight:"100vh",background:"#05080d",color:"#67f0b0",display:"grid",placeItems:"center",fontFamily:"Inter,system-ui,sans-serif"}}>Loading Province Intelligence…</main>}><ProvinceCommand /></Suspense>
 }
