@@ -1,0 +1,36 @@
+name: Fix capture build once
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Remove stale owner resolver reference
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('app/api/capture/route.ts')
+          s = p.read_text()
+          old = "      if (!ownerId) ownerId = await resolveServiceOwner(supabase, capture)\n"
+          if old not in s:
+              raise SystemExit('stale resolver reference not found')
+          s = s.replace(old, '')
+          p.write_text(s)
+          PY
+      - name: Verify build
+        run: |
+          npm ci
+          npm run build
+      - name: Commit fix and remove workflow
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add app/api/capture/route.ts .github/workflows/fix-capture-build-once.yml
+          git commit -m 'Fix capture route build error'
+          git push origin main
