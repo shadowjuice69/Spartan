@@ -14,6 +14,38 @@ function isServiceRequest(request: Request) {
   return Boolean(configured && request.headers.get('x-spartan-capture-key') === configured)
 }
 
+function hashCaptureToken(token: string) {
+  return crypto.createHash('sha256').update(token).digest('hex')
+}
+
+async function resolveCaptureDeviceOwner(supabase: any, captureToken: string) {
+  const tokenHash = hashCaptureToken(captureToken)
+  const device = await supabase
+    .from('spartan_capture_devices')
+    .select('id,owner_id')
+    .eq('token_hash', tokenHash)
+    .maybeSingle()
+
+  if (device.error) throw new Error(device.error.message)
+  if (!device.data?.owner_id) return null
+
+  const account = await supabase
+    .from('spartan_accounts')
+    .select('id,account_status')
+    .eq('id', device.data.owner_id)
+    .maybeSingle()
+
+  if (account.error) throw new Error(account.error.message)
+  if (!account.data || account.data.account_status !== 'active') return null
+
+  await supabase
+    .from('spartan_capture_devices')
+    .update({ last_seen_at: new Date().toISOString() })
+    .eq('id', device.data.id)
+
+  return account.data.id as string
+}
+
 function object(value: unknown): AnyRecord {
   return value && typeof value === 'object' && !Array.isArray(value) ? (value as AnyRecord) : {}
 }
@@ -304,53 +336,6 @@ async function canonicalCaptureIdentity(supabase: any, capture: AnyRecord) {
   }
 }
 
-async function resolveServiceOwner(supabase: any, capture: AnyRecord) {
-  if (process.env.SPARTAN_CAPTURE_USER_ID) return process.env.SPARTAN_CAPTURE_USER_ID
-
-  const identity = extractCaptureIdentity(capture)
-  const province = await findProvinceByCaptureIdentity(supabase, capture)
-  const provinceId = province?.id ?? (isUuid(capture.provinceId) ? capture.provinceId : null)
-  const provinceName = firstText(province?.name, capture.provinceName, identity.provinceName)
-  const kingdomCode = firstText(province?.kd_code, identity.kingdomCode, capture.kingdomId)
-
-  if (provinceId) {
-    const linked = await supabase
-      .from('spartan_accounts')
-      .select('auth_user_id')
-      .ilike('province_name', provinceName || '')
-      .eq('province_location', kingdomCode || '')
-      .limit(1)
-      .maybeSingle()
-    if (linked.error) throw new Error(linked.error.message)
-    if (linked.data?.auth_user_id) return linked.data.auth_user_id
-  }
-
-  if (provinceName && kingdomCode) {
-    const exact = await supabase
-      .from('spartan_accounts')
-      .select('auth_user_id')
-      .ilike('province_name', provinceName)
-      .eq('province_location', kingdomCode)
-      .limit(1)
-      .maybeSingle()
-    if (exact.error) throw new Error(exact.error.message)
-    if (exact.data?.auth_user_id) return exact.data.auth_user_id
-  }
-
-  if (provinceName) {
-    const byName = await supabase
-      .from('spartan_accounts')
-      .select('auth_user_id')
-      .ilike('province_name', provinceName)
-      .limit(1)
-      .maybeSingle()
-    if (byName.error) throw new Error(byName.error.message)
-    if (byName.data?.auth_user_id) return byName.data.auth_user_id
-  }
-
-  return null
-}
-
 function buildSnapshotRow(snapshot: ProvinceSnapshot, ownerId: string, canonicalKingdomId: string | null) {
   return {
     user_id: ownerId,
@@ -413,7 +398,16 @@ export async function POST(request: Request) {
       userId?: string
     }
 
-    if (serviceRequest) ownerId = body.userId ?? null
+    if (serviceRequest) {
+      const captureToken = text(request.headers.get('x-spartan-capture-token'))
+      if (!captureToken) {
+        return NextResponse.json({ error: 'Scraper capture token is required.' }, { status: 401 })
+      }
+      ownerId = await resolveCaptureDeviceOwner(supabase, captureToken)
+      if (!ownerId) {
+        return NextResponse.json({ error: 'Invalid or inactive scraper capture token.' }, { status: 401 })
+      }
+    }
 
     let capture = body.capture
     let captureSteward: ReturnType<typeof runCaptureStewards> | null = null
