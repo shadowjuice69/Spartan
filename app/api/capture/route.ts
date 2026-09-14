@@ -419,7 +419,6 @@ export async function POST(request: Request) {
       body.capture = capture
       canonicalKingdomId = capture.canonicalKingdomId ?? null
 
-      if (!ownerId) ownerId = await resolveServiceOwner(supabase, capture)
 
       if (!ownerId) {
         const identity = extractCaptureIdentity(capture)
