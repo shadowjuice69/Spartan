@@ -140,8 +140,8 @@ async function canonicalCaptureIdentity(supabase: any, capture: AnyRecord) {
   return {
     ...capture,
     provinceId: province?.id ?? capture.provinceId ?? null,
-    kingdomId: province?.kd_code ?? kingdomCode || capture.kingdomId || null,
-    provinceName: province?.name ?? provinceName || null,
+    kingdomId: (province?.kd_code ?? kingdomCode) || capture.kingdomId || null,
+    provinceName: (province?.name ?? provinceName) || null,
   }
 }
 
