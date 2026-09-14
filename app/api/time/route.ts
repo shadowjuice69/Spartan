@@ -2,18 +2,24 @@ import { NextResponse } from 'next/server'
 
 export const dynamic = 'force-dynamic'
 
-const UTOPIA_TICK_MINUTE = 3
-const ANCHOR_REAL_MS = Date.parse('2026-09-13T05:03:00.000Z')
-const ANCHOR_UTOPIA_YEAR = 6
-const ANCHOR_UTOPIA_MONTH = 7
-const ANCHOR_UTOPIA_DAY = 12
-const ANCHOR_UTOPIA_TICK = 1
+// Utopia time: 1 tick = 1 real hour, 24 days/month, 7 months/year.
+// The current in-game checkpoint is supplied by the live Utopia state:
+// Sep 14 2026, 09:03 Chicago = June 13 YR6, tick 10.
+const TICK_MS = 3_600_000
 const TICKS_PER_DAY = 24
-const TICKS_PER_MONTH = 31 * TICKS_PER_DAY
-const TICKS_PER_YEAR = 12 * TICKS_PER_MONTH
+const DAYS_PER_MONTH = 24
+const MONTHS_PER_YEAR = 7
+const TICKS_PER_MONTH = DAYS_PER_MONTH * TICKS_PER_DAY
+const TICKS_PER_YEAR = MONTHS_PER_YEAR * TICKS_PER_MONTH
+const ANCHOR_REAL_MS = Date.parse('2026-09-14T14:03:00.000Z')
+const ANCHOR_YEAR = 6
+const ANCHOR_MONTH = 6
+const ANCHOR_DAY = 13
+const ANCHOR_TICK = 10
 
 function utopiaFromTicks(ticksFromAnchor: number) {
-  let absolute = (ANCHOR_UTOPIA_YEAR - 1) * TICKS_PER_YEAR + (ANCHOR_UTOPIA_MONTH - 1) * TICKS_PER_MONTH + (ANCHOR_UTOPIA_DAY - 1) * TICKS_PER_DAY + (ANCHOR_UTOPIA_TICK - 1) + ticksFromAnchor
+  const anchorAbsolute = (ANCHOR_YEAR - 1) * TICKS_PER_YEAR + (ANCHOR_MONTH - 1) * TICKS_PER_MONTH + (ANCHOR_DAY - 1) * TICKS_PER_DAY + (ANCHOR_TICK - 1)
+  let absolute = anchorAbsolute + ticksFromAnchor
   const year = Math.floor(absolute / TICKS_PER_YEAR) + 1
   absolute %= TICKS_PER_YEAR
   const month = Math.floor(absolute / TICKS_PER_MONTH) + 1
@@ -24,50 +30,33 @@ function utopiaFromTicks(ticksFromAnchor: number) {
 }
 
 export async function GET() {
-  const localNow = Date.now()
-  let networkNow = localNow
-  let source = 'local-fallback'
-
-  try {
-    const response = await fetch('https://worldtimeapi.org/api/timezone/America/Chicago', {
-      cache: 'no-store',
-      signal: AbortSignal.timeout(2500),
-    })
-    if (response.ok) {
-      const data = await response.json() as { unixtime?: number }
-      if (Number.isFinite(data.unixtime)) {
-        networkNow = Number(data.unixtime) * 1000
-        source = 'worldtimeapi-america-chicago'
-      }
-    }
-  } catch {
-    // Keep the server clock as a safe fallback if the public time service is unavailable.
-  }
-
-  const elapsedTicks = Math.floor((networkNow - ANCHOR_REAL_MS) / 3_600_000)
+  const now = Date.now()
+  const elapsedTicks = Math.floor((now - ANCHOR_REAL_MS) / TICK_MS)
   const utopia = utopiaFromTicks(elapsedTicks)
-  const nextTick = new Date(Math.floor(networkNow / 3_600_000) * 3_600_000 + UTOPIA_TICK_MINUTE * 60_000)
-  if (nextTick.getTime() <= networkNow) nextTick.setTime(nextTick.getTime() + 3_600_000)
 
-  const currentDate = new Date(networkNow)
-  const currentYearStart = (utopia.year - 1) * TICKS_PER_YEAR
-  const nextYearStart = currentYearStart + TICKS_PER_YEAR
-  const currentAbsoluteTicks = currentYearStart
-    + (utopia.month - 1) * TICKS_PER_MONTH
-    + (utopia.day - 1) * TICKS_PER_DAY
-    + (utopia.tick - 1)
-  const ticksUntilNextYear = Math.max(0, nextYearStart - currentAbsoluteTicks)
+  // Tick boundaries occur at :03 in the Chicago clock, matching the live clock checkpoint.
+  const current = new Date(now)
+  const nextTick = new Date(current)
+  nextTick.setMinutes(3, 0, 0)
+  if (nextTick.getTime() <= now) nextTick.setTime(nextTick.getTime() + TICK_MS)
+
+  const absoluteNow = (utopia.year - 1) * TICKS_PER_YEAR + (utopia.month - 1) * TICKS_PER_MONTH + (utopia.day - 1) * TICKS_PER_DAY + (utopia.tick - 1)
+  const nextYearStart = utopia.year * TICKS_PER_YEAR
+  const ticksUntilNextYear = Math.max(0, nextYearStart - absoluteNow)
+  const jan21Yr7Absolute = TICKS_PER_YEAR + 20 * TICKS_PER_DAY
+  const ticksUntilJan21Yr7 = Math.max(0, jan21Yr7Absolute - absoluteNow)
 
   return NextResponse.json({
-    now: new Date(networkNow).toISOString(),
-    chicagoTime: currentDate.toLocaleString('en-US', { timeZone: 'America/Chicago', hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true }),
-    chicagoDate: currentDate.toLocaleDateString('en-US', { timeZone: 'America/Chicago', month: 'short', day: 'numeric', year: 'numeric' }),
-    source,
+    now: new Date(now).toISOString(),
+    chicagoTime: current.toLocaleString('en-US', { timeZone: 'America/Chicago', hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true }),
+    chicagoDate: current.toLocaleDateString('en-US', { timeZone: 'America/Chicago', month: 'short', day: 'numeric', year: 'numeric' }),
+    source: 'render-server-clock',
     utopia,
     nextTickAt: nextTick.toISOString(),
     ticksUntilNextYear,
-    ticksUntilEndYr7: utopia.month === 7 ? ticksUntilNextYear : null,
-    boundaryLabel: utopia.month === 7 ? `YR${utopia.year + 1} BOUNDARY` : `NEXT YEAR BOUNDARY`,
-    sync: source !== 'local-fallback',
+    nextYearLabel: `JAN 1, YR${utopia.year + 1}`,
+    ticksUntilJan21Yr7,
+    jan21Yr7Label: 'JAN 21, YR7',
+    sync: true,
   }, { headers: { 'Cache-Control': 'no-store, max-age=0' } })
 }
