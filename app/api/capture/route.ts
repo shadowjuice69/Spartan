@@ -41,7 +41,7 @@ export async function POST(request:Request){
   let capture=body.capture
   let captureSteward:ReturnType<typeof runCaptureStewards>|null=null,captureKnowledge:Awaited<ReturnType<typeof resolveWikiKnowledge>>|null=null
   if(capture){
-   const canonical=await canonicalCaptureIdentity(supabase,capture);capture=canonical.capture;body.capture=capture
+   const canonical=await canonicalCaptureIdentity(supabase,capture);capture=canonical.capture; if(!capture) return NextResponse.json({error:'Capture normalization failed'},{status:500}); body.capture=capture
    captureKnowledge=await resolveWikiKnowledge(supabase,{provinceId:capture.provinceId})
    captureSteward=runCaptureStewards(capture,captureKnowledge)
    const rawText=capture.rawText??'',rawPayload=capture.rawPayload??{},parsedPayload=capture.parsedPayload??{},contentHash=crypto.createHash('sha256').update(JSON.stringify([capture.url??'',capture.provinceId??null,capture.kingdomId??null,rawText,rawPayload,parsedPayload])).digest('hex')
