@@ -22,19 +22,20 @@ export async function proxy(request: NextRequest) {
   const path = request.nextUrl.pathname
   const response = await updateSession(request)
 
-  if (response.redirected || path === '/login' || path.startsWith('/auth')) return response
+  // API routes authenticate themselves with the Supabase session inside each
+  // handler. Do not run the full IPinfo/security audit on every polling request
+  // (history, Jeeves, command data, etc.). That would turn a 15-second dashboard
+  // refresh into repeated external reputation checks and security-event writes.
+  if (response.redirected || path === '/login' || path.startsWith('/auth') || path.startsWith('/api/')) return response
 
   const discordUserId = response.headers.get('x-spartan-discord-id')
   const authUserId = response.headers.get('x-spartan-auth-user-id')
 
   if (PUBLIC_PATHS.has(path)) return response
-
   if (!authUserId) return login(request)
 
-  // The Supabase auth user is the durable session identity. Discord metadata is
-  // useful for authorization, but provider/session refreshes can legitimately
-  // omit it. Resolve the stored Spartan account by auth_user_id first, then use
-  // its canonical Discord ID for access checks.
+  // Page navigation gets the full security checkpoint once. The Supabase auth
+  // user is the durable identity; Discord metadata is supplemental.
   try {
     const security = await authorizeDashboardForAuthUser(request, authUserId, discordUserId)
     if (!security.allowed) return deny(request, security.reason ?? 'security')

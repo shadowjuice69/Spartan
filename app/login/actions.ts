@@ -4,8 +4,8 @@ import { headers } from 'next/headers'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { accountEmail, registerSpartanAccount } from '@/lib/spartan/accounts'
-import { recordLoginCheckpoint } from '@/lib/spartan/security'
+import { accountEmail, registerSpartanAccount, resolveSpartanLoginEmail } from '@/lib/spartan/accounts'
+import { authorizeDashboardForAuthUser } from '@/lib/spartan/security'
 
 export async function createSpartanAccount(formData: FormData) {
   const screenName = String(formData.get('screenName') ?? '')
@@ -33,20 +33,32 @@ export async function login(formData: FormData) {
 
   if (!screenName || !password) redirect('/login?error=missing')
 
-  const { data, error } = await supabase.auth.signInWithPassword({
-    email: accountEmail(screenName),
-    password,
-  })
+  let email: string | null = null
+  try {
+    email = await resolveSpartanLoginEmail(screenName)
+  } catch {
+    email = null
+  }
+  email = email || accountEmail(screenName)
+
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password })
   if (error || !data.user) redirect('/login?error=invalid')
 
+  let securityReason: string | null = null
   try {
     const requestHeaders = await headers()
     const request = new Request('https://spartan.local/login', { headers: requestHeaders })
-    await recordLoginCheckpoint({ authUserId: data.user.id, request })
+    const security = await authorizeDashboardForAuthUser(request, data.user.id)
+    if (!security.allowed) securityReason = security.reason ?? 'security-check-failed'
   } catch (error) {
     await supabase.auth.signOut()
     const message = error instanceof Error ? error.message : 'security-check-failed'
     redirect(`/login?error=${encodeURIComponent(message)}`)
+  }
+
+  if (securityReason) {
+    await supabase.auth.signOut()
+    redirect(`/login?error=${encodeURIComponent(securityReason)}`)
   }
 
   revalidatePath('/', 'layout')
