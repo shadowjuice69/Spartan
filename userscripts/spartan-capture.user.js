@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Spartan Capture Engine
 // @namespace    spartan-capture-engine
-// @version      2.0.0
-// @description  Capture every Utopia page completely, extract structured page data without restricting capture, and deliver it reliably to Spartan on Render.
+// @version      3.0.0
+// @description  Capture every Utopia page to Spartan on Render with automatic per-user scraper identity.
 // @match        https://www.utopia-game.com/*
 // @match        https://utopia-game.com/*
 // @match        https://intel.utopia-game.com/*
@@ -19,38 +19,28 @@
 (function () {
   'use strict';
 
-  const VERSION = '2.0.0';
+  const VERSION = '3.0.0';
   const ENDPOINT = 'https://spartan-dashboard.onrender.com/api/capture';
+  const IDENTITY_ENDPOINT = 'https://spartan-dashboard.onrender.com/api/capture/identity';
   const CAPTURE_KEY = 'NikkoAce';
-  const QUEUE_KEY = 'spartan_capture_queue_v2';
-  const LAST_KEY = 'spartan_capture_last_fingerprint_v2';
+  const TOKEN_KEY = 'spartan_capture_token_v3';
+  const OWNER_KEY = 'spartan_capture_owner_v3';
+  const QUEUE_KEY = 'spartan_capture_queue_v3';
   const PANEL_ID = 'spartan-capture-engine-panel';
   const MAX_QUEUE = 25;
   const RETRIES = 5;
   const RETRY_MS = 4000;
-  const AUTO_DELAY = 1800;
 
   let busy = false;
-  let current = null;
+  let identityState = null;
 
   const safe = (fn, fallback = null) => { try { return fn(); } catch (_) { return fallback; } };
   const text = v => String(v == null ? '' : v).replace(/\u00a0/g, ' ').replace(/\r\n?/g, '\n').trim();
-  const num = v => {
-    const n = Number(String(v == null ? '' : v).replace(/[^0-9.+-]/g, ''));
-    return Number.isFinite(n) ? n : null;
-  };
+  const num = v => { const n = Number(String(v ?? '').replace(/[^0-9.+-]/g, '')); return Number.isFinite(n) ? n : null; };
 
   function uuid() {
-    if (crypto && crypto.randomUUID) return crypto.randomUUID();
-    return `sp-${Date.now()}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
-  }
-
-  function fingerprint() {
-    const body = text(document.body?.innerText || '');
-    const sample = `${location.href}|${document.title}|${body.length}|${body.slice(0, 700)}|${body.slice(-700)}`;
-    let h = 2166136261;
-    for (let i = 0; i < sample.length; i++) h = Math.imul(h ^ sample.charCodeAt(i), 16777619);
-    return `${(h >>> 0).toString(16)}-${sample.length}`;
+    if (crypto?.randomUUID) return crypto.randomUUID();
+    return `sp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
   }
 
   function pageKind() {
@@ -72,33 +62,44 @@
     const body = text(document.body?.innerText || '');
     const out = {};
     const coord = body.match(/\b(\d{1,3}:\d{1,3})\b/);
-    if (coord) out.kd_code = coord[1];
-    const province = body.match(/(?:Province\s*:\s*|The Province of\s+)([^\n(]{2,100})/i);
-    if (province) out.province = text(province[1]);
-    const title = text(document.title);
-    if (!out.province && title) out.title_hint = title;
+    if (coord) out.kingdomCode = coord[1];
+    const patterns = [
+      /(?:Province|Province Name)\s*[:\-]\s*([^\n|]{2,100})/i,
+      /The Province of\s+([^\n(]{2,100})/i,
+      /(?:Your Province|Current Province)\s*[:\-]?\s*([^\n|]{2,100})/i,
+      /<title[^>]*>.*?([^|\-]{2,80})/i,
+    ];
+    for (const re of patterns) { const m = body.match(re); if (m?.[1]) { out.provinceName = text(m[1]); break; } }
+    if (!out.provinceName) {
+      const title = text(document.title);
+      if (title && !/utopia/i.test(title)) out.titleHint = title;
+    }
     return out;
   }
 
-  function addField(target, key, value, source) {
-    if (value == null || value === '') return;
-    if (!(key in target)) target[key] = { value, source };
+  function scalar(v) {
+    const s = text(v);
+    return /^[-+]?\d[\d,.]*%?$/.test(s) ? num(s) : s;
   }
 
-  function extractStructured() {
+  function normalizeKey(v) {
+    return text(v).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 80) || 'field';
+  }
+
+  function structured() {
     const fields = {};
+    const sources = {};
     const tables = [];
-    const links = [];
-    const forms = [];
+    const add = (k, v, source) => { if (v !== null && v !== '') { const key = normalizeKey(k); if (!(key in fields)) { fields[key] = v; sources[key] = source; } } };
 
     document.querySelectorAll('table').forEach((table, ti) => {
       const rows = [];
       table.querySelectorAll('tr').forEach((tr, ri) => {
-        const cells = Array.from(tr.querySelectorAll('th,td')).map(c => text(c.innerText || c.textContent));
+        const cells = [...tr.querySelectorAll('th,td')].map(c => text(c.innerText || c.textContent));
         if (cells.length) rows.push(cells);
         cells.forEach((cell, ci) => {
           const pair = cell.match(/^(.{2,80}?)[\s:=]+([+-]?[\d,.]+%?)$/);
-          if (pair) addField(fields, normalizeKey(pair[1]), num(pair[2]), `table:${ti}:${ri}:${ci}`);
+          if (pair) add(pair[1], num(pair[2]), `table:${ti}:${ri}:${ci}`);
         });
       });
       if (rows.length) tables.push({ index: ti, rows });
@@ -106,159 +107,129 @@
 
     document.querySelectorAll('dt').forEach((dt, i) => {
       const dd = dt.nextElementSibling;
-      if (dd && dd.matches('dd')) addField(fields, normalizeKey(dt.innerText), scalar(dd.innerText), `dl:${i}`);
+      if (dd?.matches('dd')) add(dt.innerText, scalar(dd.innerText), `dl:${i}`);
     });
 
     document.querySelectorAll('label').forEach((label, i) => {
-      const forId = label.htmlFor;
-      const input = forId ? document.getElementById(forId) : label.querySelector('input,select,textarea');
-      if (input) addField(fields, normalizeKey(label.innerText), scalar(input.value), `label:${i}`);
+      const input = label.htmlFor ? document.getElementById(label.htmlFor) : label.querySelector('input,select,textarea');
+      if (input) add(label.innerText, scalar(input.value), `label:${i}`);
     });
-
-    document.querySelectorAll('a[href]').forEach(a => links.push({ text: text(a.innerText || a.textContent), href: a.href }));
-    document.querySelectorAll('form').forEach((form, i) => forms.push({ index: i, action: form.action, method: form.method || 'get', fields: Array.from(form.elements).map(e => ({ name: e.name || '', type: e.type || e.tagName.toLowerCase(), value: e.value || '' })) }));
 
     const visible = text(document.body?.innerText || '');
     const patterns = {
       acres: [/\bAcres?\b[^\d]{0,20}([\d,]+)/i, /\bLand\b[^\d]{0,20}([\d,]+)/i],
       networth: [/\bNet\s*worth\b[^\d]{0,20}([\d,]+)/i, /\bNW\b[^\d]{0,20}([\d,]+)/i],
-      gold: [/\bGold\b[^\d]{0,20}([\d,]+)/i], food: [/\bFood\b[^\d]{0,20}([\d,]+)/i],
-      runes: [/\bRunes?\b[^\d]{0,20}([\d,]+)/i], population: [/\bPopulation\b[^\d]{0,20}([\d,]+)/i], peons: [/\bPeasants?\b[^\d]{0,20}([\d,]+)/i, /\bPeons?\b[^\d]{0,20}([\d,]+)/i],
+      population: [/\bPopulation\b[^\d]{0,20}([\d,]+)/i], peons: [/\bPeasants?\b[^\d]{0,20}([\d,]+)/i, /\bPeons?\b[^\d]{0,20}([\d,]+)/i],
       soldiers: [/\bSoldiers\b[^\d]{0,20}([\d,]+)/i], off_specs: [/\bOff(?:ensive)?\s*Specs?\b[^\d]{0,20}([\d,]+)/i], def_specs: [/\bDef(?:ensive)?\s*Specs?\b[^\d]{0,20}([\d,]+)/i],
       elites: [/\bElites?\b[^\d]{0,20}([\d,]+)/i], thieves: [/\bThieves\b[^\d]{0,20}([\d,]+)/i], wizards: [/\bWizards\b[^\d]{0,20}([\d,]+)/i], generals: [/\bGenerals\b[^\d]{0,20}([\d,]+)/i], prisoners: [/\bPrisoners\b[^\d]{0,20}([\d,]+)/i], war_horses: [/\bWar\s*Horses\b[^\d]{0,20}([\d,]+)/i],
       offense: [/\bOffen[cs]e(?:\s*Points?)?\b[^\d]{0,20}([\d,]+)/i], defense: [/\bDefen[cs]e(?:\s*Points?)?\b[^\d]{0,20}([\d,]+)/i], mana: [/\bMana\b[^\d]{0,20}([\d,]+)/i], stealth: [/\bStealth\b[^\d]{0,20}([\d,.]+)%?/i],
-      build_efficiency: [/\bBuild(?:ing)?\s*Efficiency\b[^\d]{0,20}([\d,.]+)%?/i], wages: [/\bWages\b[^\d]{0,20}([\d,.]+)/i], r_tpa: [/\bRate\s*TPA\b[^\d]{0,20}([\d,.]+)/i], o_tpa: [/\bOff(?:ense)?\s*TPA\b[^\d]{0,20}([\d,.]+)/i], d_tpa: [/\bDef(?:ense)?\s*TPA\b[^\d]{0,20}([\d,.]+)/i], r_wpa: [/\bRate\s*WPA\b[^\d]{0,20}([\d,.]+)/i], o_wpa: [/\bOff(?:ense)?\s*WPA\b[^\d]{0,20}([\d,.]+)/i], d_wpa: [/\bDef(?:ense)?\s*WPA\b[^\d]{0,20}([\d,.]+)/i]
+      build_efficiency: [/\bBuild(?:ing)?\s*Efficiency\b[^\d]{0,20}([\d,.]+)%?/i], wages: [/\bWages\b[^\d]{0,20}([\d,.]+)/i],
+      r_tpa: [/\bRate\s*TPA\b[^\d]{0,20}([\d,.]+)/i], o_tpa: [/\bOff(?:ense)?\s*TPA\b[^\d]{0,20}([\d,.]+)/i], d_tpa: [/\bDef(?:ense)?\s*TPA\b[^\d]{0,20}([\d,.]+)/i],
+      r_wpa: [/\bRate\s*WPA\b[^\d]{0,20}([\d,.]+)/i], o_wpa: [/\bOff(?:ense)?\s*WPA\b[^\d]{0,20}([\d,.]+)/i], d_wpa: [/\bDef(?:ense)?\s*WPA\b[^\d]{0,20}([\d,.]+)/i]
     };
-    for (const [key, list] of Object.entries(patterns)) for (const re of list) { const m = visible.match(re); if (m) { addField(fields, key, num(m[1]), `text:${re}`); break; } }
+    for (const [key, list] of Object.entries(patterns)) for (const re of list) { const m = visible.match(re); if (m) { add(key, num(m[1]), `text:${re}`); break; } }
 
-    return { fields: Object.fromEntries(Object.entries(fields).map(([k,v]) => [k, v.value])), tables, links, forms, field_sources: fields };
+    return { fields, tables, links: [...document.querySelectorAll('a[href]')].map(a => ({ text: text(a.innerText || a.textContent), href: a.href })), forms: [...document.querySelectorAll('form')].map((f, i) => ({ index: i, action: f.action, method: f.method || 'get', fields: [...f.elements].map(e => ({ name: e.name || '', type: e.type || e.tagName.toLowerCase(), value: e.value || '' })) })), field_sources: sources };
   }
 
-  function normalizeKey(v) {
-    return text(v).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 80) || 'field';
-  }
-  function scalar(v) { const s = text(v); const n = num(s); return /^[-+]?\d[\d,.]*%?$/.test(s) ? n : s; }
-
-  function buildCapture() {
+  function capture() {
     const rawDom = document.documentElement?.outerHTML || '';
-    const visibleText = text(document.body?.innerText || '');
-    const structured = safe(extractStructured, { fields: {}, tables: [], links: [], forms: [], field_sources: {} });
+    const s = safe(structured, { fields: {}, tables: [], links: [], forms: [], field_sources: {} });
     const id = uuid();
     return {
-      captureId: id,
-      capturedAt: new Date().toISOString(),
-      source: 'spartan_capture_engine',
-      sourceId: id,
-      scraperVersion: VERSION,
-      pageKind: pageKind(),
-      url: location.href,
-      rawText: visibleText,
-      rawPayload: {
-        capture_engine: VERSION,
-        page: { url: location.href, origin: location.origin, hostname: location.hostname, pathname: location.pathname, search: location.search, hash: location.hash, title: document.title || '', readyState: document.readyState, language: document.documentElement?.lang || null },
-        identity: identity(),
-        rawDom,
-        structured,
-      },
-      parsedPayload: structured.fields,
+      captureId: id, capturedAt: new Date().toISOString(), source: 'spartan_capture_engine', sourceId: id,
+      scraperVersion: VERSION, pageKind: pageKind(), url: location.href, rawText: text(document.body?.innerText || ''),
+      rawPayload: { capture_engine: VERSION, page: { url: location.href, origin: location.origin, hostname: location.hostname, pathname: location.pathname, search: location.search, hash: location.hash, title: document.title || '', readyState: document.readyState, language: document.documentElement?.lang || null }, identity: identity(), rawDom, structured: s },
+      parsedPayload: s.fields,
     };
   }
 
-  function loadQueue() { return safe(() => JSON.parse(GM_getValue(QUEUE_KEY, '[]')), []); }
-  function saveQueue(q) { GM_setValue(QUEUE_KEY, JSON.stringify(q.slice(-MAX_QUEUE))); }
+  function token() { return safe(() => GM_getValue(TOKEN_KEY, ''), ''); }
+  function owner() { return safe(() => GM_getValue(OWNER_KEY, ''), ''); }
+  function setIdentity(data) { if (data?.captureToken) GM_setValue(TOKEN_KEY, data.captureToken); if (data?.ownerId) GM_setValue(OWNER_KEY, data.ownerId); identityState = data; }
 
-  function enqueue(capture) {
-    const q = loadQueue();
-    q.push({ capture, attempts: 0, nextAt: Date.now() });
-    saveQueue(q);
-  }
-
-  function request(capture) {
+  function http(url, data, extra = {}) {
     return new Promise(resolve => {
-      let settled = false;
-      const finish = result => { if (!settled) { settled = true; resolve(result); } };
+      let done = false;
+      const finish = value => { if (!done) { done = true; resolve(value); } };
       const timer = setTimeout(() => finish({ ok: false, status: 0, error: 'timeout' }), 30000);
-      GM_xmlhttpRequest({
-        method: 'POST', url: ENDPOINT,
-        headers: { 'Content-Type': 'application/json', 'x-spartan-capture-key': CAPTURE_KEY, 'x-spartan-capture-version': VERSION },
-        data: JSON.stringify({ capture }),
-        timeout: 28000,
-        onload: r => { clearTimeout(timer); let body = null; try { body = JSON.parse(r.responseText || '{}'); } catch (_) {} finish({ ok: r.status >= 200 && r.status < 300, status: r.status, body, error: body?.error || '' }); },
+      GM_xmlhttpRequest({ method: 'POST', url, headers: { 'Content-Type': 'application/json', 'x-spartan-capture-key': CAPTURE_KEY, 'x-spartan-capture-version': VERSION, ...(extra.headers || {}) }, data: JSON.stringify(data), timeout: 28000,
+        onload: r => { clearTimeout(timer); let body = {}; try { body = JSON.parse(r.responseText || '{}'); } catch (_) {} finish({ ok: r.status >= 200 && r.status < 300, status: r.status, body, error: body.error || '' }); },
         onerror: () => { clearTimeout(timer); finish({ ok: false, status: 0, error: 'network error' }); },
         ontimeout: () => { clearTimeout(timer); finish({ ok: false, status: 0, error: 'timeout' }); }
       });
     });
   }
 
+  async function bootstrapIdentity() {
+    const existing = token();
+    if (existing && owner()) return true;
+    const id = identity();
+    const result = await http(IDENTITY_ENDPOINT, { provinceName: id.provinceName || '', kingdomCode: id.kingdomCode || '', captureToken: existing || '' });
+    if (result.ok && result.body?.captureToken && result.body?.ownerId) {
+      setIdentity(result.body);
+      setStatus(`Identity linked ✓ · ${result.body.provinceName || 'province'}`, true);
+      return true;
+    }
+    setStatus(result.body?.error || 'Open your Throne page once to link this scraper.', false);
+    return false;
+  }
+
+  function loadQueue() { return safe(() => JSON.parse(GM_getValue(QUEUE_KEY, '[]')), []); }
+  function saveQueue(q) { GM_setValue(QUEUE_KEY, JSON.stringify(q.slice(-MAX_QUEUE))); }
+  function enqueue(c) { const q = loadQueue(); q.push({ capture: c, attempts: 0, nextAt: Date.now() }); saveQueue(q); }
+
+  async function send(c) {
+    const result = await http(ENDPOINT, { capture: c, userId: owner() }, { headers: token() ? { 'x-spartan-capture-token': token() } : {} });
+    if (result.ok && result.body?.captureToken) setIdentity(result.body);
+    return result;
+  }
+
   async function flushQueue() {
     if (busy) return;
     busy = true;
     try {
-      let q = loadQueue();
+      const q = loadQueue();
       for (let i = 0; i < q.length; ) {
         if (q[i].nextAt > Date.now()) { i++; continue; }
-        const item = q[i];
-        setStatus(`Sending ${item.capture.pageKind}…`, false);
-        const result = await request(item.capture);
-        if (result.ok) {
-          q.splice(i, 1); saveQueue(q);
-          current = item.capture;
-          setStatus(`Saved ✓ · ${item.capture.pageKind} · ${Object.keys(item.capture.parsedPayload || {}).length} fields`, true);
-        } else {
-          item.attempts += 1;
-          if (item.attempts >= RETRIES) {
-            item.nextAt = Date.now() + 60000;
-            setStatus(`Queued · Render ${result.status || 'offline'} · retry ${item.attempts}/${RETRIES}`, false);
-          } else {
-            item.nextAt = Date.now() + RETRY_MS * item.attempts;
-            setStatus(`Retry queued · ${result.error || result.status || 'connection failure'}`, false);
-          }
-          q[i] = item; saveQueue(q); i++;
-        }
+        setStatus(`Sending ${q[i].capture.pageKind}…`, false);
+        const result = await send(q[i].capture);
+        if (result.ok) { q.splice(i, 1); saveQueue(q); setStatus(`Saved ✓ · ${q[i]?.capture?.pageKind || 'capture'}`, true); }
+        else { q[i].attempts++; q[i].nextAt = Date.now() + (q[i].attempts >= RETRIES ? 60000 : RETRY_MS * q[i].attempts); saveQueue(q); setStatus(`Queued · ${result.error || result.status || 'Render unavailable'}`, false); i++; }
       }
     } finally { busy = false; }
   }
 
   async function captureNow() {
     if (busy) return;
-    const capture = buildCapture();
-    current = capture;
-    enqueue(capture);
-    GM_setValue(LAST_KEY, fingerprint());
-    setStatus(`Queued · ${capture.pageKind} · ${Math.round(capture.rawPayload.rawDom.length / 1024)} KB DOM`, true);
+    if (!(await bootstrapIdentity())) return;
+    const c = capture();
+    enqueue(c);
+    setStatus(`Queued · ${c.pageKind} · ${Math.round(c.rawPayload.rawDom.length / 1024)} KB DOM`, true);
     await flushQueue();
   }
 
-  function copy(value, label) { GM_setClipboard(String(value || ''), 'text'); setStatus(label, true); }
+  function setStatus(message, good) { const p = document.getElementById(PANEL_ID); const s = p?.querySelector('[data-status]'); if (s) { s.textContent = message; s.style.color = good ? '#7ee787' : '#ffb86b'; } }
+  function copy(v, label) { GM_setClipboard(String(v || ''), 'text'); setStatus(label, true); }
 
-  function setStatus(message, good) {
-    const p = document.getElementById(PANEL_ID); if (!p) return;
-    const s = p.querySelector('[data-status]'); if (!s) return;
-    s.textContent = message; s.style.color = good ? '#7ee787' : '#ffb86b';
-  }
-
-  function makePanel() {
+  function panel() {
     if (document.getElementById(PANEL_ID)) return;
     const p = document.createElement('div'); p.id = PANEL_ID;
-    p.style.cssText = 'position:fixed;right:14px;bottom:14px;z-index:2147483647;width:310px;padding:10px;border:1px solid #30363d;border-radius:10px;background:#0d1117;color:#c9d1d9;box-shadow:0 8px 30px rgba(0,0,0,.45);font:12px monospace';
-    p.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center"><b style="color:#7ee787">⚡ Spartan Capture 2.0</b><span data-status style="color:#8b949e">Ready</span></div><div style="font-size:9px;color:#8b949e;margin:5px 0 8px">Every page → complete DOM + structured data → Render</div><div style="display:flex;gap:5px;flex-wrap:wrap"><button data-capture>Capture</button><button data-dom>Copy DOM</button><button data-json>Copy JSON</button><button data-clear>Clear Queue</button></div>`;
-    p.querySelectorAll('button').forEach(b => b.style.cssText = 'border:0;border-radius:6px;padding:6px 8px;background:#21262d;color:#fff;font:bold 10px monospace;cursor:pointer');
+    p.style.cssText = 'position:fixed;right:14px;bottom:14px;z-index:2147483647;width:320px;padding:10px;border:1px solid #30363d;border-radius:10px;background:#0d1117;color:#c9d1d9;box-shadow:0 8px 30px rgba(0,0,0,.45);font:12px monospace';
+    p.innerHTML = `<div style="display:flex;justify-content:space-between;gap:8px"><b style="color:#7ee787">⚡ Spartan Capture 3.0</b><span data-status style="color:#8b949e">Starting…</span></div><div style="margin-top:7px;font-size:10px;color:#8b949e">Identity: <span data-identity>checking…</span></div><div style="display:flex;gap:6px;margin-top:8px"><button data-capture>Capture now</button><button data-copy>Copy status</button></div>`;
+    document.body.appendChild(p);
+    p.querySelectorAll('button').forEach(b => b.style.cssText = 'background:#161b22;color:#c9d1d9;border:1px solid #30363d;border-radius:6px;padding:4px 7px;font:11px monospace');
     p.querySelector('[data-capture]').onclick = captureNow;
-    p.querySelector('[data-dom]').onclick = () => copy(document.documentElement?.outerHTML, 'DOM copied');
-    p.querySelector('[data-json]').onclick = () => copy(JSON.stringify(current || buildCapture(), null, 2), 'Capture JSON copied');
-    p.querySelector('[data-clear]').onclick = () => { GM_setValue(QUEUE_KEY, '[]'); setStatus('Queue cleared', true); };
-    document.documentElement.appendChild(p);
+    p.querySelector('[data-copy]').onclick = () => copy(JSON.stringify({ version: VERSION, owner: owner() || null, token: Boolean(token()), identity: identityState || identity(), url: location.href }, null, 2), 'Status copied');
   }
 
-  function boot() {
-    makePanel();
-    setTimeout(async () => {
-      const fp = fingerprint();
-      if (GM_getValue(LAST_KEY, '') !== fp) await captureNow();
-      else await flushQueue();
-    }, AUTO_DELAY);
-    setInterval(flushQueue, 15000);
+  async function start() {
+    panel();
+    const linked = await bootstrapIdentity();
+    const label = document.querySelector('[data-identity]');
+    if (label) label.textContent = linked ? `${identityState?.provinceName || 'linked'} · ${identityState?.kingdomCode || ''}` : 'not linked';
+    if (linked) { setStatus('Ready', true); setTimeout(captureNow, 500); }
   }
 
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot, { once: true }); else boot();
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, { once: true }); else start();
 })();
