@@ -65,6 +65,16 @@ function firstText(...values: unknown[]) {
   return ''
 }
 
+function isUuid(value: unknown) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(text(value))
+}
+
+function extractKingdomCode(value: unknown) {
+  const candidate = text(value)
+  const coordinate = candidate.match(/\b\d{1,3}:\d{1,3}\b/)
+  return coordinate?.[0] ?? ''
+}
+
 function collectIdentityObjects(capture: AnyRecord) {
   const parsed = unwrapPayload(capture.parsedPayload ?? capture.rawPayload)
   const state = unwrapPayload(parsed.throne ?? parsed.state ?? parsed.data ?? parsed)
@@ -104,7 +114,7 @@ function extractCaptureIdentity(capture: AnyRecord) {
     ...nested.flatMap((item) => [item.name, item.provinceName, item.province_name, item.currentProvinceName])
   )
 
-  const kingdomCode = firstText(
+  const kingdomCandidate = firstText(
     capture.kingdomId,
     capture.kingdom_id,
     capture.kingdomCode,
@@ -136,10 +146,8 @@ function extractCaptureIdentity(capture: AnyRecord) {
     ])
   )
 
-  if (kingdomCode) {
-    const coordinate = kingdomCode.match(/\b\d{1,3}:\d{1,3}\b/)
-    if (coordinate) return { provinceName, kingdomCode: coordinate[0], parsed, state }
-  }
+  const kingdomCode = extractKingdomCode(kingdomCandidate)
+  if (kingdomCode) return { provinceName, kingdomCode, parsed, state }
 
   const rawText = text(capture.rawText)
   const headingCoordinate = rawText.match(/\b(?:kingdom|kingdom of)[^\n]{0,180}\((\d{1,3}:\d{1,3})\)/i)
@@ -149,7 +157,43 @@ function extractCaptureIdentity(capture: AnyRecord) {
   return { provinceName, kingdomCode: anyCoordinate?.[1] ?? '', parsed, state }
 }
 
-function normalizeSnapshotFromCapture(capture: AnyRecord, provinceId: string | null, kingdomId: string | null): ProvinceSnapshot | null {
+async function resolveCanonicalKingdomId(
+  supabase: any,
+  kingdomValue: unknown,
+  provinceId?: string | null,
+  kingdomCodeHint?: string | null,
+) {
+  const value = text(kingdomValue)
+  if (isUuid(value)) return value
+
+  if (provinceId && isUuid(provinceId)) {
+    const provinceQuery = await supabase
+      .from('provinces')
+      .select('kingdom_id')
+      .eq('id', provinceId)
+      .maybeSingle()
+    if (provinceQuery.error) throw new Error(provinceQuery.error.message)
+    if (provinceQuery.data?.kingdom_id) return provinceQuery.data.kingdom_id
+  }
+
+  const kingdomCode = extractKingdomCode(kingdomCodeHint) || extractKingdomCode(value)
+  if (!kingdomCode) return null
+
+  const kingdomQuery = await supabase
+    .from('kingdoms')
+    .select('id')
+    .eq('kd_code', kingdomCode)
+    .limit(1)
+    .maybeSingle()
+  if (kingdomQuery.error) throw new Error(kingdomQuery.error.message)
+  return kingdomQuery.data?.id ?? null
+}
+
+function normalizeSnapshotFromCapture(
+  capture: AnyRecord,
+  provinceId: string | null,
+  canonicalKingdomId: string | null,
+): ProvinceSnapshot | null {
   if (!provinceId) return null
 
   const parsed = unwrapPayload(capture.parsedPayload ?? capture.rawPayload)
@@ -158,7 +202,7 @@ function normalizeSnapshotFromCapture(capture: AnyRecord, provinceId: string | n
 
   return {
     provinceId,
-    kingdomId,
+    kingdomId: canonicalKingdomId,
     observedAt: capture.capturedAt ?? new Date().toISOString(),
     age: number(state.age ?? parsed.age ?? capture.age),
     gameYear: number(state.gameYear ?? state.year ?? parsed.gameYear ?? parsed.year ?? capture.gameYear ?? capture.year),
@@ -206,7 +250,7 @@ async function canonicalCaptureIdentity(supabase: any, capture: AnyRecord) {
   if (provinceName && kingdomCode) {
     const query = await supabase
       .from('provinces')
-      .select('id,name,kd_code')
+      .select('id,name,kd_code,kingdom_id')
       .ilike('name', provinceName)
       .eq('kd_code', kingdomCode)
       .limit(1)
@@ -218,7 +262,7 @@ async function canonicalCaptureIdentity(supabase: any, capture: AnyRecord) {
   if (!province && provinceName) {
     const query = await supabase
       .from('provinces')
-      .select('id,name,kd_code')
+      .select('id,name,kd_code,kingdom_id')
       .ilike('name', provinceName)
       .order('updated_at', { ascending: false })
       .limit(1)
@@ -227,20 +271,29 @@ async function canonicalCaptureIdentity(supabase: any, capture: AnyRecord) {
     province = query.data ?? null
   }
 
-  if (!province && capture.provinceId) {
+  if (!province && capture.provinceId && isUuid(capture.provinceId)) {
     const query = await supabase
       .from('provinces')
-      .select('id,name,kd_code')
+      .select('id,name,kd_code,kingdom_id')
       .eq('id', capture.provinceId)
       .maybeSingle()
     if (query.error) throw new Error(query.error.message)
     province = query.data ?? null
   }
 
+  const canonicalProvinceId = province?.id ?? (isUuid(capture.provinceId) ? capture.provinceId : null)
+  const canonicalKingdomId = await resolveCanonicalKingdomId(
+    supabase,
+    province?.kingdom_id ?? null,
+    canonicalProvinceId,
+    kingdomCode,
+  )
+
   return {
     ...capture,
-    provinceId: province?.id ?? capture.provinceId ?? null,
-    kingdomId: firstText(province?.kd_code, kingdomCode, capture.kingdomId) || null,
+    provinceId: canonicalProvinceId,
+    kingdomId: kingdomCode || extractKingdomCode(capture.kingdomId) || null,
+    canonicalKingdomId,
     provinceName: firstText(province?.name, provinceName, capture.provinceName) || null,
   }
 }
@@ -297,11 +350,11 @@ async function resolveServiceOwner(supabase: any, capture: AnyRecord) {
   return null
 }
 
-function buildSnapshotRow(snapshot: ProvinceSnapshot, ownerId: string) {
+function buildSnapshotRow(snapshot: ProvinceSnapshot, ownerId: string, canonicalKingdomId: string | null) {
   return {
     user_id: ownerId,
     province_id: snapshot.provinceId ?? null,
-    kingdom_id: snapshot.kingdomId ?? null,
+    kingdom_id: canonicalKingdomId,
     observed_at: snapshot.observedAt ?? new Date().toISOString(),
     age: snapshot.age ?? null,
     game_year: snapshot.gameYear ?? null,
@@ -364,10 +417,12 @@ export async function POST(request: Request) {
     let capture = body.capture
     let captureSteward: ReturnType<typeof runCaptureStewards> | null = null
     let captureKnowledge: Awaited<ReturnType<typeof resolveWikiKnowledge>> | null = null
+    let canonicalKingdomId: string | null = null
 
     if (capture) {
       capture = await canonicalCaptureIdentity(supabase, capture)
       body.capture = capture
+      canonicalKingdomId = capture.canonicalKingdomId ?? null
 
       if (!ownerId) ownerId = await resolveServiceOwner(supabase, capture)
 
@@ -467,7 +522,7 @@ export async function POST(request: Request) {
       }
 
       if (['throne', 'throne-room', 'province', 'overview'].includes(String(capture.pageKind ?? '').toLowerCase())) {
-        const derived = normalizeSnapshotFromCapture(capture, capture.provinceId ?? null, capture.kingdomId ?? null)
+        const derived = normalizeSnapshotFromCapture(capture, capture.provinceId ?? null, canonicalKingdomId)
         if (derived) body.snapshot = derived
       }
     }
@@ -486,11 +541,23 @@ export async function POST(request: Request) {
 
     if (!ownerId) return NextResponse.json({ error: 'A userId is required for history snapshots' }, { status: 400 })
 
+    const canonicalSnapshotKingdomId = await resolveCanonicalKingdomId(
+      supabase,
+      snapshot.kingdomId ?? canonicalKingdomId,
+      snapshot.provinceId ?? null,
+      capture ? extractCaptureIdentity(capture).kingdomCode : null,
+    )
+
+    const snapshotForPersistence: ProvinceSnapshot = {
+      ...snapshot,
+      kingdomId: canonicalSnapshotKingdomId,
+    }
+
     const snapshotKnowledge = captureKnowledge ?? await resolveWikiKnowledge(supabase, {
-      provinceId: snapshot.provinceId ?? null,
-      snapshot: snapshot as unknown as Record<string, unknown>,
+      provinceId: snapshotForPersistence.provinceId ?? null,
+      snapshot: snapshotForPersistence as unknown as Record<string, unknown>,
     })
-    const snapshotSteward = runSnapshotSteward(snapshot as unknown as Record<string, unknown>, snapshotKnowledge)
+    const snapshotSteward = runSnapshotSteward(snapshotForPersistence as unknown as Record<string, unknown>, snapshotKnowledge)
 
     if (snapshotSteward.decision === 'quarantine') {
       return NextResponse.json({
@@ -505,20 +572,25 @@ export async function POST(request: Request) {
 
     const { error: snapshotError } = await supabase
       .from('spartan_province_history')
-      .insert(buildSnapshotRow(snapshot, ownerId))
+      .insert(buildSnapshotRow(snapshotForPersistence, ownerId, canonicalSnapshotKingdomId))
     if (snapshotError) return NextResponse.json({ error: snapshotError.message }, { status: 500 })
 
     if (body.events?.length) {
-      const eventRows = body.events.map((event) => ({
+      const eventRows = await Promise.all(body.events.map(async (event) => ({
         user_id: ownerId,
-        province_id: event.provinceId ?? snapshot.provinceId ?? null,
-        kingdom_id: event.kingdomId ?? snapshot.kingdomId ?? null,
+        province_id: event.provinceId ?? snapshotForPersistence.provinceId ?? null,
+        kingdom_id: await resolveCanonicalKingdomId(
+          supabase,
+          event.kingdomId ?? snapshotForPersistence.kingdomId,
+          event.provinceId ?? snapshotForPersistence.provinceId ?? null,
+          capture ? extractCaptureIdentity(capture).kingdomCode : null,
+        ),
         occurred_at: event.occurredAt ?? new Date().toISOString(),
-        age: event.age ?? snapshot.age ?? null,
-        game_year: event.gameYear ?? snapshot.gameYear ?? null,
-        game_tick: event.gameTick ?? snapshot.gameTick ?? null,
+        age: event.age ?? snapshotForPersistence.age ?? null,
+        game_year: event.gameYear ?? snapshotForPersistence.gameYear ?? null,
+        game_tick: event.gameTick ?? snapshotForPersistence.gameTick ?? null,
         event_type: event.eventType,
-        source: event.source ?? snapshot.source ?? 'universal_capture',
+        source: event.source ?? snapshotForPersistence.source ?? 'universal_capture',
         source_id: event.sourceId ?? null,
         attacker: event.attacker ?? null,
         defender: event.defender ?? null,
@@ -534,7 +606,7 @@ export async function POST(request: Request) {
         mana_change: event.manaChange ?? 0,
         payload: event.payload ?? {},
         raw_text: event.rawText ?? null,
-      }))
+      })))
 
       const { error: eventError } = await supabase.from('spartan_event_history').insert(eventRows)
       if (eventError) return NextResponse.json({ error: eventError.message }, { status: 500 })
