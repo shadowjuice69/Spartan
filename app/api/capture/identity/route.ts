@@ -54,17 +54,17 @@ export async function POST(request: Request) {
     }
 
     if (province) {
-      const result = await supabase.from('spartan_accounts').select('auth_user_id,account_status,role,screen_name').ilike('province_name', province.name).eq('province_location', province.kd_code).limit(1).maybeSingle()
+      const result = await supabase.from('spartan_accounts').select('id,auth_user_id,account_status,role,screen_name').ilike('province_name', province.name).eq('province_location', province.kd_code).limit(1).maybeSingle()
       if (result.error) throw new Error(result.error.message)
       account = result.data
-      ownerId = account?.auth_user_id ?? null
+      ownerId = account?.id ?? null
     }
 
     if (!ownerId && provinceName && kingdomCode) {
-      const result = await supabase.from('spartan_accounts').select('auth_user_id,account_status,role,screen_name').ilike('province_name', provinceName).eq('province_location', kingdomCode).limit(1).maybeSingle()
+      const result = await supabase.from('spartan_accounts').select('id,auth_user_id,account_status,role,screen_name').ilike('province_name', provinceName).eq('province_location', kingdomCode).limit(1).maybeSingle()
       if (result.error) throw new Error(result.error.message)
       account = result.data
-      ownerId = account?.auth_user_id ?? null
+      ownerId = account?.id ?? null
     }
 
     if (!ownerId) return NextResponse.json({ error: 'No Spartan account is linked to this Utopia province.', identity: { provinceName: provinceName || null, kingdomCode: kingdomCode || null } }, { status: 404 })
