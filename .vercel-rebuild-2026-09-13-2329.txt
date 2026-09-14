@@ -1,1 +1,0 @@
-Obsolete deployment marker removed. Render is the sole Spartan production target.
