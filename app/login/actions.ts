@@ -44,18 +44,21 @@ export async function login(formData: FormData) {
   const { data, error } = await supabase.auth.signInWithPassword({ email, password })
   if (error || !data.user) redirect('/login?error=invalid')
 
+  let securityReason: string | null = null
   try {
     const requestHeaders = await headers()
     const request = new Request('https://spartan.local/login', { headers: requestHeaders })
     const security = await authorizeDashboardForAuthUser(request, data.user.id)
-    if (!security.allowed) {
-      await supabase.auth.signOut()
-      redirect(`/login?error=${encodeURIComponent(security.reason ?? 'security-check-failed')}`)
-    }
+    if (!security.allowed) securityReason = security.reason ?? 'security-check-failed'
   } catch (error) {
     await supabase.auth.signOut()
     const message = error instanceof Error ? error.message : 'security-check-failed'
     redirect(`/login?error=${encodeURIComponent(message)}`)
+  }
+
+  if (securityReason) {
+    await supabase.auth.signOut()
+    redirect(`/login?error=${encodeURIComponent(securityReason)}`)
   }
 
   revalidatePath('/', 'layout')
