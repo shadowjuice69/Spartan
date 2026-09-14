@@ -1,1 +1,1 @@
-Spartan production rebuild trigger. Current main already contains the capture gameTick type fix.
+Obsolete deployment marker removed. Render is the sole Spartan production target.
