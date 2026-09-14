@@ -1,0 +1,75 @@
+name: Apply capture token security
+
+on:
+  push:
+    paths:
+      - .github/workflows/secure-capture-owner-once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Patch capture route
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+          import re
+
+          path = Path('app/api/capture/route.ts')
+          s = path.read_text()
+
+          if 'function hashCaptureToken' not in s:
+              marker = "function isServiceRequest(request: Request) {\n  const configured = process.env.SPARTAN_CAPTURE_KEY\n  return Boolean(configured && request.headers.get('x-spartan-capture-key') === configured)\n}\n"
+              insert = marker + "\nfunction hashCaptureToken(token: string) {\n  return crypto.createHash('sha256').update(token).digest('hex')\n}\n\nasync function resolveCaptureDeviceOwner(supabase: any, captureToken: string) {\n  const tokenHash = hashCaptureToken(captureToken)\n  const device = await supabase\n    .from('spartan_capture_devices')\n    .select('id,owner_id')\n    .eq('token_hash', tokenHash)\n    .maybeSingle()\n\n  if (device.error) throw new Error(device.error.message)\n  if (!device.data?.owner_id) return null\n\n  const account = await supabase\n    .from('spartan_accounts')\n    .select('id,account_status')\n    .eq('id', device.data.owner_id)\n    .maybeSingle()\n\n  if (account.error) throw new Error(account.error.message)\n  if (!account.data || account.data.account_status !== 'active') return null\n\n  await supabase\n    .from('spartan_capture_devices')\n    .update({ last_seen_at: new Date().toISOString() })\n    .eq('id', device.data.id)\n\n  return account.data.id as string\n}\n"
+              if marker not in s:
+                  raise SystemExit('capture route service-request marker not found')
+              s = s.replace(marker, insert, 1)
+
+          old = re.compile(r"async function resolveServiceOwner\(supabase: any, capture: AnyRecord\) \{.*?\n\}\n\nfunction buildSnapshotRow", re.S)
+          new = "function buildSnapshotRow"
+          if old.search(s):
+              s = old.sub(new, s, count=1)
+          else:
+              raise SystemExit('resolveServiceOwner block not found')
+
+          old_post = "    if (serviceRequest) ownerId = body.userId ?? null\n"
+          new_post = "    if (serviceRequest) {\n      const captureToken = text(request.headers.get('x-spartan-capture-token'))\n      if (!captureToken) {\n        return NextResponse.json({ error: 'Scraper capture token is required.' }, { status: 401 })\n      }\n      ownerId = await resolveCaptureDeviceOwner(supabase, captureToken)\n      if (!ownerId) {\n        return NextResponse.json({ error: 'Invalid or inactive scraper capture token.' }, { status: 401 })\n      }\n    }\n"
+          if old_post not in s:
+              raise SystemExit('service owner assignment not found')
+          s = s.replace(old_post, new_post, 1)
+
+          # The service owner is now established exclusively from the device token.
+          # Never allow capture payload userId to override it.
+          if 'body.userId ?? null' in s:
+              raise SystemExit('unsafe body.userId owner fallback still present')
+
+          path.write_text(s)
+          PY
+
+      - name: Verify patch
+        run: |
+          grep -n "hashCaptureToken\|resolveCaptureDeviceOwner\|x-spartan-capture-token\|body.userId" app/api/capture/route.ts
+          if grep -q "SPARTAN_CAPTURE_USER_ID" app/api/capture/route.ts; then
+            echo 'ERROR: legacy SPARTAN_CAPTURE_USER_ID fallback remains'
+            exit 1
+          fi
+          if grep -q "body.userId ?? null" app/api/capture/route.ts; then
+            echo 'ERROR: body.userId owner assignment remains'
+            exit 1
+          fi
+
+      - name: Commit patched route
+        run: |
+          git config user.name "spartan-security-bot"
+          git config user.email "spartan-security-bot@users.noreply.github.com"
+          git add app/api/capture/route.ts
+          git diff --cached --quiet && exit 0
+          git commit -m "Lock capture ownership to registered scraper token"
+          git push
