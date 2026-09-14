@@ -5,7 +5,7 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { accountEmail, registerSpartanAccount, resolveSpartanLoginEmail } from '@/lib/spartan/accounts'
-import { recordLoginCheckpoint } from '@/lib/spartan/security'
+import { authorizeDashboardForAuthUser } from '@/lib/spartan/security'
 
 export async function createSpartanAccount(formData: FormData) {
   const screenName = String(formData.get('screenName') ?? '')
@@ -47,7 +47,11 @@ export async function login(formData: FormData) {
   try {
     const requestHeaders = await headers()
     const request = new Request('https://spartan.local/login', { headers: requestHeaders })
-    await recordLoginCheckpoint({ authUserId: data.user.id, request })
+    const security = await authorizeDashboardForAuthUser(request, data.user.id)
+    if (!security.allowed) {
+      await supabase.auth.signOut()
+      redirect(`/login?error=${encodeURIComponent(security.reason ?? 'security-check-failed')}`)
+    }
   } catch (error) {
     await supabase.auth.signOut()
     const message = error instanceof Error ? error.message : 'security-check-failed'
