@@ -7,7 +7,7 @@ type Briefing = {
   firstArrival: boolean;
   historyAvailable?: boolean;
   jeeves: { name: string; title: string; preferredName: string; lastBriefingAt: string | null; briefingCount: number };
-  identity: { screenName: string; provinceName: string; provinceLocation: string | null; kingdom: string | null; race: string | null; personality: string | null; lastLoginAt: string | null };
+  identity: { screenName: string; provinceName: string; provinceLocation: string | null; kingdom: string | null; race: string | null; personality: string | null; lastLoginAt: string | null; currentLoginAt?: string | null };
   latest?: Record<string, number | string | null> | null;
   changes: Record<string, number | null>;
   away: { since: string; eventCount: number; acresChange: number | null; troopsLost: number | null; thievesLost: number | null; wizardsLost: number | null; alerts: string[] };
@@ -15,6 +15,7 @@ type Briefing = {
 
 const fmt = (v: number | null | undefined) => v == null ? "—" : `${v > 0 ? "+" : ""}${v.toLocaleString()}`;
 const current = (v: unknown) => { const n = Number(v); return Number.isFinite(n) ? n.toLocaleString() : "—"; };
+const BRIEFING_LOGIN_KEY = "spartan_jeeves_briefing_login";
 
 export default function Jeeves() {
   const [data, setData] = useState<Briefing | null>(null);
@@ -33,10 +34,22 @@ export default function Jeeves() {
         throw new Error(result.error || "Jeeves could not reach the Spartan data core.");
       }
       if (result.ok !== true) throw new Error(result.error || "Jeeves returned an invalid briefing.");
-      setData(result as Briefing);
-      setName(result.jeeves?.preferredName || "");
+      const briefing = result as Briefing;
+      setData(briefing);
+      setName(briefing.jeeves?.preferredName || "");
       setError("");
-      setOpen(true);
+
+      // Jeeves is a login briefing, not a polling notification. The login timestamp
+      // changes only when the user actually logs in again, so navigation/remounts
+      // during the same session never reopen the briefing.
+      const loginMarker = briefing.identity?.currentLoginAt || briefing.identity?.lastLoginAt || briefing.jeeves?.lastBriefingAt || "session";
+      const shownForLogin = sessionStorage.getItem(BRIEFING_LOGIN_KEY);
+      if (shownForLogin !== loginMarker) {
+        sessionStorage.setItem(BRIEFING_LOGIN_KEY, loginMarker);
+        setOpen(true);
+      } else {
+        setOpen(false);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Jeeves could not load your briefing.");
     } finally {
@@ -46,8 +59,6 @@ export default function Jeeves() {
 
   useEffect(() => {
     void load();
-    const timer = setInterval(() => { void load(); }, 15000);
-    return () => clearInterval(timer);
   }, []);
 
   async function introduce() {
