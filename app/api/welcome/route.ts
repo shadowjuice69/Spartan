@@ -4,7 +4,12 @@ import { createClient } from '@/lib/supabase/server'
 import { extractDiscordId } from '@/lib/spartan/security'
 
 export const dynamic = 'force-dynamic'
-type Row = Record<string, any>
+type Row = Record<string, unknown>
+type Snapshot = Row & {
+  observed_at: string
+  province_id?: string | null
+  kingdom_id?: string | null
+}
 
 function db() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -14,8 +19,8 @@ function db() {
 }
 function num(v: unknown) { const n = Number(typeof v === 'string' ? v.replace(/,/g, '') : v); return Number.isFinite(n) ? n : null }
 function obj(v: unknown): Row { return v && typeof v === 'object' && !Array.isArray(v) ? v as Row : {} }
-function payload(capture: any) {
-  let v = obj(capture?.parsed_payload ?? capture?.raw_payload)
+function payload(capture: Row) {
+  let v = obj(capture.parsed_payload ?? capture.raw_payload)
   for (let i = 0; i < 6; i++) {
     const next = v.data ?? v.payload ?? v.throne ?? v.state ?? v.parsed
     if (!next || typeof next !== 'object' || Array.isArray(next)) break
@@ -24,16 +29,16 @@ function payload(capture: any) {
   return v
 }
 function pick(v: Row, ...keys: string[]) { for (const k of keys) if (v[k] !== undefined && v[k] !== null) return v[k]; return null }
-function state(province: any): Row {
-  const t = province?.state_data?.throne ?? {}
-  return { observed_at: province?.state_data?.throne_captured_at ?? province?.updated_at ?? new Date().toISOString(), province_id: province?.id, kingdom_id: province?.kd_code, acres: num(t.acres ?? province?.acres), networth: num(t.nw ?? province?.nw), population: num(t.peons ?? province?.peons), soldiers: num(t.soldiers ?? province?.soldiers), off_specs: num(t.off_specs ?? province?.off_specs), def_specs: num(t.def_specs ?? province?.def_specs), elites: num(t.elites ?? province?.elites), thieves: num(t.thieves ?? province?.thieves), wizards: num(t.wizards ?? province?.wizards), offense: num(t.off ?? province?.off), defense: num(t.def ?? province?.def), mana: num(t.mana ?? province?.mana), stealth: num(t.stlth ?? province?.stlth), build_efficiency: num(t.be ?? province?.be), wages: num(t.wages ?? province?.wages), source: 'canonical_province' }
+function state(province: Row): Snapshot {
+  const t = obj(province.state_data).throne && typeof obj(province.state_data).throne === 'object' ? obj(obj(province.state_data).throne) : {}
+  return { observed_at: String(t.throne_captured_at ?? province.updated_at ?? new Date().toISOString()), province_id: province.id as string | null, kingdom_id: (province.kd_code as string | null) ?? null, acres: num(t.acres ?? province.acres), networth: num(t.nw ?? province.nw), population: num(t.peons ?? province.peons), soldiers: num(t.soldiers ?? province.soldiers), off_specs: num(t.off_specs ?? province.off_specs), def_specs: num(t.def_specs ?? province.def_specs), elites: num(t.elites ?? province.elites), thieves: num(t.thieves ?? province.thieves), wizards: num(t.wizards ?? province.wizards), offense: num(t.off ?? province.off), defense: num(t.def ?? province.def), mana: num(t.mana ?? province.mana), stealth: num(t.stlth ?? province.stlth), build_efficiency: num(t.be ?? province.be), wages: num(t.wages ?? province.wages), source: 'canonical_province' }
 }
-function captureState(c: any, province: any): Row {
-  const d = payload(c)
-  return { observed_at: c?.captured_at ?? province?.state_data?.throne_captured_at ?? new Date().toISOString(), province_id: province?.id ?? c?.province_id, kingdom_id: province?.kd_code ?? c?.kingdom_id, acres: num(pick(d, 'acres', 'land')), networth: num(pick(d, 'nw', 'networth')), population: num(pick(d, 'population', 'peons', 'peasants')), soldiers: num(pick(d, 'soldiers')), off_specs: num(pick(d, 'off_specs', 'offSpecs')), def_specs: num(pick(d, 'def_specs', 'defSpecs')), elites: num(pick(d, 'elites')), thieves: num(pick(d, 'thieves')), wizards: num(pick(d, 'wizards')), offense: num(pick(d, 'offense', 'off')), defense: num(pick(d, 'defense', 'def')), mana: num(pick(d, 'mana')), stealth: num(pick(d, 'stealth', 'stlth')), build_efficiency: num(pick(d, 'build_efficiency', 'buildEfficiency', 'be')), wages: num(pick(d, 'wages')), source: c?.source ?? 'capture_vault' }
+function captureState(capture: Row, province: Row): Snapshot {
+  const d = payload(capture)
+  return { observed_at: String(capture.captured_at ?? obj(province.state_data).throne_captured_at ?? new Date().toISOString()), province_id: (province.id as string | null) ?? (capture.province_id as string | null), kingdom_id: (province.kd_code as string | null) ?? (capture.kingdom_id as string | null), acres: num(pick(d, 'acres', 'land')), networth: num(pick(d, 'nw', 'networth')), population: num(pick(d, 'population', 'peons', 'peasants')), soldiers: num(pick(d, 'soldiers')), off_specs: num(pick(d, 'off_specs', 'offSpecs')), def_specs: num(pick(d, 'def_specs', 'defSpecs')), elites: num(pick(d, 'elites')), thieves: num(pick(d, 'thieves')), wizards: num(pick(d, 'wizards')), offense: num(pick(d, 'offense', 'off')), defense: num(pick(d, 'defense', 'def')), mana: num(pick(d, 'mana')), stealth: num(pick(d, 'stealth', 'stlth')), build_efficiency: num(pick(d, 'build_efficiency', 'buildEfficiency', 'be')), wages: num(pick(d, 'wages')), source: capture.source ?? 'capture_vault' }
 }
-function normalize(row: Row, fallback: Row) {
-  const out = { ...fallback, ...row }
+function normalize(row: Row, fallback: Snapshot): Snapshot {
+  const out: Snapshot = { ...fallback, ...row, observed_at: String(row.observed_at ?? fallback.observed_at) }
   for (const k of ['acres','networth','population','soldiers','off_specs','def_specs','elites','thieves','wizards','offense','defense','mana','stealth','build_efficiency','wages']) if (out[k] == null) out[k] = fallback[k]
   return out
 }
@@ -87,17 +92,20 @@ export async function GET() {
     if (h.error) throw h.error; if (c.error) throw c.error; if (e.error) throw e.error
 
     const events: Row[] = (e.data ?? []) as Row[]
-    const fallback = state(province)
-    const rows = [...(h.data ?? []).map(x => normalize(x, fallback)), ...(c.data ?? []).map(x => captureState(x, province))]
-    const merged = new Map<string, Row>()
-    for (const row of rows) { const key = `${row.province_id}:${row.observed_at}`; merged.set(key, { ...(merged.get(key) ?? {}), ...row }) }
-    const snapshots = [...merged.values()].sort((a,b) => Date.parse(a.observed_at) - Date.parse(b.observed_at))
-    const latest = snapshots.at(-1) ?? fallback
-    const previous = snapshots.length > 1 ? snapshots.at(-2) : null
+    const fallback = state(province as Row)
+    const rows: Snapshot[] = [...(h.data ?? []).map(x => normalize(x as Row, fallback)), ...(c.data ?? []).map(x => captureState(x as Row, province as Row))]
+    const merged = new Map<string, Snapshot>()
+    for (const row of rows) { const key = `${row.province_id ?? ''}:${row.observed_at}`; merged.set(key, { ...(merged.get(key) ?? {}), ...row }) }
+    const snapshots: Snapshot[] = [...merged.values()].sort((a,b) => Date.parse(a.observed_at) - Date.parse(b.observed_at))
+    const latest: Snapshot = snapshots.length > 0 ? snapshots[snapshots.length - 1] : fallback
+    const previous: Snapshot | null = snapshots.length > 1 ? snapshots[snapshots.length - 2] : null
     const delta = (k: string) => { const a = num(latest[k]); const b = previous ? num(previous[k]) : null; return a != null && b != null ? a - b : null }
     const totals = (k: string) => events.reduce((s, x) => s + (num(x[k]) ?? 0), 0)
     const critical = events.filter(x => /attack|war|ambush|plague|failed|loss|destroy|raze/i.test(`${x.event_type ?? ''} ${x.raw_text ?? ''}`))
-    const alerts: string[] = []; if (num(latest.defense) != null && num(latest.defense) < 0) alerts.push('Your current defensive state needs attention.'); if (critical.length) alerts.push(`${critical.length} combat or loss event${critical.length === 1 ? '' : 's'} occurred while you were away.`)
+    const alerts: string[] = []
+    const currentDefense = num(latest.defense)
+    if (currentDefense != null && currentDefense < 0) alerts.push('Your current defensive state needs attention.')
+    if (critical.length) alerts.push(`${critical.length} combat or loss event${critical.length === 1 ? '' : 's'} occurred while you were away.`)
     const firstArrival = !v.jeeves?.introduced_at; const name = v.jeeves?.preferred_name || v.account.screen_name || ''
     return NextResponse.json({ ok: true, firstArrival, firstLogin: firstArrival, historyAvailable: Boolean(previous), jeeves: { name: 'Jeeves', title: 'Personal Steward', introducedAt: v.jeeves?.introduced_at ?? null, preferredName: name, lastBriefingAt: v.jeeves?.last_briefing_at ?? null, briefingCount: v.jeeves?.briefing_count ?? 0 }, identity: { screenName: name, discordId: v.discordId, role: v.account.role, provinceId: province.id, provinceName: province.name, provinceLocation: province.location || province.slot || v.account.province_location, kingdom: province.kd_code, race: province.race, personality: province.personality, lastLoginAt: v.account.previous_login_at, currentLoginAt: v.account.last_login_at }, province, latest, changes: { acres: delta('acres'), networth: delta('networth'), population: delta('population'), soldiers: delta('soldiers'), off_specs: delta('off_specs'), def_specs: delta('def_specs'), elites: delta('elites'), thieves: delta('thieves'), wizards: delta('wizards'), offense: delta('offense'), defense: delta('defense'), mana: delta('mana'), stealth: delta('stealth') }, away: { since, eventCount: events.length, acresChange: totals('acres_change'), troopsLost: totals('troops_lost'), thievesLost: totals('thieves_lost'), wizardsLost: totals('wizards_lost'), peasantsChange: totals('peasants_change'), goldChange: totals('gold_change'), foodChange: totals('food_change'), runesChange: totals('runes_change'), manaChange: totals('mana_change'), events, alerts } })
   } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : 'Jeeves briefing failed' }, { status: 500 }) }
