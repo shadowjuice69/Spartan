@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spartan Universal Capture
 // @namespace    spartan-universal-capture
-// @version      3.4.0
+// @version      3.4.1
 // @description  Capture every Utopia page completely, keep Throne identity locked, and automatically deliver page/CPS captures to Spartan.
 // @match        https://www.utopia-game.com/*
 // @match        https://utopia-game.com/*
@@ -19,7 +19,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '3.4.0';
+  const VERSION = '3.4.1';
   const ENDPOINT = 'https://spartan-dashboard.onrender.com/api/capture';
   const IDENTITY_ENDPOINT = 'https://spartan-dashboard.onrender.com/api/capture/identity';
   const CAPTURE_KEY = 'NikkoAce';
@@ -40,6 +40,7 @@
   let autoTimer = null;
   let observerTimer = null;
   let lastUrl = location.href;
+  let cpsAlertWasActive = false;
 
   const safe = (fn, fallback = null) => { try { return fn(); } catch (_) { return fallback; } };
   const text = v => String(v == null ? '' : v).replace(/\u00a0/g, ' ').replace(/\r\n?/g, '\n').trim();
@@ -220,10 +221,7 @@
   async function captureNow(reason = 'manual', force = false) {
     if (busy) return false;
     const fp = fingerprint();
-    if (!force && GM_getValue(LAST_KEY, '') === fp) {
-      await flushQueue();
-      return false;
-    }
+    if (!force && GM_getValue(LAST_KEY, '') === fp) { await flushQueue(); return false; }
 
     const kind = pageKind();
     if (kind === 'throne') {
@@ -266,10 +264,13 @@
     const root = document.documentElement;
     if (!root) return;
     const observer = new MutationObserver(() => {
-      if (isCpsAlertActive()) {
+      const cpsActive = isCpsAlertActive();
+      if (cpsActive && !cpsAlertWasActive) {
+        cpsAlertWasActive = true;
         scheduleCapture('CPS alert', 250, true);
         return;
       }
+      if (!cpsActive) cpsAlertWasActive = false;
       clearTimeout(observerTimer);
       observerTimer = setTimeout(() => {
         const fp = fingerprint();
@@ -286,7 +287,7 @@
     if (document.getElementById(PANEL_ID)) return;
     const p = document.createElement('div'); p.id = PANEL_ID;
     p.style.cssText = 'position:fixed;right:14px;bottom:14px;z-index:2147483647;width:310px;background:#101318;color:#e6edf3;border:1px solid #30363d;border-radius:10px;padding:12px;font:12px/1.4 system-ui,sans-serif;box-shadow:0 8px 30px rgba(0,0,0,.45)';
-    p.innerHTML = `<div style="font-weight:700;font-size:13px;margin-bottom:8px">Spartan Capture 3.4</div><div data-status style="min-height:34px;margin-bottom:8px">Ready</div><div style="display:flex;gap:6px;flex-wrap:wrap"><button data-capture>Capture</button><button data-copy>Copy identity</button></div>`;
+    p.innerHTML = `<div style="font-weight:700;font-size:13px;margin-bottom:8px">Spartan Capture 3.4.1</div><div data-status style="min-height:34px;margin-bottom:8px">Ready</div><div style="display:flex;gap:6px;flex-wrap:wrap"><button data-capture>Capture</button><button data-copy>Copy identity</button></div>`;
     p.querySelectorAll('button').forEach(b => { b.style.cssText = 'border:1px solid #484f58;background:#21262d;color:#e6edf3;border-radius:6px;padding:5px 8px;font:inherit'; });
     p.querySelector('[data-capture]').addEventListener('click', () => captureNow('manual', true));
     p.querySelector('[data-copy]').addEventListener('click', () => copy(JSON.stringify(getStoredIdentity(), null, 2), 'Identity copied'));
@@ -299,6 +300,7 @@
     panel();
     watchNavigation();
     watchDom();
+    cpsAlertWasActive = isCpsAlertActive();
     scheduleCapture('initial page', AUTO_DELAY);
     setInterval(() => flushQueue().catch(error => setStatus(`Queue error · ${error?.message || error}`, false)), 15000);
   }
