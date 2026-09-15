@@ -35,10 +35,6 @@ export async function registerSpartanAccount({ screenName, password, provinceNam
   })
   if (!provinceRow) throw new Error('That province name and location are not currently registered in Spartan. Have the province send a fresh capture, then try again.')
 
-  // The province table is the canonical identity when the bot has already linked
-  // a Discord ID. If an older/bot-created province row has not been linked yet,
-  // fall back to the already-authorized Spartan registration username. This keeps
-  // spartan_accounts.discord_user_id non-null without weakening the DB constraint.
   let discordUserId = provinceRow.discord_id ? String(provinceRow.discord_id) : null
   let role = 'member'
 
@@ -66,24 +62,52 @@ export async function registerSpartanAccount({ screenName, password, provinceNam
   if (access?.status !== 'active') throw new Error('The Discord identity associated with this province is not currently authorized by Spartan.')
   role = access.role || role
 
-  const existingQuery = supabase.from('spartan_accounts').select('id').or(`discord_user_id.eq.${discordUserId},screen_name.eq.${name}`).limit(1).maybeSingle()
-  const { data: existing } = await existingQuery
+  const { data: existing } = await supabase
+    .from('spartan_accounts')
+    .select('id')
+    .or(`discord_user_id.eq.${discordUserId},screen_name.eq.${name}`)
+    .limit(1)
+    .maybeSingle()
   if (existing) throw new Error('That identity or screen name already has a Spartan account.')
 
   const ip = requestIp(new Request('https://spartan.local', { headers: await headers() }))
-  const { data: authUser, error: authError } = await supabase.auth.admin.createUser({
-    email: internalEmail(name), password, email_confirm: true,
-    app_metadata: { discord_user_id: discordUserId, provider: 'spartan-password' },
-    user_metadata: { screen_name: name, province_name: province, province_location: location },
-  })
-  if (authError || !authUser.user) throw new Error(authError?.message || 'Could not create Spartan credentials.')
+  const email = internalEmail(name)
+
+  // If a prior Spartan account row was removed while its Auth credential
+  // remained, restore that credential instead of failing on duplicate email.
+  const { data: authUsers, error: authListError } = await supabase.auth.admin.listUsers({ page: 1, perPage: 1000 })
+  if (authListError) throw new Error(`Spartan credential lookup failed: ${authListError.message}`)
+  const existingAuthUser = authUsers.users.find((user) => user.email?.toLowerCase() === email.toLowerCase())
+
+  let authUserId: string
+  let createdAuthUser = false
+
+  if (existingAuthUser) {
+    const { data: updatedAuth, error: updateAuthError } = await supabase.auth.admin.updateUserById(existingAuthUser.id, {
+      password,
+      email_confirm: true,
+      app_metadata: { ...(existingAuthUser.app_metadata ?? {}), discord_user_id: discordUserId, provider: 'spartan-password' },
+      user_metadata: { ...(existingAuthUser.user_metadata ?? {}), screen_name: name, province_name: province, province_location: location },
+    })
+    if (updateAuthError || !updatedAuth.user) throw new Error(updateAuthError?.message || 'Could not restore Spartan credentials.')
+    authUserId = updatedAuth.user.id
+  } else {
+    const { data: authUser, error: authError } = await supabase.auth.admin.createUser({
+      email, password, email_confirm: true,
+      app_metadata: { discord_user_id: discordUserId, provider: 'spartan-password' },
+      user_metadata: { screen_name: name, province_name: province, province_location: location },
+    })
+    if (authError || !authUser.user) throw new Error(authError?.message || 'Could not create Spartan credentials.')
+    authUserId = authUser.user.id
+    createdAuthUser = true
+  }
 
   const { error: accountError } = await supabase.from('spartan_accounts').insert({
-    auth_user_id: authUser.user.id, discord_user_id: discordUserId, screen_name: name,
+    auth_user_id: authUserId, discord_user_id: discordUserId, screen_name: name,
     province_name: province, province_location: location, registration_ip: ip, role,
   })
   if (accountError) {
-    await supabase.auth.admin.deleteUser(authUser.user.id)
+    if (createdAuthUser) await supabase.auth.admin.deleteUser(authUserId)
     throw new Error(`Spartan account record failed: ${accountError.message}`)
   }
 
