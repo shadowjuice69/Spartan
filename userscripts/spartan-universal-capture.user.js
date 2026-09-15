@@ -257,6 +257,7 @@
     const s = safe(structured, { fields:{}, tables:[], links:[], forms:[], field_sources:{} });
     const id = uuid();
     const locked = getStoredIdentity();
+    const ident = locked || currentIdentity();
     return {
       captureId:id,
       capturedAt:new Date().toISOString(),
@@ -265,11 +266,13 @@
       scraperVersion:VERSION,
       pageKind:pageKind(),
       url:location.href,
+      provinceName:ident?.provinceName || '',
+      kingdomCode:ident?.kingdomCode || '',
       rawText:visibleText,
       rawPayload:{
         capture_engine:VERSION,
         page:{ url:location.href, origin:location.origin, hostname:location.hostname, pathname:location.pathname, search:location.search, hash:location.hash, title:document.title || '', readyState:document.readyState, language:document.documentElement?.lang || null },
-        identity:locked || currentIdentity(),
+        identity:ident,
         rawDom,
         structured:s
       },
