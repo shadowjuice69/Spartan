@@ -20,6 +20,12 @@ function login(request: NextRequest, reason = 'discord-required') {
 
 export async function proxy(request: NextRequest) {
   const path = request.nextUrl.pathname
+
+  // Capture ingestion authenticates via its own header-based key/token
+  // (Tampermonkey script) — no Supabase session cookie exists here, so it
+  // must bypass the session/redirect logic entirely, not hit /login.
+  if (path.startsWith('/api/capture')) return NextResponse.next()
+
   const response = await updateSession(request)
 
   if (response.redirected || path === '/login' || path.startsWith('/auth')) return response
