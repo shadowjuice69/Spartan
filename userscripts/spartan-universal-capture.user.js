@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spartan Universal Capture
 // @namespace    spartan-universal-capture
-// @version      4.0.0-recovery
+// @version      4.0.1-recovery
 // @description  Full Utopia page scraper restored from the known-good engine, with Spartan identity, authorization, CPS capture, queue/retry, and the full control panel.
 // @match        https://www.utopia-game.com/*
 // @match        https://utopia-game.com/*
@@ -19,7 +19,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '4.0.0-recovery';
+  const VERSION = '4.0.1-recovery';
   const SOURCE = 'spartan_capture_engine';
   const ENDPOINT = 'https://spartan-dashboard.onrender.com/api/capture';
   const IDENTITY_ENDPOINT = 'https://spartan-dashboard.onrender.com/api/capture/identity';
@@ -85,17 +85,34 @@
   }
 
   function pageKind() {
-    const p = `${location.pathname} ${location.search}`.toLowerCase();
-    const t = text(document.body?.innerText || '').toLowerCase();
-    if (/throne/.test(p) || /throne room/.test(t)) return 'throne';
-    if (/military|army|armies/.test(p)) return 'military';
-    if (/magic|wizard|mage/.test(p)) return 'magic';
-    if (/thiev|thief|thieves|thievery/.test(p)) return 'thievery';
-    if (/science/.test(p)) return 'science';
-    if (/build|building/.test(p)) return 'buildings';
-    if (/explor/.test(p)) return 'exploration';
-    if (/kingdom|kd-details|province-list/.test(p)) return 'kingdom';
-    if (/intel/.test(location.hostname) || /intel/.test(p)) return 'intel';
+    const path = `${location.pathname} ${location.search}`.toLowerCase();
+
+    const local = [...document.querySelectorAll(
+      'main,[role="main"],h1,h2,h3,[class*="content"],[class*="page"]'
+    )]
+      .map(el => text(el.innerText || el.textContent || ''))
+      .join('\n')
+      .toLowerCase();
+
+    if (/(^|[/_.?=&-])throne([/_.?=&-]|$)/.test(path)) return 'throne';
+    if (/(military|army|armies)/.test(path)) return 'military';
+    if (/(magic|wizard|mage|mystic)/.test(path)) return 'magic';
+    if (/(thiev|thief|thieves|thievery)/.test(path)) return 'thievery';
+    if (/science/.test(path)) return 'science';
+    if (/(build|building)/.test(path)) return 'buildings';
+    if (/explor/.test(path)) return 'exploration';
+    if (/(kingdom|kd-details|province-list|state)/.test(path)) return 'kingdom';
+    if (/intel/.test(location.hostname) || /intel/.test(path)) return 'intel';
+
+    if (/\bmilitary\b/.test(local)) return 'military';
+    if (/\b(magic|mystic|wizards?)\b/.test(local)) return 'magic';
+    if (/\b(thievery|thieves?|thieves' den)\b/.test(local)) return 'thievery';
+    if (/\bscience\b/.test(local)) return 'science';
+    if (/\b(buildings?|construction)\b/.test(local)) return 'buildings';
+    if (/\b(exploration|explore)\b/.test(local)) return 'exploration';
+    if (/\b(kingdom|state|provinces)\b/.test(local)) return 'kingdom';
+    if (/\bthrone room\b/.test(local)) return 'throne';
+
     return 'generic';
   }
 
@@ -339,12 +356,20 @@
         item.attempts = (item.attempts || 0) + 1;
         saveQueue(queue);
         renderPanel(item.capture, `Queued · retry ${item.attempts}/${RETRIES}`, false);
+
         if (item.attempts >= RETRIES) {
           queue.shift();
           saveQueue(queue);
           renderPanel(item.capture, 'Capture dropped after retries', false);
-          break;
+          continue;
         }
+
+        setTimeout(() => {
+          flushQueue().catch(err => {
+            console.error('[Spartan] queued retry failed:', err);
+          });
+        }, RETRY_MS);
+
         break;
       }
     } finally {
