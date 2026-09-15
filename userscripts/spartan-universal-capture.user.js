@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         Spartan Capture Engine
-// @namespace    spartan-capture-engine
-// @version      3.3.0
-// @description  Authenticate a Utopia province with Spartan from Throne, persist identity across pages, and capture on explicit request.
+// @name         Spartan Universal Capture
+// @namespace    spartan-universal-capture
+// @version      3.4.0
+// @description  Capture every Utopia page completely, keep Throne identity locked, and automatically deliver page/CPS captures to Spartan.
 // @match        https://www.utopia-game.com/*
 // @match        https://utopia-game.com/*
 // @match        https://intel.utopia-game.com/*
@@ -19,7 +19,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '3.3.0';
+  const VERSION = '3.4.0';
   const ENDPOINT = 'https://spartan-dashboard.onrender.com/api/capture';
   const IDENTITY_ENDPOINT = 'https://spartan-dashboard.onrender.com/api/capture/identity';
   const CAPTURE_KEY = 'NikkoAce';
@@ -27,13 +27,19 @@
   const OWNER_KEY = 'spartan_capture_owner_v4';
   const IDENTITY_KEY = 'spartan_capture_identity_v1';
   const QUEUE_KEY = 'spartan_capture_queue_v4';
+  const LAST_KEY = 'spartan_capture_last_fingerprint_v3';
   const PANEL_ID = 'spartan-capture-engine-panel';
   const MAX_QUEUE = 25;
   const RETRIES = 5;
   const RETRY_MS = 4000;
+  const AUTO_DELAY = 1800;
+  const CHANGE_DELAY = 1200;
 
   let busy = false;
   let identityState = null;
+  let autoTimer = null;
+  let observerTimer = null;
+  let lastUrl = location.href;
 
   const safe = (fn, fallback = null) => { try { return fn(); } catch (_) { return fallback; } };
   const text = v => String(v == null ? '' : v).replace(/\u00a0/g, ' ').replace(/\r\n?/g, '\n').trim();
@@ -75,9 +81,7 @@
     return out;
   }
 
-  function getStoredIdentity() {
-    return safe(() => JSON.parse(GM_getValue(IDENTITY_KEY, 'null')), null);
-  }
+  function getStoredIdentity() { return safe(() => JSON.parse(GM_getValue(IDENTITY_KEY, 'null')), null); }
 
   function setIdentity(data) {
     if (data?.captureToken) GM_setValue(TOKEN_KEY, data.captureToken);
@@ -126,6 +130,23 @@
     return { captureId: id, capturedAt: new Date().toISOString(), source: 'spartan_capture_engine', sourceId: id, scraperVersion: VERSION, pageKind: pageKind(), url: location.href, rawText: text(document.body?.innerText || ''), rawPayload: { capture_engine: VERSION, page: { url: location.href, origin: location.origin, hostname: location.hostname, pathname: location.pathname, search: location.search, hash: location.hash, title: document.title || '', readyState: document.readyState, language: document.documentElement?.lang || null }, identity: locked || identity(), rawDom, structured: s }, parsedPayload: s.fields };
   }
 
+  function fingerprint() {
+    const body = text(document.body?.innerText || '');
+    const sample = `${location.href}|${document.title}|${body.length}|${body.slice(0, 700)}|${body.slice(-700)}`;
+    let h = 2166136261;
+    for (let i = 0; i < sample.length; i++) h = Math.imul(h ^ sample.charCodeAt(i), 16777619);
+    return `${(h >>> 0).toString(16)}-${sample.length}`;
+  }
+
+  function isCpsAlertActive() {
+    const nodes = document.querySelectorAll('[role="alert"], [aria-live], .alert, .notice, .notification, .toast, .message, [class*="alert"], [class*="notice"], [class*="toast"]');
+    for (const node of nodes) {
+      const t = text(node.innerText || node.textContent || '');
+      if (/\bCPS\b/i.test(t)) return true;
+    }
+    return false;
+  }
+
   function token() { return safe(() => GM_getValue(TOKEN_KEY, ''), ''); }
 
   function http(url, data, extra = {}) {
@@ -133,21 +154,19 @@
       let done = false;
       const finish = value => { if (!done) { done = true; resolve(value); } };
       const timer = setTimeout(() => finish({ ok: false, status: 0, error: 'timeout' }), 30000);
-      GM_xmlhttpRequest({ method: 'POST', url, headers: { 'Content-Type': 'application/json', 'x-spartan-capture-key': CAPTURE_KEY, 'x-spartan-capture-version': VERSION, ...(extra.headers || {}) }, data: JSON.stringify(data), timeout: 28000,
-        onload: r => { clearTimeout(timer); let body = {}; try { body = JSON.parse(r.responseText || '{}'); } catch (_) {} finish({ ok: r.status >= 200 && r.status < 300, status: r.status, body, error: body.error || '' }); },
-        onerror: () => { clearTimeout(timer); finish({ ok: false, status: 0, error: 'network error' }); },
-        ontimeout: () => { clearTimeout(timer); finish({ ok: false, status: 0, error: 'timeout' }); }
-      });
+      try {
+        GM_xmlhttpRequest({ method: 'POST', url, headers: { 'Content-Type': 'application/json', 'x-spartan-capture-key': CAPTURE_KEY, 'x-spartan-capture-version': VERSION, ...(extra.headers || {}) }, data: JSON.stringify(data), timeout: 28000,
+          onload: r => { clearTimeout(timer); let body = {}; try { body = JSON.parse(r.responseText || '{}'); } catch (_) {} finish({ ok: r.status >= 200 && r.status < 300, status: r.status, body, error: body.error || '' }); },
+          onerror: () => { clearTimeout(timer); finish({ ok: false, status: 0, error: 'network error' }); },
+          ontimeout: () => { clearTimeout(timer); finish({ ok: false, status: 0, error: 'timeout' }); }
+        });
+      } catch (error) { clearTimeout(timer); finish({ ok: false, status: 0, error: error?.message || 'request failed' }); }
     });
   }
 
   async function bootstrapIdentity(force = false) {
     const stored = getStoredIdentity();
-    if (!force && storedIdentityValid() && token()) {
-      identityState = stored;
-      setStatus(`Identity locked ✓ · ${stored.provinceName} · ${stored.kingdomCode}`, true);
-      return true;
-    }
+    if (!force && storedIdentityValid() && token()) { identityState = stored; return true; }
     const id = identity();
     setStatus(`Identity checking · ${id.provinceName || id.titleHint || 'province'} · ${id.kingdomCode || 'KD unknown'}`, false);
     const result = await http(IDENTITY_ENDPOINT, { provinceName: id.provinceName || id.titleHint || '', kingdomCode: id.kingdomCode || '', captureToken: token() || '' });
@@ -177,32 +196,87 @@
       const q = loadQueue();
       for (let i = 0; i < q.length; ) {
         if (q[i].nextAt > Date.now()) { i++; continue; }
-        setStatus(`Sending ${q[i].capture.pageKind}…`, false);
-        const result = await send(q[i].capture);
-        if (result.ok) { const kind = q[i].capture.pageKind; q.splice(i, 1); saveQueue(q); setStatus(`Saved ✓ · ${kind}`, true); }
-        else { q[i].attempts++; q[i].nextAt = Date.now() + (q[i].attempts >= RETRIES ? 60000 : RETRY_MS * q[i].attempts); saveQueue(q); setStatus(`Queued · ${result.error || result.status || 'Render unavailable'}`, false); i++; }
+        const item = q[i];
+        setStatus(`Sending ${item.capture.pageKind}…`, false);
+        const result = await send(item.capture);
+        if (result.ok) {
+          const kind = item.capture.pageKind;
+          q.splice(i, 1);
+          saveQueue(q);
+          GM_setValue(LAST_KEY, fingerprint());
+          setStatus(`Saved ✓ · ${kind}`, true);
+        } else {
+          item.attempts++;
+          item.nextAt = Date.now() + (item.attempts >= RETRIES ? 60000 : RETRY_MS * item.attempts);
+          q[i] = item;
+          saveQueue(q);
+          setStatus(`Queued · ${result.error || result.status || 'Render unavailable'} · retry ${Math.min(item.attempts, RETRIES)}/${RETRIES}`, false);
+          i++;
+        }
       }
     } finally { busy = false; }
   }
 
-  async function captureNow() {
-    if (busy) return;
+  async function captureNow(reason = 'manual', force = false) {
+    if (busy) return false;
+    const fp = fingerprint();
+    if (!force && GM_getValue(LAST_KEY, '') === fp) {
+      await flushQueue();
+      return false;
+    }
+
     const kind = pageKind();
-    // Only a Throne page is allowed to establish/re-establish identity.
-    // Every other page must use the identity already anchored by Throne.
     if (kind === 'throne') {
-      if (!(await bootstrapIdentity(false))) return;
+      if (!(await bootstrapIdentity(false))) return false;
     } else if (!storedIdentityValid() || !token()) {
       setStatus('Identity not linked · capture Throne first', false);
-      return;
+      return false;
     } else {
       identityState = getStoredIdentity();
-      setStatus(`Identity locked ✓ · ${identityState.provinceName} · ${identityState.kingdomCode}`, true);
     }
+
     const c = capture();
     enqueue(c);
-    setStatus(`Queued · ${c.pageKind} · ${Math.round(c.rawPayload.rawDom.length / 1024)} KB DOM`, true);
+    setStatus(`Queued · ${c.pageKind} · ${Math.round(c.rawPayload.rawDom.length / 1024)} KB DOM · ${reason}`, true);
     await flushQueue();
+    return true;
+  }
+
+  function scheduleCapture(reason, delay = CHANGE_DELAY, force = false) {
+    clearTimeout(autoTimer);
+    autoTimer = setTimeout(() => { captureNow(reason, force).catch(error => setStatus(`Capture error · ${error?.message || error}`, false)); }, delay);
+  }
+
+  function watchNavigation() {
+    const changed = () => {
+      if (location.href === lastUrl) return;
+      lastUrl = location.href;
+      scheduleCapture('page change', AUTO_DELAY);
+    };
+    for (const name of ['pushState', 'replaceState']) {
+      const original = history[name];
+      if (typeof original !== 'function') continue;
+      history[name] = function (...args) { const result = original.apply(this, args); setTimeout(changed, 0); return result; };
+    }
+    addEventListener('popstate', changed);
+    addEventListener('hashchange', changed);
+  }
+
+  function watchDom() {
+    const root = document.documentElement;
+    if (!root) return;
+    const observer = new MutationObserver(() => {
+      if (isCpsAlertActive()) {
+        scheduleCapture('CPS alert', 250, true);
+        return;
+      }
+      clearTimeout(observerTimer);
+      observerTimer = setTimeout(() => {
+        const fp = fingerprint();
+        if (GM_getValue(LAST_KEY, '') !== fp && !busy) scheduleCapture('page update', CHANGE_DELAY);
+      }, 500);
+    });
+    observer.observe(root, { childList: true, subtree: true, characterData: true });
   }
 
   function setStatus(message, good) { const p = document.getElementById(PANEL_ID); const s = p?.querySelector('[data-status]'); if (s) { s.textContent = message; s.style.color = good ? '#7ee787' : '#ffb86b'; } }
@@ -212,14 +286,22 @@
     if (document.getElementById(PANEL_ID)) return;
     const p = document.createElement('div'); p.id = PANEL_ID;
     p.style.cssText = 'position:fixed;right:14px;bottom:14px;z-index:2147483647;width:310px;background:#101318;color:#e6edf3;border:1px solid #30363d;border-radius:10px;padding:12px;font:12px/1.4 system-ui,sans-serif;box-shadow:0 8px 30px rgba(0,0,0,.45)';
-    p.innerHTML = `<div style="font-weight:700;font-size:13px;margin-bottom:8px">Spartan Capture 3.3</div><div data-status style="min-height:34px;margin-bottom:8px">Ready</div><div style="display:flex;gap:6px;flex-wrap:wrap"><button data-capture>Capture</button><button data-copy>Copy identity</button></div>`;
+    p.innerHTML = `<div style="font-weight:700;font-size:13px;margin-bottom:8px">Spartan Capture 3.4</div><div data-status style="min-height:34px;margin-bottom:8px">Ready</div><div style="display:flex;gap:6px;flex-wrap:wrap"><button data-capture>Capture</button><button data-copy>Copy identity</button></div>`;
     p.querySelectorAll('button').forEach(b => { b.style.cssText = 'border:1px solid #484f58;background:#21262d;color:#e6edf3;border-radius:6px;padding:5px 8px;font:inherit'; });
-    p.querySelector('[data-capture]').addEventListener('click', captureNow);
+    p.querySelector('[data-capture]').addEventListener('click', () => captureNow('manual', true));
     p.querySelector('[data-copy]').addEventListener('click', () => copy(JSON.stringify(getStoredIdentity(), null, 2), 'Identity copied'));
     document.body.appendChild(p);
     const stored = getStoredIdentity();
     if (storedIdentityValid() && token()) setStatus(`Identity locked ✓ · ${stored.provinceName} · ${stored.kingdomCode}`, true);
   }
 
-  panel();
+  function boot() {
+    panel();
+    watchNavigation();
+    watchDom();
+    scheduleCapture('initial page', AUTO_DELAY);
+    setInterval(() => flushQueue().catch(error => setStatus(`Queue error · ${error?.message || error}`, false)), 15000);
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot, { once: true }); else boot();
 })();
