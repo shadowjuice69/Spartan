@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spartan Universal Capture
 // @namespace    spartan-universal-capture
-// @version      3.4.2
+// @version      3.4.3
 // @description  Capture every Utopia page completely, lock Throne identity, and deliver page/CPS captures without duplicate observer loops.
 // @match        https://www.utopia-game.com/*
 // @match        https://utopia-game.com/*
@@ -19,7 +19,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '3.4.2';
+  const VERSION = '3.4.3';
   const ENDPOINT = 'https://spartan-dashboard.onrender.com/api/capture';
   const IDENTITY_ENDPOINT = 'https://spartan-dashboard.onrender.com/api/capture/identity';
   const CAPTURE_KEY = 'NikkoAce';
@@ -34,10 +34,12 @@
   const RETRY_MS = 4000;
   const AUTO_DELAY = 1800;
   const CHANGE_DELAY = 1200;
+  const CPS_RETRY_DELAY = 1500;
 
   let busy = false;
   let autoTimer = null;
   let observerTimer = null;
+  let cpsRetryTimer = null;
   let lastUrl = location.href;
   let cpsAlertWasActive = false;
 
@@ -68,11 +70,7 @@
     const all = `${title}\n${body}`;
     const coord = all.match(/\b(\d{1,3}:\d{1,3})\b/);
     if (coord) out.kingdomCode = coord[1];
-
-    const selectors = [
-      '[data-province-name]', '[data-province]', '[data-current-province]',
-      '[data-kingdom-code]', '[data-kd-code]', '[data-location]'
-    ];
+    const selectors = ['[data-province-name]', '[data-province]', '[data-current-province]', '[data-kingdom-code]', '[data-kd-code]', '[data-location]'];
     for (const selector of selectors) {
       document.querySelectorAll(selector).forEach(el => {
         const name = text(el.getAttribute('data-province-name') || el.getAttribute('data-province') || el.getAttribute('data-current-province') || '');
@@ -81,18 +79,13 @@
         if (!out.kingdomCode && /\d{1,3}:\d{1,3}/.test(kd)) out.kingdomCode = kd.match(/\d{1,3}:\d{1,3}/)[0];
       });
     }
-
     const patterns = [
       /(?:Province(?: Name)?|Your Province|Current Province)\s*[:\-]\s*([^\n|]{2,100})/i,
       /The Province of\s+([^\n(]{2,100})/i,
       /(?:Welcome|Welcome back)[, ]+([^\n|]{2,100}?)(?:\s+\(?\d{1,3}:\d{1,3}\)?|$)/i,
       /(?:Province|Name)\s*<[^>]*>\s*([^<]{2,100})/i,
     ];
-    for (const re of patterns) {
-      const m = all.match(re);
-      if (m?.[1]) { out.provinceName = text(m[1]); break; }
-    }
-
+    for (const re of patterns) { const m = all.match(re); if (m?.[1]) { out.provinceName = text(m[1]); break; } }
     if (!out.provinceName) {
       const meta = [...document.querySelectorAll('meta[name],meta[property]')];
       for (const m of meta) {
@@ -101,7 +94,6 @@
         if (/province|ruler/.test(n) && v && v.length >= 2 && v.length <= 100) { out.provinceName = v; break; }
       }
     }
-
     if (!out.provinceName && title && !/utopia/i.test(title)) {
       const cleaned = title.replace(/\s*[|\-].*$/, '').trim();
       if (cleaned.length >= 2) out.titleHint = cleaned;
@@ -111,6 +103,22 @@
 
   function getStoredIdentity() { return safe(() => JSON.parse(GM_getValue(IDENTITY_KEY, 'null')), null); }
   function token() { return safe(() => GM_getValue(TOKEN_KEY, ''), ''); }
+
+  function showIdentityLinkedPopup(data) {
+    try {
+      const key = 'spartan_identity_linked_notice_v1';
+      if (sessionStorage.getItem(key)) return;
+      sessionStorage.setItem(key, '1');
+      const old = document.getElementById('spartan-identity-linked-popup');
+      if (old) old.remove();
+      const p = document.createElement('div');
+      p.id = 'spartan-identity-linked-popup';
+      p.style.cssText = 'position:fixed;left:50%;top:18%;transform:translateX(-50%);z-index:2147483647;background:#101318;color:#e6edf3;border:1px solid #58a6ff;border-radius:12px;padding:18px 22px;min-width:280px;max-width:90vw;text-align:center;font:14px/1.5 system-ui,sans-serif;box-shadow:0 12px 40px rgba(0,0,0,.55)';
+      p.innerHTML = `<div style="font-size:18px;font-weight:800;margin-bottom:6px">Spartan Identity Linked ✓</div><div>${text(data?.provinceName || 'Province')} · ${text(data?.kingdomCode || '')}</div><div style="margin-top:8px;font-size:12px;opacity:.8">This identity is locked for this Utopia session.</div>`;
+      document.body.appendChild(p);
+      setTimeout(() => p.remove(), 5000);
+    } catch (_) {}
+  }
 
   function setIdentity(data) {
     if (data?.captureToken) GM_setValue(TOKEN_KEY, data.captureToken);
@@ -143,24 +151,10 @@
     document.querySelectorAll('label').forEach((label, i) => { const input = label.htmlFor ? document.getElementById(label.htmlFor) : label.querySelector('input,select,textarea'); if (input) add(label.innerText, scalar(input.value), `label:${i}`); });
     const visible = text(document.body?.innerText || '');
     const patterns = {
-      acres: [/\bAcres?\b[^\d]{0,20}([\d,]+)/i, /\bLand\b[^\d]{0,20}([\d,]+)/i],
-      networth: [/\bNet\s*worth\b[^\d]{0,20}([\d,]+)/i, /\bNW\b[^\d]{0,20}([\d,]+)/i],
-      population: [/\bPopulation\b[^\d]{0,20}([\d,]+)/i], peons: [/\bPeasants?\b[^\d]{0,20}([\d,]+)/i, /\bPeons?\b[^\d]{0,20}([\d,]+)/i],
-      soldiers: [/\bSoldiers\b[^\d]{0,20}([\d,]+)/i], off_specs: [/\bOff(?:ensive)?\s*Specs?\b[^\d]{0,20}([\d,]+)/i], def_specs: [/\bDef(?:ensive)?\s*Specs?\b[^\d]{0,20}([\d,]+)/i],
-      elites: [/\bElites?\b[^\d]{0,20}([\d,]+)/i], thieves: [/\bThieves\b[^\d]{0,20}([\d,]+)/i], wizards: [/\bWizards\b[^\d]{0,20}([\d,]+)/i], generals: [/\bGenerals\b[^\d]{0,20}([\d,]+)/i],
-      prisoners: [/\bPrisoners\b[^\d]{0,20}([\d,]+)/i], war_horses: [/\bWar\s*Horses\b[^\d]{0,20}([\d,]+)/i], offense: [/\bOffen[cs]e(?:\s*Points?)?\b[^\d]{0,20}([\d,]+)/i],
-      defense: [/\bDefen[cs]e(?:\s*Points?)?\b[^\d]{0,20}([\d,]+)/i], mana: [/\bMana\b[^\d]{0,20}([\d,]+)/i], stealth: [/\bStealth\b[^\d]{0,20}([\d,.]+)%?/i],
-      build_efficiency: [/\bBuild(?:ing)?\s*Efficiency\b[^\d]{0,20}([\d,.]+)%?/i], wages: [/\bWages\b[^\d]{0,20}([\d,.]+)/i], r_tpa: [/\bRate\s*TPA\b[^\d]{0,20}([\d,.]+)/i],
-      o_tpa: [/\bOff(?:ense)?\s*TPA\b[^\d]{0,20}([\d,.]+)/i], d_tpa: [/\bDef(?:ense)?\s*TPA\b[^\d]{0,20}([\d,.]+)/i], r_wpa: [/\bRate\s*WPA\b[^\d]{0,20}([\d,.]+)/i],
-      o_wpa: [/\bOff(?:ense)?\s*WPA\b[^\d]{0,20}([\d,.]+)/i], d_wpa: [/\bDef(?:ense)?\s*WPA\b[^\d]{0,20}([\d,.]+)/i]
+      acres: [/\bAcres?\b[^\d]{0,20}([\d,]+)/i, /\bLand\b[^\d]{0,20}([\d,]+)/i], networth: [/\bNet\s*worth\b[^\d]{0,20}([\d,]+)/i, /\bNW\b[^\d]{0,20}([\d,]+)/i], population: [/\bPopulation\b[^\d]{0,20}([\d,]+)/i], peons: [/\bPeasants?\b[^\d]{0,20}([\d,]+)/i, /\bPeons?\b[^\d]{0,20}([\d,]+)/i], soldiers: [/\bSoldiers\b[^\d]{0,20}([\d,]+)/i], off_specs: [/\bOff(?:ensive)?\s*Specs?\b[^\d]{0,20}([\d,]+)/i], def_specs: [/\bDef(?:ensive)?\s*Specs?\b[^\d]{0,20}([\d,]+)/i], elites: [/\bElites?\b[^\d]{0,20}([\d,]+)/i], thieves: [/\bThieves\b[^\d]{0,20}([\d,]+)/i], wizards: [/\bWizards\b[^\d]{0,20}([\d,]+)/i], generals: [/\bGenerals\b[^\d]{0,20}([\d,]+)/i], prisoners: [/\bPrisoners\b[^\d]{0,20}([\d,]+)/i], war_horses: [/\bWar\s*Horses\b[^\d]{0,20}([\d,]+)/i], offense: [/\bOffen[cs]e(?:\s*Points?)?\b[^\d]{0,20}([\d,]+)/i], defense: [/\bDefen[cs]e(?:\s*Points?)?\b[^\d]{0,20}([\d,]+)/i], mana: [/\bMana\b[^\d]{0,20}([\d,]+)/i], stealth: [/\bStealth\b[^\d]{0,20}([\d,.]+)%?/i], build_efficiency: [/\bBuild(?:ing)?\s*Efficiency\b[^\d]{0,20}([\d,.]+)%?/i], wages: [/\bWages\b[^\d]{0,20}([\d,.]+)/i], r_tpa: [/\bRate\s*TPA\b[^\d]{0,20}([\d,.]+)/i], o_tpa: [/\bOff(?:ense)?\s*TPA\b[^\d]{0,20}([\d,.]+)/i], d_tpa: [/\bDef(?:ense)?\s*TPA\b[^\d]{0,20}([\d,.]+)/i], r_wpa: [/\bRate\s*WPA\b[^\d]{0,20}([\d,.]+)/i], o_wpa: [/\bOff(?:ense)?\s*WPA\b[^\d]{0,20}([\d,.]+)/i], d_wpa: [/\bDef(?:ense)?\s*WPA\b[^\d]{0,20}([\d,.]+)/i]
     };
     for (const [key, list] of Object.entries(patterns)) for (const re of list) { const m = visible.match(re); if (m) { add(key, num(m[1]), `text:${re}`); break; } }
-    return {
-      fields, tables,
-      links: [...document.querySelectorAll('a[href]')].map(a => ({ text: text(a.innerText || a.textContent), href: a.href })),
-      forms: [...document.querySelectorAll('form')].map((f, i) => ({ index: i, action: f.action, method: f.method || 'get', fields: [...f.elements].map(e => ({ name: e.name || '', type: e.type || e.tagName.toLowerCase(), value: e.value || '' })) })),
-      field_sources: sources
-    };
+    return { fields, tables, links: [...document.querySelectorAll('a[href]')].map(a => ({ text: text(a.innerText || a.textContent), href: a.href })), forms: [...document.querySelectorAll('form')].map((f, i) => ({ index: i, action: f.action, method: f.method || 'get', fields: [...f.elements].map(e => ({ name: e.name || '', type: e.type || e.tagName.toLowerCase(), value: e.value || '' })) })), field_sources: sources };
   }
 
   function capture() {
@@ -168,17 +162,10 @@
     const s = safe(structured, { fields: {}, tables: [], links: [], forms: [], field_sources: {} });
     const id = uuid();
     const locked = getStoredIdentity();
-    return {
-      captureId: id, capturedAt: new Date().toISOString(), source: 'spartan_capture_engine', sourceId: id,
-      scraperVersion: VERSION, pageKind: pageKind(), url: location.href, rawText: text(document.body?.innerText || ''),
-      rawPayload: { capture_engine: VERSION, page: { url: location.href, origin: location.origin, hostname: location.hostname, pathname: location.pathname, search: location.search, hash: location.hash, title: document.title || '', readyState: document.readyState, language: document.documentElement?.lang || null }, identity: locked || identity(), rawDom, structured: s },
-      parsedPayload: s.fields
-    };
+    return { captureId: id, capturedAt: new Date().toISOString(), source: 'spartan_capture_engine', sourceId: id, scraperVersion: VERSION, pageKind: pageKind(), url: location.href, rawText: text(document.body?.innerText || ''), rawPayload: { capture_engine: VERSION, page: { url: location.href, origin: location.origin, hostname: location.hostname, pathname: location.pathname, search: location.search, hash: location.hash, title: document.title || '', readyState: document.readyState, language: document.documentElement?.lang || null }, identity: locked || identity(), rawDom, structured: s }, parsedPayload: s.fields };
   }
 
   function fingerprint() {
-    // Exclude Spartan's own panel/status from the page fingerprint. Its status changes
-    // were causing the MutationObserver to see every send as a new page.
     const panel = document.getElementById(PANEL_ID);
     const oldDisplay = panel?.style.display;
     if (panel) panel.style.display = 'none';
@@ -201,10 +188,7 @@
       const finish = value => { if (!done) { done = true; resolve(value); } };
       const timer = setTimeout(() => finish({ ok: false, status: 0, error: 'timeout' }), 30000);
       try {
-        GM_xmlhttpRequest({
-          method: 'POST', url,
-          headers: { 'Content-Type': 'application/json', 'x-spartan-capture-key': CAPTURE_KEY, 'x-spartan-capture-version': VERSION, ...(extra.headers || {}) },
-          data: JSON.stringify(data), timeout: 28000,
+        GM_xmlhttpRequest({ method: 'POST', url, headers: { 'Content-Type': 'application/json', 'x-spartan-capture-key': CAPTURE_KEY, 'x-spartan-capture-version': VERSION, ...(extra.headers || {}) }, data: JSON.stringify(data), timeout: 28000,
           onload: r => { clearTimeout(timer); let body = {}; try { body = JSON.parse(r.responseText || '{}'); } catch (_) {} finish({ ok: r.status >= 200 && r.status < 300, status: r.status, body, error: body.error || '' }); },
           onerror: () => { clearTimeout(timer); finish({ ok: false, status: 0, error: 'network error' }); },
           ontimeout: () => { clearTimeout(timer); finish({ ok: false, status: 0, error: 'timeout' }); }
@@ -222,6 +206,7 @@
     if (result.ok && result.body?.captureToken && result.body?.ownerId) {
       setIdentity(result.body);
       setStatus(`Identity locked ✓ · ${result.body.provinceName || 'province'} · ${result.body.kingdomCode || ''}`, true);
+      showIdentityLinkedPopup(result.body);
       return true;
     }
     setStatus(`Identity failed · ${result.body?.error || result.error || `HTTP ${result.status}`}`, false);
@@ -287,6 +272,16 @@
     autoTimer = setTimeout(() => captureNow(reason, force).catch(error => setStatus(`Capture error · ${error?.message || error}`, false)), delay);
   }
 
+  function scheduleCpsCapture() {
+    clearTimeout(cpsRetryTimer);
+    cpsRetryTimer = setTimeout(async () => {
+      if (!isCpsAlertActive()) return;
+      if (busy) { scheduleCpsCapture(); return; }
+      const captured = await captureNow('CPS alert', true).catch(error => { setStatus(`CPS capture error · ${error?.message || error}`, false); return false; });
+      if (!captured && isCpsAlertActive()) scheduleCpsCapture();
+    }, 250);
+  }
+
   function watchNavigation() {
     const changed = () => { if (location.href === lastUrl) return; lastUrl = location.href; scheduleCapture('page change', AUTO_DELAY); };
     for (const name of ['pushState', 'replaceState']) {
@@ -300,8 +295,8 @@
     const root = document.documentElement; if (!root) return;
     const observer = new MutationObserver(() => {
       const cpsActive = isCpsAlertActive();
-      if (cpsActive && !cpsAlertWasActive) { cpsAlertWasActive = true; scheduleCapture('CPS alert', 250, true); return; }
-      if (!cpsActive) cpsAlertWasActive = false;
+      if (cpsActive && !cpsAlertWasActive) { cpsAlertWasActive = true; scheduleCpsCapture(); return; }
+      if (!cpsActive) { cpsAlertWasActive = false; clearTimeout(cpsRetryTimer); }
       clearTimeout(observerTimer);
       observerTimer = setTimeout(() => {
         const fp = fingerprint();
