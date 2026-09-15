@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spartan Universal Capture
 // @namespace    spartan-universal-capture
-// @version      4.0.1-recovery
+// @version      4.0.2-recovery
 // @description  Full Utopia page scraper restored from the known-good engine, with Spartan identity, authorization, CPS capture, queue/retry, and the full control panel.
 // @match        https://www.utopia-game.com/*
 // @match        https://utopia-game.com/*
@@ -19,7 +19,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '4.0.1-recovery';
+  const VERSION = '4.0.2-recovery';
   const SOURCE = 'spartan_capture_engine';
   const ENDPOINT = 'https://spartan-dashboard.onrender.com/api/capture';
   const IDENTITY_ENDPOINT = 'https://spartan-dashboard.onrender.com/api/capture/identity';
@@ -246,10 +246,16 @@
       gold: [/\bGold\b[^\d]{0,20}([\d,]+)/i,/\bTreasury\b[^\d]{0,20}([\d,]+)/i],
       food: [/\bFood\b[^\d]{0,20}([\d,]+)/i], runes:[/\bRunes?\b[^\d]{0,20}([\d,]+)/i],
       population:[/\bPopulation\b[^\d]{0,20}([\d,]+)/i], peons:[/\bPeasants?\b[^\d]{0,20}([\d,]+)/i,/\bPeons?\b[^\d]{0,20}([\d,]+)/i],
-      soldiers:[/\bSoldiers\b[^\d]{0,20}([\d,]+)/i], off_specs:[/\bOff(?:ensive)?\s*Specs?\b[^\d]{0,20}([\d,]+)/i], def_specs:[/\bDef(?:ensive)?\s*Specs?\b[^\d]{0,20}([\d,]+)/i],
-      elites:[/\bElites?\b[^\d]{0,20}([\d,]+)/i], thieves:[/\bThieves\b[^\d]{0,20}([\d,]+)/i], wizards:[/\bWizards\b[^\d]{0,20}([\d,]+)/i],
+      soldiers:[/\bSoldiers\b[^\d]{0,20}([\d,]+)/i],
+      off_specs:[/(?:^|\n)[A-Za-z][A-Za-z .'-]*\s+([\d,]+)\s+[\d.]+ospa\b/im,/\bOff(?:ensive)?\s*Specs?\b[^\d]{0,20}([\d,]+)/i],
+      def_specs:[/(?:^|\n)[A-Za-z][A-Za-z .'-]*\s+([\d,]+)\s+[\d.]+dspa\b/im,/\bDef(?:ensive)?\s*Specs?\b[^\d]{0,20}([\d,]+)/i],
+      elites:[/(?:^|\n)[A-Za-z][A-Za-z .'-]*\s+([\d,]+)\s+[\d.]+epa\b/im,/\bElites?\b[^\d]{0,20}([\d,]+)/i],
+      thieves:[/\bThieves\s+([\d,]+)/i], wizards:[/\bWizards\s+([\d,]+)/i],
+      tpa:[/\bThieves\s+[\d,]+(?:\s+\(\d+%\))?\s+([\d.]+)tpa\b/i],
+      wpa:[/\bWizards\s+[\d,]+(?:\s+\(\d+%\))?\s+([\d.]+)wpa\b/i],
       generals:[/\bGenerals\b[^\d]{0,20}([\d,]+)/i], prisoners:[/\bPrisoners\b[^\d]{0,20}([\d,]+)/i], war_horses:[/\bWar\s*Horses\b[^\d]{0,20}([\d,]+)/i],
-      offense:[/\bOffen[cs]e(?:\s*Points?)?\b[^\d]{0,20}([\d,]+)/i], defense:[/\bDefen[cs]e(?:\s*Points?)?\b[^\d]{0,20}([\d,]+)/i],
+      offense:[/\bOff\.\s*Points\b[^\d]{0,20}([\d,]+)/i,/\bOffen[cs]e(?:\s*Points?)?\b[^\d]{0,20}([\d,]+)/i],
+      defense:[/\bDef\.\s*Points\b[^\d]{0,20}([\d,]+)/i,/\bDefen[cs]e(?:\s*Points?)?\b[^\d]{0,20}([\d,]+)/i],
       mana:[/\bMana\b[^\d]{0,20}([\d,]+)/i], stealth:[/\bStealth\b[^\d]{0,20}([\d,.]+)%?/i],
       build_efficiency:[/\bBuild(?:ing)?\s*Efficiency\b[^\d]{0,20}([\d,.]+)%?/i], wages:[/\bWages\b[^\d]{0,20}([\d,.]+)/i],
       r_tpa:[/\bRate\s*TPA\b[^\d]{0,20}([\d,.]+)/i], o_tpa:[/\bOff(?:ense)?\s*TPA\b[^\d]{0,20}([\d,.]+)/i], d_tpa:[/\bDef(?:ense)?\s*TPA\b[^\d]{0,20}([\d,.]+)/i],
