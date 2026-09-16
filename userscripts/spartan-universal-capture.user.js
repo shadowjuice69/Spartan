@@ -119,8 +119,23 @@
   function findIdentityHints(source) {
     const all = String(source || '');
     const out = {};
-    const coord = all.match(/\b(\d{1,3}:\d{1,3})\b/);
-    if (coord) out.kingdomCode = coord[1];
+
+    // Throne is authoritative: extract the province and kingdom
+    // from the actual province heading before looking anywhere else.
+    const throneIdentity = all.match(
+      /\bThe\s+Province\s+of\s+([^\n(]{2,100}?)\s*\(\s*(\d{1,3}:\d{1,3})\s*\)/i
+    );
+
+    if (throneIdentity) {
+      out.provinceName = text(throneIdentity[1]);
+      out.kingdomCode = throneIdentity[2];
+    } else {
+      // Generic coordinate fallback only when the authoritative
+      // Throne identity is not present.
+      const coord = all.match(/\b(\d{1,3}:\d{1,3})\b/);
+      if (coord) out.kingdomCode = coord[1];
+    }
+
     const patterns = [
       /(?:Province(?: Name)?|Your Province|Current Province)\s*[:\-]\s*([^\n|]{2,100})/i,
       /The Province of\s+([^\n(]{2,100})/i,
@@ -223,8 +238,103 @@
     const add = (key, value, source) => {
       if (value === null || value === '') return;
       const normalized = text(key).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 80) || 'field';
+
+      // Never turn clock/watch-list fragments such as "10:29"
+      // into numeric field names like "10": 29.
+      if (/^\d+$/.test(normalized)) return;
+
       if (!(normalized in fields)) { fields[normalized] = value; sources[normalized] = source; }
     };
+    /*
+     * Utopia Throne tables are real label/value tables.
+     * Labels and values are frequently separate adjacent cells,
+     * so "Label: Value" parsing alone is insufficient.
+     *
+     * This parser deliberately requires:
+     *   - a known/stat-like label
+     *   - a numeric value in the next cell
+     *
+     * That prevents chat/watch-list content such as:
+     *   "10:29" / "11:12"
+     * from becoming fields.
+     */
+    const thronePage = /\bThe\s+Province\s+of\s+[^\n(]+\(\s*\d{1,3}:\d{1,3}\s*\)/i.test(visible || document.body?.innerText || '');
+
+    const throneLabels = {
+      'money': 'gold',
+      'land': 'acres',
+      'net worth': 'networth',
+      'networth': 'networth',
+      'peasants': 'peons',
+      'peons': 'peons',
+      'food': 'food',
+      'runes': 'runes',
+      'soldiers': 'soldiers',
+      'thieves': 'thieves',
+      'wizards': 'wizards',
+      'war horses': 'war_horses',
+      'prisoners': 'prisoners',
+      'off. points': 'offense',
+      'off points': 'offense',
+      'def. points': 'defense',
+      'def points': 'defense',
+      'building eff.': 'build_efficiency',
+      'building efficiency': 'build_efficiency'
+    };
+
+    function throneCellNumber(value) {
+      const raw = text(value);
+      if (!/^[-+]?\d[\d,]*(?:\.\d+)?%?$/.test(raw)) return null;
+      return num(raw);
+    }
+
+    function scanThroneTables() {
+      document.querySelectorAll('table').forEach((table, ti) => {
+        const rows = [...table.querySelectorAll('tr')];
+
+        rows.forEach((tr, ri) => {
+          const cells = [...tr.querySelectorAll('th,td')]
+            .map(cell => text(cell.innerText || cell.textContent))
+            .filter(Boolean);
+
+          // Normal label -> value pairs.
+          for (let ci = 0; ci < cells.length - 1; ci++) {
+            const label = cells[ci].toLowerCase().replace(/\s+/g, ' ').trim();
+            const key = throneLabels[label];
+            if (!key) continue;
+
+            const value = throneCellNumber(cells[ci + 1]);
+            if (value !== null) {
+              add(key, value, `throne-table:${ti}:${ri}:${ci}`);
+            }
+          }
+
+          // Some Utopia tables put all labels on one row and
+          // all corresponding values on the following row.
+          if (ri < rows.length - 1) {
+            const nextCells = [...rows[ri + 1].querySelectorAll('th,td')]
+              .map(cell => text(cell.innerText || cell.textContent))
+              .filter(Boolean);
+
+            const count = Math.min(cells.length, nextCells.length);
+
+            for (let ci = 0; ci < count; ci++) {
+              const label = cells[ci].toLowerCase().replace(/\s+/g, ' ').trim();
+              const key = throneLabels[label];
+              if (!key) continue;
+
+              const value = throneCellNumber(nextCells[ci]);
+              if (value !== null) {
+                add(key, value, `throne-table:${ti}:${ri}:stacked:${ci}`);
+              }
+            }
+          }
+        });
+      });
+    }
+
+    if (thronePage) scanThroneTables();
+
     document.querySelectorAll('table').forEach((table, ti) => {
       const rows = [];
       table.querySelectorAll('tr').forEach((tr, ri) => {
@@ -262,9 +372,76 @@
       r_wpa:[/\bRate\s*WPA\b[^\d]{0,20}([\d,.]+)/i], o_wpa:[/\bOff(?:ense)?\s*WPA\b[^\d]{0,20}([\d,.]+)/i], d_wpa:[/\bDef(?:ense)?\s*WPA\b[^\d]{0,20}([\d,.]+)/i]
     };
     for (const [key, list] of Object.entries(patterns)) for (const re of list) { const m = visible.match(re); if (m) { add(key, num(m[1]), `text:${key}`); break; } }
+    if (thronePage) {
+      const throneUnitPatterns = [
+        ['off_specs', /\b[A-Za-z][A-Za-z .'-]*\s+([\d,]+)\s+[\d.]+ospa\b/i],
+        ['def_specs', /\b[A-Za-z][A-Za-z .'-]*\s+([\d,]+)\s+[\d.]+dspa\b/i],
+        ['elites', /\b[A-Za-z][A-Za-z .'-]*\s+([\d,]+)\s+[\d.]+epa\b/i]
+      ];
+
+      for (const [key, re] of throneUnitPatterns) {
+        const match = visible.match(re);
+        if (match) add(key, num(match[1]), `throne-unit:${key}`);
+      }
+
+      // Combined Throne values.
+      const tpaMatch = visible.match(/\bThieves\s+[\d,]+(?:\s+\(\d+%\))?\s+([\d.]+)tpa\b/i);
+      const wpaMatch = visible.match(/\bWizards\s+[\d,]+(?:\s+\(\d+%\))?\s+([\d.]+)wpa\b/i);
+
+      if (tpaMatch) add('tpa', num(tpaMatch[1]), 'throne-unit:tpa');
+      if (wpaMatch) add('wpa', num(wpaMatch[1]), 'throne-unit:wpa');
+
+      const buildEff = visible.match(/\bBuilding\s+Eff\.\s*([\d.]+)%/i);
+      if (buildEff) add('build_efficiency', num(buildEff[1]), 'throne-label:Building Eff.');
+
+      // These labels are authoritative on Throne and must override
+      // misleading summary-table proximity matches.
+      const exactThroneFields = [
+        ['gold', /\bMoney\s+([\d,]+)/i],
+        ['acres', /\bLand\s+([\d,]+)/i],
+        ['networth', /\bNetworth\s+([\d,]+)/i],
+        ['peons', /\bPeasants\s+([\d,]+)/i],
+        ['food', /\bFood\s+([\d,]+)/i],
+        ['runes', /\bRunes\s+([\d,]+)/i],
+        ['soldiers', /\bSoldiers\s+([\d,]+)/i],
+        ['thieves', /\bThieves\s+([\d,]+)/i],
+        ['wizards', /\bWizards\s+([\d,]+)/i],
+        ['war_horses', /\bWar\s+Horses\s+([\d,]+)/i],
+        ['prisoners', /\bPrisoners\s+([\d,]+)/i],
+        ['offense', /\bOff\.\s*Points\s+([\d,]+)/i],
+        ['defense', /\bDef\.\s*Points\s+([\d,]+)/i]
+      ];
+
+      // Explicit Throne labels are authoritative. Replace any
+      // earlier proximity-derived value from a summary table.
+      for (const [key, re] of exactThroneFields) {
+        const match = visible.match(re);
+        if (match) {
+          fields[key] = num(match[1]);
+          sources[key] = `throne-exact:${key}`;
+        }
+      }
+    }
+
     const id = currentIdentity();
     if (id.provinceName) add('province_name', id.provinceName, 'identity');
-    if (id.kingdomCode) add('kingdom_code', id.kingdomCode, 'identity');
+
+    // Throne heading is authoritative for the parsed kingdom code.
+    // This prevents sitter/chat coordinates from leaking into the payload.
+    if (thronePage) {
+      const throneIdentity = visible.match(
+        /\bThe\s+Province\s+of\s+([^\n(]{2,100}?)\s*\(\s*(\d{1,3}:\d{1,3})\s*\)/i
+      );
+
+      if (throneIdentity) {
+        fields.province_name = text(throneIdentity[1]);
+        fields.kingdom_code = throneIdentity[2];
+        sources.province_name = 'throne-heading';
+        sources.kingdom_code = 'throne-heading';
+      }
+    } else if (id.kingdomCode) {
+      add('kingdom_code', id.kingdomCode, 'identity');
+    }
     return {
       fields,
       tables,

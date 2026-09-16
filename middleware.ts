@@ -18,7 +18,7 @@ function login(request: NextRequest, reason = 'discord-required') {
   return NextResponse.redirect(url)
 }
 
-export async function proxy(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const path = request.nextUrl.pathname
   const response = await updateSession(request)
 
