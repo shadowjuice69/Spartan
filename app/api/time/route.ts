@@ -8,17 +8,17 @@ const TICK_MS = 3_600_000
 const TICKS_PER_DAY = 24
 const DAYS_PER_MONTH = 24
 const MONTHS_PER_YEAR = 7
-const TICKS_PER_MONTH = DAYS_PER_MONTH * TICKS_PER_DAY
-const TICKS_PER_YEAR = MONTHS_PER_YEAR * TICKS_PER_MONTH
-const TICK_MINUTE_UTC = 3
+const DAYS_PER_YEAR = DAYS_PER_MONTH * MONTHS_PER_YEAR
+const TICKS_PER_YEAR = DAYS_PER_YEAR
+const TICK_MINUTE_UTC = 0
 const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July']
 
-type Anchor = {
-  year: number
-  month: number
-  day: number
+type GameDate = { year: number; month: number; day: number }
+
+type Anchor = GameDate & {
   tick: number
   capturedAt: string
+  nextTickAt: string
   source: string
 }
 
@@ -29,9 +29,10 @@ function adminClient() {
   return createSupabaseAdmin(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
 }
 
-function parseGameDate(rawText: unknown): { year: number; month: number; day: number } | null {
-  if (typeof rawText !== 'string') return null
-  const match = rawText.match(/class=["']current-date["'][^>]*>\s*([A-Za-z]+)\s+(\d{1,2}),\s*YR(\d+)\s*</i)
+function parseGameDate(value: unknown): GameDate | null {
+  if (typeof value !== 'string') return null
+  const normalized = value.replace(/\s+/g, ' ').trim()
+  const match = normalized.match(/([A-Za-z]+)\s+(\d{1,2})(?:st|nd|rd|th)?[,]?\s*(?:of\s+)?YR\s*(\d+)/i)
   if (!match) return null
 
   const month = MONTH_NAMES.findIndex((name) => name.toLowerCase() === match[1].toLowerCase()) + 1
@@ -39,6 +40,41 @@ function parseGameDate(rawText: unknown): { year: number; month: number; day: nu
   const year = Number(match[3])
   if (!month || !Number.isInteger(day) || day < 1 || day > DAYS_PER_MONTH || !Number.isInteger(year) || year < 1) return null
   return { year, month, day }
+}
+
+function findGameDate(value: unknown): GameDate | null {
+  const direct = parseGameDate(value)
+  if (direct) return direct
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  for (const candidate of Object.values(value as Record<string, unknown>)) {
+    const found = findGameDate(candidate)
+    if (found) return found
+  }
+  return null
+}
+
+function parseNextTickMs(value: unknown): number | null {
+  if (typeof value !== 'string') return null
+  const normalized = value.replace(/\s+/g, ' ').trim()
+  const match = normalized.match(/next\s+tick\s*:\s*(\d+)\s*(minute|minutes|hour|hours)/i)
+  if (!match) return null
+
+  const amount = Number(match[1])
+  if (!Number.isFinite(amount) || amount < 0) return null
+  const unit = match[2].toLowerCase()
+  const multiplier = unit.startsWith('hour') ? 60 * 60 * 1000 : 60 * 1000
+  return amount * multiplier
+}
+
+function findNextTickMs(value: unknown): number | null {
+  const direct = parseNextTickMs(value)
+  if (direct !== null) return direct
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  for (const candidate of Object.values(value as Record<string, unknown>)) {
+    const found = findNextTickMs(candidate)
+    if (found !== null) return found
+  }
+  return null
 }
 
 function tickBoundary(date: Date): Date {
@@ -52,22 +88,24 @@ function tickNumberForBoundary(boundary: Date): number {
   return boundary.getUTCHours() + 1
 }
 
-function absoluteTick(year: number, month: number, day: number, tick: number) {
-  return (year - 1) * TICKS_PER_YEAR + (month - 1) * TICKS_PER_MONTH + (day - 1) * TICKS_PER_DAY + (tick - 1)
+function calendarDayIndex(year: number, month: number, day: number) {
+  return (year - 1) * DAYS_PER_YEAR + (month - 1) * DAYS_PER_MONTH + (day - 1)
 }
 
-function fromAbsoluteTick(value: number) {
-  let absolute = Math.max(0, value)
-  const year = Math.floor(absolute / TICKS_PER_YEAR) + 1
-  absolute %= TICKS_PER_YEAR
-  const month = Math.floor(absolute / TICKS_PER_MONTH) + 1
-  absolute %= TICKS_PER_MONTH
-  const day = Math.floor(absolute / TICKS_PER_DAY) + 1
-  const tick = (absolute % TICKS_PER_DAY) + 1
-  return { year, month, day, tick }
+function fromCalendarDayIndex(value: number) {
+  const absolute = Math.max(0, value)
+  const year = Math.floor(absolute / DAYS_PER_YEAR) + 1
+  const withinYear = absolute % DAYS_PER_YEAR
+  const month = Math.floor(withinYear / DAYS_PER_MONTH) + 1
+  const day = (withinYear % DAYS_PER_MONTH) + 1
+  return { year, month, day }
 }
 
-async function resolveAnchor() {
+function daysUntilNextYear(year: number, month: number, day: number) {
+  return Math.max(0, year * DAYS_PER_YEAR - calendarDayIndex(year, month, day))
+}
+
+async function resolveAnchor(): Promise<Anchor> {
   const auth = await createClient()
   const { data: { user } } = await auth.auth.getUser()
   if (!user) throw new Error('Unauthorized')
@@ -118,30 +156,38 @@ async function resolveAnchor() {
 
   const { data: captures, error: captureError } = await db
     .from('spartan_capture_vault')
-    .select('captured_at,raw_text,page_kind')
+    .select('captured_at,raw_text,parsed_payload,page_kind')
     .eq('province_id', province.id)
     .eq('page_kind', 'throne')
     .order('captured_at', { ascending: false })
-    .limit(20)
+    .limit(100)
   if (captureError) throw captureError
 
   for (const capture of captures ?? []) {
-    const gameDate = parseGameDate(capture.raw_text)
+    const gameDate = findGameDate(capture.raw_text) ?? findGameDate(capture.parsed_payload)
     const capturedAt = typeof capture.captured_at === 'string' ? capture.captured_at : null
     if (!gameDate || !capturedAt) continue
 
     const captured = new Date(capturedAt)
     if (!Number.isFinite(captured.getTime())) continue
-    const boundary = tickBoundary(captured)
+
+    const nextTickDelay = findNextTickMs(capture.raw_text) ?? findNextTickMs(capture.parsed_payload)
+    const nextTickAt = nextTickDelay !== null
+      ? new Date(captured.getTime() + nextTickDelay)
+      : new Date(tickBoundary(captured).getTime() + TICK_MS)
+
+    if (!Number.isFinite(nextTickAt.getTime())) continue
+
+    const currentBoundary = new Date(nextTickAt.getTime() - TICK_MS)
+    const tick = tickNumberForBoundary(currentBoundary)
 
     return {
-      year: gameDate.year,
-      month: gameDate.month,
-      day: gameDate.day,
-      tick: tickNumberForBoundary(boundary),
+      ...gameDate,
+      tick,
       capturedAt: captured.toISOString(),
+      nextTickAt: nextTickAt.toISOString(),
       source: 'spartan_capture_vault.throne',
-    } satisfies Anchor
+    }
   }
 
   throw new Error('No Throne capture containing an authoritative Utopia date has been stored yet.')
@@ -151,23 +197,26 @@ export async function GET() {
   try {
     const now = new Date()
     const anchor = await resolveAnchor()
-    const anchorBoundary = tickBoundary(new Date(anchor.capturedAt))
-    const anchorAbsolute = absoluteTick(anchor.year, anchor.month, anchor.day, anchor.tick)
-    const elapsedTicks = Math.max(0, Math.floor((now.getTime() - anchorBoundary.getTime()) / TICK_MS))
-    const utopia = fromAbsoluteTick(anchorAbsolute + elapsedTicks)
+    const anchorBoundary = new Date(anchor.nextTickAt).getTime() - TICK_MS
+    const elapsedTicks = Math.max(0, Math.floor((now.getTime() - anchorBoundary) / TICK_MS))
 
-    const nextTick = new Date(tickBoundary(now).getTime() + TICK_MS)
-    const absoluteNow = absoluteTick(utopia.year, utopia.month, utopia.day, utopia.tick)
-    const nextYearStart = utopia.year * TICKS_PER_YEAR
-    const ticksUntilNextYear = Math.max(0, nextYearStart - absoluteNow)
+    // Utopia advances one calendar day whenever the real-time game tick advances.
+    // The 24-tick counter remains the hourly cycle, but each completed tick moves
+    // the displayed Utopia date forward by exactly one game day.
+    const dateIndex = calendarDayIndex(anchor.year, anchor.month, anchor.day) + elapsedTicks
+    const utopiaDate = fromCalendarDayIndex(dateIndex)
+    const utopiaTick = ((anchor.tick - 1 + elapsedTicks) % TICKS_PER_DAY) + 1
+    const utopia = { ...utopiaDate, tick: utopiaTick }
 
-    const current = now
+    const nextTick = new Date(anchorBoundary + (elapsedTicks + 1) * TICK_MS)
+    const ticksUntilNextYear = daysUntilNextYear(utopia.year, utopia.month, utopia.day)
+
     return NextResponse.json({
       now: now.toISOString(),
-      chicagoTime: current.toLocaleString('en-US', {
+      chicagoTime: now.toLocaleString('en-US', {
         timeZone: 'America/Chicago', hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true,
       }),
-      chicagoDate: current.toLocaleDateString('en-US', {
+      chicagoDate: now.toLocaleDateString('en-US', {
         timeZone: 'America/Chicago', month: 'short', day: 'numeric', year: 'numeric',
       }),
       source: anchor.source,
