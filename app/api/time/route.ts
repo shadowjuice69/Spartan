@@ -8,8 +8,8 @@ const TICK_MS = 3_600_000
 const TICKS_PER_DAY = 24
 const DAYS_PER_MONTH = 24
 const MONTHS_PER_YEAR = 7
-const TICKS_PER_MONTH = DAYS_PER_MONTH * TICKS_PER_DAY
-const TICKS_PER_YEAR = MONTHS_PER_YEAR * TICKS_PER_MONTH
+const DAYS_PER_YEAR = DAYS_PER_MONTH * MONTHS_PER_YEAR
+const TICKS_PER_YEAR = DAYS_PER_YEAR
 const TICK_MINUTE_UTC = 0
 const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July']
 
@@ -88,19 +88,21 @@ function tickNumberForBoundary(boundary: Date): number {
   return boundary.getUTCHours() + 1
 }
 
-function absoluteTick(year: number, month: number, day: number, tick: number) {
-  return (year - 1) * TICKS_PER_YEAR + (month - 1) * TICKS_PER_MONTH + (day - 1) * TICKS_PER_DAY + (tick - 1)
+function calendarDayIndex(year: number, month: number, day: number) {
+  return (year - 1) * DAYS_PER_YEAR + (month - 1) * DAYS_PER_MONTH + (day - 1)
 }
 
-function fromAbsoluteTick(value: number) {
-  let absolute = Math.max(0, value)
-  const year = Math.floor(absolute / TICKS_PER_YEAR) + 1
-  absolute %= TICKS_PER_YEAR
-  const month = Math.floor(absolute / TICKS_PER_MONTH) + 1
-  absolute %= TICKS_PER_MONTH
-  const day = Math.floor(absolute / TICKS_PER_DAY) + 1
-  const tick = (absolute % TICKS_PER_DAY) + 1
-  return { year, month, day, tick }
+function fromCalendarDayIndex(value: number) {
+  const absolute = Math.max(0, value)
+  const year = Math.floor(absolute / DAYS_PER_YEAR) + 1
+  const withinYear = absolute % DAYS_PER_YEAR
+  const month = Math.floor(withinYear / DAYS_PER_MONTH) + 1
+  const day = (withinYear % DAYS_PER_MONTH) + 1
+  return { year, month, day }
+}
+
+function daysUntilNextYear(year: number, month: number, day: number) {
+  return Math.max(0, year * DAYS_PER_YEAR - calendarDayIndex(year, month, day))
 }
 
 async function resolveAnchor(): Promise<Anchor> {
@@ -169,10 +171,6 @@ async function resolveAnchor(): Promise<Anchor> {
     const captured = new Date(capturedAt)
     if (!Number.isFinite(captured.getTime())) continue
 
-    // A Throne capture tells us exactly how long remains until the next Utopia tick.
-    // Use that as the authoritative tick boundary when available instead of guessing
-    // from the server's clock. This keeps the countdown and hourly tick transition
-    // aligned with the game even if the real-world tick is not exactly on :00.
     const nextTickDelay = findNextTickMs(capture.raw_text) ?? findNextTickMs(capture.parsed_payload)
     const nextTickAt = nextTickDelay !== null
       ? new Date(captured.getTime() + nextTickDelay)
@@ -200,14 +198,18 @@ export async function GET() {
     const now = new Date()
     const anchor = await resolveAnchor()
     const anchorBoundary = new Date(anchor.nextTickAt).getTime() - TICK_MS
-    const anchorAbsolute = absoluteTick(anchor.year, anchor.month, anchor.day, anchor.tick)
     const elapsedTicks = Math.max(0, Math.floor((now.getTime() - anchorBoundary) / TICK_MS))
-    const utopia = fromAbsoluteTick(anchorAbsolute + elapsedTicks)
+
+    // Utopia advances one calendar day whenever the real-time game tick advances.
+    // The 24-tick counter remains the hourly cycle, but each completed tick moves
+    // the displayed Utopia date forward by exactly one game day.
+    const dateIndex = calendarDayIndex(anchor.year, anchor.month, anchor.day) + elapsedTicks
+    const utopiaDate = fromCalendarDayIndex(dateIndex)
+    const utopiaTick = ((anchor.tick - 1 + elapsedTicks) % TICKS_PER_DAY) + 1
+    const utopia = { ...utopiaDate, tick: utopiaTick }
 
     const nextTick = new Date(anchorBoundary + (elapsedTicks + 1) * TICK_MS)
-    const absoluteNow = absoluteTick(utopia.year, utopia.month, utopia.day, utopia.tick)
-    const nextYearStart = utopia.year * TICKS_PER_YEAR
-    const ticksUntilNextYear = Math.max(0, nextYearStart - absoluteNow)
+    const ticksUntilNextYear = daysUntilNextYear(utopia.year, utopia.month, utopia.day)
 
     return NextResponse.json({
       now: now.toISOString(),
