@@ -3,6 +3,7 @@ import "./globals.css";
 import CommandClockMount from "./components/CommandClockMount";
 import UpdatesNotice from "./components/UpdatesNotice";
 import Jeeves from "./components/Jeeves";
+import DiagnosticsMonitor from "./components/DiagnosticsMonitor";
 
 export const metadata: Metadata = {
   title: "Spartan — Province Command Center",
@@ -16,6 +17,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <CommandClockMount />
         <UpdatesNotice />
         <Jeeves />
+        <DiagnosticsMonitor />
         {children}
       </body>
     </html>
