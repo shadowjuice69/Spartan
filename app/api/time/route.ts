@@ -10,7 +10,7 @@ const DAYS_PER_MONTH = 24
 const MONTHS_PER_YEAR = 7
 const TICKS_PER_MONTH = DAYS_PER_MONTH * TICKS_PER_DAY
 const TICKS_PER_YEAR = MONTHS_PER_YEAR * TICKS_PER_MONTH
-const TICK_MINUTE_UTC = 3
+const TICK_MINUTE_UTC = 0
 const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July']
 
 type Anchor = {
@@ -29,9 +29,10 @@ function adminClient() {
   return createSupabaseAdmin(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
 }
 
-function parseGameDate(rawText: unknown): { year: number; month: number; day: number } | null {
-  if (typeof rawText !== 'string') return null
-  const match = rawText.match(/class=["']current-date["'][^>]*>\s*([A-Za-z]+)\s+(\d{1,2}),\s*YR(\d+)\s*</i)
+function parseGameDate(value: unknown): { year: number; month: number; day: number } | null {
+  if (typeof value !== 'string') return null
+  const normalized = value.replace(/\s+/g, ' ').trim()
+  const match = normalized.match(/(?:class=["']current-date["'][^>]*>\s*)?([A-Za-z]+)\s+(\d{1,2}),?\s*YR\s*(\d+)/i)
   if (!match) return null
 
   const month = MONTH_NAMES.findIndex((name) => name.toLowerCase() === match[1].toLowerCase()) + 1
@@ -39,6 +40,17 @@ function parseGameDate(rawText: unknown): { year: number; month: number; day: nu
   const year = Number(match[3])
   if (!month || !Number.isInteger(day) || day < 1 || day > DAYS_PER_MONTH || !Number.isInteger(year) || year < 1) return null
   return { year, month, day }
+}
+
+function findGameDate(value: unknown): { year: number; month: number; day: number } | null {
+  const direct = parseGameDate(value)
+  if (direct) return direct
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  for (const candidate of Object.values(value as Record<string, unknown>)) {
+    const found = findGameDate(candidate)
+    if (found) return found
+  }
+  return null
 }
 
 function tickBoundary(date: Date): Date {
@@ -118,15 +130,15 @@ async function resolveAnchor() {
 
   const { data: captures, error: captureError } = await db
     .from('spartan_capture_vault')
-    .select('captured_at,raw_text,page_kind')
+    .select('captured_at,raw_text,parsed_payload,page_kind')
     .eq('province_id', province.id)
     .eq('page_kind', 'throne')
     .order('captured_at', { ascending: false })
-    .limit(20)
+    .limit(50)
   if (captureError) throw captureError
 
   for (const capture of captures ?? []) {
-    const gameDate = parseGameDate(capture.raw_text)
+    const gameDate = findGameDate(capture.raw_text) ?? findGameDate(capture.parsed_payload)
     const capturedAt = typeof capture.captured_at === 'string' ? capture.captured_at : null
     if (!gameDate || !capturedAt) continue
 
