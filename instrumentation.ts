@@ -10,7 +10,10 @@ declare global {
 async function runStorageSteward() {
   const baseUrl = String(process.env.SPARTAN_DASHBOARD_URL || 'http://127.0.0.1:3000').replace(/\/$/, '')
   const key = process.env.SPARTAN_STEWARD_KEY
-  if (!key) return
+  if (!key) {
+    console.error('[storage-steward] SPARTAN_STEWARD_KEY is not configured')
+    return
+  }
 
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), 90_000)
@@ -30,9 +33,11 @@ async function runStorageSteward() {
       console.error('[storage-steward] background cycle failed', response.status, payload)
       return
     }
-    if ((payload.staged ?? 0) > 0 || (payload.processed ?? 0) > 0 || (payload.failed ?? 0) > 0) {
-      console.log('[storage-steward] background cycle', JSON.stringify({ staged: payload.staged, processed: payload.processed, failed: payload.failed }))
-    }
+    console.log('[storage-steward] background cycle', JSON.stringify({
+      staged: payload.staged ?? 0,
+      processed: payload.processed ?? 0,
+      failed: payload.failed ?? 0,
+    }))
   } catch (error) {
     console.error('[storage-steward] background cycle error', error instanceof Error ? error.message : String(error))
   } finally {
@@ -41,7 +46,6 @@ async function runStorageSteward() {
 }
 
 export async function register() {
-  if (process.env.NEXT_RUNTIME !== 'nodejs') return
   if (globalThis.__spartanStorageStewardStarted) return
   globalThis.__spartanStorageStewardStarted = true
 
