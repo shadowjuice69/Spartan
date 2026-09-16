@@ -84,19 +84,36 @@ export async function GET(request: Request) {
       province = result.data
     }
 
-    const [historyResult, projectionsResult, eventsResult] = await Promise.all([
+    // The dashboard only needs this province's current projection. The old query
+    // loaded up to 100 kingdom projections, including large JSON state blobs,
+    // before filtering them in application code. That made first paint wait on
+    // substantially more data than the dashboard actually uses.
+    const [historyResult, directProjectionResult, eventsResult] = await Promise.all([
       db.from('spartan_province_history').select('*').eq('province_id', province.province_id).order('observed_at', { ascending: true }).limit(limit),
-      db.from('spartan_state_projection').select('province_id,kingdom_id,state,version,updated_at').eq('kingdom_id', province.kingdom_code).order('updated_at', { ascending: false }).limit(100),
-      db.from('spartan_event_history').select('*').eq('province_id', province.province_id).order('occurred_at', { ascending: false }).limit(100),
+      db.from('spartan_state_projection').select('province_id,kingdom_id,state,version,updated_at').eq('province_id', province.province_id).order('updated_at', { ascending: false }).limit(1),
+      db.from('spartan_event_history').select('*').eq('province_id', province.province_id).order('occurred_at', { ascending: false }).limit(4),
     ])
     if (historyResult.error) throw historyResult.error
-    if (projectionsResult.error) throw projectionsResult.error
+    if (directProjectionResult.error) throw directProjectionResult.error
     if (eventsResult.error) throw eventsResult.error
 
-    const projections = projectionsResult.data || []
-    const direct = projections.find((p: any) => String(p.province_id).trim().toLowerCase() === province.province_name.trim().toLowerCase())
-    const kingdomProjection = projections.find((p: any) => projectionData(p).raw_kind === 'kingdom_details') || projections[0]
-    const currentState = direct ? projectionData(direct) : kingdomProvince(kingdomProjection, province.province_name)
+    let direct = directProjectionResult.data?.[0] || null
+    let kingdomProjection: any = null
+
+    // Some older canonical projection rows use the province name as the
+    // projection key. Keep a narrow fallback for those rows instead of loading
+    // the entire kingdom projection set on every dashboard visit.
+    if (!direct) {
+      const fallback = await db.from('spartan_state_projection')
+        .select('province_id,kingdom_id,state,version,updated_at')
+        .eq('kingdom_id', province.kingdom_code)
+        .order('updated_at', { ascending: false })
+        .limit(100)
+      if (fallback.error) throw fallback.error
+      kingdomProjection = fallback.data?.find((p: any) => String(p.province_id).trim().toLowerCase() === province.province_name.trim().toLowerCase()) || fallback.data?.find((p: any) => projectionData(p).raw_kind === 'kingdom_details') || fallback.data?.[0] || null
+    }
+
+    const currentState = direct ? projectionData(direct) : kingdomProjection ? (projectionData(kingdomProjection).raw_kind === 'kingdom_details' ? kingdomProvince(kingdomProjection, province.province_name) : projectionData(kingdomProjection)) : {}
     const current = snapshotFromState(province, currentState, direct?.updated_at || kingdomProjection?.updated_at || province.updated_at, 'spartan_state_projection')
 
     const rows = (historyResult.data || []).map((row: any) => ({ ...current, ...row, source: row.source || 'spartan_province_history', canonical: true }))
