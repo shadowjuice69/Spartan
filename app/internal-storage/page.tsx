@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
-import { authorizeDashboardForAuthUser } from '@/lib/spartan/security'
+import { isOwner, isTrustedAdmin } from '@/lib/spartan/security'
 
 export const dynamic = 'force-dynamic'
 
@@ -9,12 +9,13 @@ export default async function InternalStoragePage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login?error=discord-required')
 
-  const security = await authorizeDashboardForAuthUser(new Request('https://spartan.internal/internal-storage'), user.id)
-  const role = String(security.access?.role ?? '')
-  const allowed = security.allowed && (security.protectedIdentity || role === 'owner' || role === 'admin')
+  const db = createServiceClient()
+  const { data: account } = await db.from('spartan_accounts').select('discord_user_id,screen_name,role').eq('auth_user_id', user.id).maybeSingle()
+  const discordId = account?.discord_user_id ? String(account.discord_user_id) : null
+  const role = String(account?.role ?? '')
+  const allowed = isOwner(discordId) || isTrustedAdmin(discordId) || role === 'owner' || role === 'admin'
   if (!allowed) redirect('/access-denied?reason=internal-storage')
 
-  const db = createServiceClient()
   const [{ data: rows }, { data: stewards }] = await Promise.all([
     db.from('spartan_internal_storage').select('capture_id,source_vault_id,captured_at,province_id,kingdom_id,url,scraper_page_kind,verified_page_kind,classification_source,classification_confidence,processing_status,steward_status,destination,created_at').order('created_at', { ascending: false }).limit(100),
     db.from('spartan_steward_registry').select('steward_key,name,role,enabled,last_run_at,last_status,processed_count,quarantined_count,error_count').order('steward_key'),
@@ -27,7 +28,7 @@ export default async function InternalStoragePage() {
     <div style={{ maxWidth: 1400, margin: '0 auto' }}>
       <header style={{ display: 'flex', justifyContent: 'space-between', gap: 20, alignItems: 'flex-start', marginBottom: 28 }}>
         <div><div style={{ color: '#67f0b0', fontSize: 12, fontWeight: 800, letterSpacing: '.18em' }}>SPARTAN // PROTECTED INFRASTRUCTURE</div><h1 style={{ margin: '8px 0', fontSize: 36 }}>Internal Storage</h1><p style={{ color: '#91a2af', margin: 0 }}>Vault intake → durable storage → controlled Steward processing.</p></div>
-        <div style={{ border: '1px solid rgba(103,240,176,.3)', borderRadius: 12, padding: '12px 16px', textAlign: 'right' }}><strong>{security.protectedIdentity ? 'OWNER / PROTECTED' : role.toUpperCase()}</strong><div style={{ color: '#91a2af', fontSize: 11, marginTop: 4 }}>Server-side authorization active</div></div>
+        <div style={{ border: '1px solid rgba(103,240,176,.3)', borderRadius: 12, padding: '12px 16px', textAlign: 'right' }}><strong>{isOwner(discordId) ? 'OWNER' : 'RIVEN / ADMIN'}</strong><div style={{ color: '#91a2af', fontSize: 11, marginTop: 4 }}>Server-side authorization active</div></div>
       </header>
 
       <section style={{ display: 'grid', gridTemplateColumns: 'repeat(5,minmax(0,1fr))', gap: 12, marginBottom: 24 }}>
