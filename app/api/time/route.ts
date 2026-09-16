@@ -13,12 +13,12 @@ const TICKS_PER_YEAR = MONTHS_PER_YEAR * TICKS_PER_MONTH
 const TICK_MINUTE_UTC = 0
 const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July']
 
-type Anchor = {
-  year: number
-  month: number
-  day: number
+type GameDate = { year: number; month: number; day: number }
+
+type Anchor = GameDate & {
   tick: number
   capturedAt: string
+  nextTickAt: string
   source: string
 }
 
@@ -29,10 +29,10 @@ function adminClient() {
   return createSupabaseAdmin(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
 }
 
-function parseGameDate(value: unknown): { year: number; month: number; day: number } | null {
+function parseGameDate(value: unknown): GameDate | null {
   if (typeof value !== 'string') return null
   const normalized = value.replace(/\s+/g, ' ').trim()
-  const match = normalized.match(/(?:class=["']current-date["'][^>]*>\s*)?([A-Za-z]+)\s+(\d{1,2}),?\s*YR\s*(\d+)/i)
+  const match = normalized.match(/([A-Za-z]+)\s+(\d{1,2})(?:st|nd|rd|th)?[,]?\s*YR\s*(\d+)/i)
   if (!match) return null
 
   const month = MONTH_NAMES.findIndex((name) => name.toLowerCase() === match[1].toLowerCase()) + 1
@@ -42,13 +42,37 @@ function parseGameDate(value: unknown): { year: number; month: number; day: numb
   return { year, month, day }
 }
 
-function findGameDate(value: unknown): { year: number; month: number; day: number } | null {
+function findGameDate(value: unknown): GameDate | null {
   const direct = parseGameDate(value)
   if (direct) return direct
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null
   for (const candidate of Object.values(value as Record<string, unknown>)) {
     const found = findGameDate(candidate)
     if (found) return found
+  }
+  return null
+}
+
+function parseNextTickMs(value: unknown): number | null {
+  if (typeof value !== 'string') return null
+  const normalized = value.replace(/\s+/g, ' ').trim()
+  const match = normalized.match(/next\s+tick\s*:\s*(\d+)\s*(minute|minutes|hour|hours)/i)
+  if (!match) return null
+
+  const amount = Number(match[1])
+  if (!Number.isFinite(amount) || amount < 0) return null
+  const unit = match[2].toLowerCase()
+  const multiplier = unit.startsWith('hour') ? 60 * 60 * 1000 : 60 * 1000
+  return amount * multiplier
+}
+
+function findNextTickMs(value: unknown): number | null {
+  const direct = parseNextTickMs(value)
+  if (direct !== null) return direct
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  for (const candidate of Object.values(value as Record<string, unknown>)) {
+    const found = findNextTickMs(candidate)
+    if (found !== null) return found
   }
   return null
 }
@@ -79,7 +103,7 @@ function fromAbsoluteTick(value: number) {
   return { year, month, day, tick }
 }
 
-async function resolveAnchor() {
+async function resolveAnchor(): Promise<Anchor> {
   const auth = await createClient()
   const { data: { user } } = await auth.auth.getUser()
   if (!user) throw new Error('Unauthorized')
@@ -134,7 +158,7 @@ async function resolveAnchor() {
     .eq('province_id', province.id)
     .eq('page_kind', 'throne')
     .order('captured_at', { ascending: false })
-    .limit(50)
+    .limit(100)
   if (captureError) throw captureError
 
   for (const capture of captures ?? []) {
@@ -144,16 +168,28 @@ async function resolveAnchor() {
 
     const captured = new Date(capturedAt)
     if (!Number.isFinite(captured.getTime())) continue
-    const boundary = tickBoundary(captured)
+
+    // A Throne capture tells us exactly how long remains until the next Utopia tick.
+    // Use that as the authoritative tick boundary when available instead of guessing
+    // from the server's clock. This keeps the countdown and hourly tick transition
+    // aligned with the game even if the real-world tick is not exactly on :00.
+    const nextTickDelay = findNextTickMs(capture.raw_text) ?? findNextTickMs(capture.parsed_payload)
+    const nextTickAt = nextTickDelay !== null
+      ? new Date(captured.getTime() + nextTickDelay)
+      : new Date(tickBoundary(captured).getTime() + TICK_MS)
+
+    if (!Number.isFinite(nextTickAt.getTime())) continue
+
+    const currentBoundary = new Date(nextTickAt.getTime() - TICK_MS)
+    const tick = tickNumberForBoundary(currentBoundary)
 
     return {
-      year: gameDate.year,
-      month: gameDate.month,
-      day: gameDate.day,
-      tick: tickNumberForBoundary(boundary),
+      ...gameDate,
+      tick,
       capturedAt: captured.toISOString(),
+      nextTickAt: nextTickAt.toISOString(),
       source: 'spartan_capture_vault.throne',
-    } satisfies Anchor
+    }
   }
 
   throw new Error('No Throne capture containing an authoritative Utopia date has been stored yet.')
@@ -163,23 +199,22 @@ export async function GET() {
   try {
     const now = new Date()
     const anchor = await resolveAnchor()
-    const anchorBoundary = tickBoundary(new Date(anchor.capturedAt))
+    const anchorBoundary = new Date(anchor.nextTickAt).getTime() - TICK_MS
     const anchorAbsolute = absoluteTick(anchor.year, anchor.month, anchor.day, anchor.tick)
-    const elapsedTicks = Math.max(0, Math.floor((now.getTime() - anchorBoundary.getTime()) / TICK_MS))
+    const elapsedTicks = Math.max(0, Math.floor((now.getTime() - anchorBoundary) / TICK_MS))
     const utopia = fromAbsoluteTick(anchorAbsolute + elapsedTicks)
 
-    const nextTick = new Date(tickBoundary(now).getTime() + TICK_MS)
+    const nextTick = new Date(anchorBoundary + (elapsedTicks + 1) * TICK_MS)
     const absoluteNow = absoluteTick(utopia.year, utopia.month, utopia.day, utopia.tick)
     const nextYearStart = utopia.year * TICKS_PER_YEAR
     const ticksUntilNextYear = Math.max(0, nextYearStart - absoluteNow)
 
-    const current = now
     return NextResponse.json({
       now: now.toISOString(),
-      chicagoTime: current.toLocaleString('en-US', {
+      chicagoTime: now.toLocaleString('en-US', {
         timeZone: 'America/Chicago', hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true,
       }),
-      chicagoDate: current.toLocaleDateString('en-US', {
+      chicagoDate: now.toLocaleDateString('en-US', {
         timeZone: 'America/Chicago', month: 'short', day: 'numeric', year: 'numeric',
       }),
       source: anchor.source,
