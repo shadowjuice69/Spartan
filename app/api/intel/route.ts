@@ -44,7 +44,9 @@ export async function POST(request: Request) {
 
     const form = await request.formData()
     const key = text(form.get('key'))
-    if (!key || !crypto.timingSafeEqual(Buffer.from(key), Buffer.from(expectedKey))) {
+    const expectedBytes = Buffer.from(expectedKey)
+    const suppliedBytes = Buffer.from(key)
+    if (!key || suppliedBytes.length !== expectedBytes.length || !crypto.timingSafeEqual(suppliedBytes, expectedBytes)) {
       return response({ success: false, error: 'Invalid key.' }, 401)
     }
 
