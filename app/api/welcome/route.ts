@@ -3,17 +3,278 @@ import { createClient } from '@/lib/supabase/server'
 import { createClient as createAdmin } from '@supabase/supabase-js'
 
 export const dynamic = 'force-dynamic'
-function db(){const url=process.env.NEXT_PUBLIC_SUPABASE_URL,key=process.env.SUPABASE_SERVICE_ROLE_KEY;if(!url||!key)throw new Error('Jeeves service is not configured.');return createAdmin(url,key,{auth:{autoRefreshToken:false,persistSession:false}})}
-function num(v:any){const n=typeof v==='number'?v:Number(String(v??'').replace(/,/g,''));return Number.isFinite(n)?n:null}
-function find(obj:any,keys:string[]):any{if(!obj||typeof obj!=='object')return null;for(const k of keys)if(obj[k]!=null)return obj[k];for(const v of Object.values(obj))if(v&&typeof v==='object'){const x=find(v,keys);if(x!=null)return x}return null}
-async function context(){const auth=await createClient();const {data:{user}}=await auth.auth.getUser();if(!user)throw new Error('Unauthorized');const supabase=db();const {data:account,error:ae}=await supabase.from('spartan_accounts').select('screen_name,province_name,province_location,discord_user_id,last_login_at,previous_login_at').eq('auth_user_id',user.id).maybeSingle();if(ae)throw ae;if(!account)throw new Error('Spartan account identity not found.');const {data:registry,error:re}=await supabase.from('spartan_province_registry').select('province_id,province_name,kingdom_code').eq('user_id',user.id).order('updated_at',{ascending:false}).limit(1).maybeSingle();if(re)throw re;if(!registry?.province_id)throw new Error('Spartan province registry link is missing.');return {user,supabase,account,registry}}
-export async function GET(){try{const {user,supabase,account,registry}=await context();let {data:profile,error:pe}=await supabase.from('spartan_jeeves_profiles').select('*').eq('auth_user_id',user.id).maybeSingle();if(pe)throw pe;if(!profile){const created={auth_user_id:user.id,discord_user_id:account.discord_user_id,province_id:registry.province_id,preferred_name:account.screen_name||account.province_name||'Commander',briefing_count:0};const result=await supabase.from('spartan_jeeves_profiles').insert(created).select('*').single();if(result.error)throw result.error;profile=result.data}
- const [{data:history,error:he},{data:intel,error:ie},{data:events,error:ee}]=await Promise.all([supabase.from('spartan_province_history').select('observed_at,acres,networth,population,soldiers,off_specs,def_specs,elites,thieves,wizards,offense,defense,mana,stealth').eq('province_id',registry.province_id).order('observed_at',{ascending:false}).limit(2),supabase.from('spartan_intel_records').select('captured_at,parsed_payload,raw_payload').eq('province_id',registry.province_id).eq('page_kind','throne').order('captured_at',{ascending:false}).limit(1),supabase.from('spartan_event_history').select('occurred_at,event_type,raw_text,troops_lost,thieves_lost,wizards_lost,acres_change,payload').eq('province_id',registry.province_id).order('occurred_at',{ascending:false}).limit(100)]);if(he)throw he;if(ie)throw ie;if(ee)throw ee
- const latest:any=history?.[0]||{};const previous:any=history?.[1]||{};const snap=intel?.[0]?.parsed_payload||intel?.[0]?.raw_payload||{};const race=find(snap,['race']),personality=find(snap,['personality']);const latestState={acres:num(latest.acres),networth:num(latest.networth),population:num(latest.population),soldiers:num(latest.soldiers),off_specs:num(latest.off_specs),def_specs:num(latest.def_specs),elites:num(latest.elites),thieves:num(latest.thieves),wizards:num(latest.wizards),offense:num(latest.offense),defense:num(latest.defense),mana:num(latest.mana),stealth:num(latest.stealth)} as const;const changes=Object.fromEntries((Object.keys(latestState) as Array<keyof typeof latestState>).map(k=>{const current=latestState[k];const old=previous[k];return [k,current==null||old==null?null:current-num(old)]}))
- const since=account.previous_login_at||account.last_login_at;const awayEvents=(events||[]).filter((e:any)=>!since||new Date(e.occurred_at).getTime()>=new Date(since).getTime());const alerts:string[]=[];for(const e of awayEvents){if(num(e.troops_lost)>0)alerts.push(`Recorded troop losses: ${num(e.troops_lost)?.toLocaleString()}`);if(num(e.thieves_lost)>0)alerts.push(`Recorded thief losses: ${num(e.thieves_lost)?.toLocaleString()}`);if(num(e.wizards_lost)>0)alerts.push(`Recorded wizard losses: ${num(e.wizards_lost)?.toLocaleString()})`)}
- const firstArrival=!profile.introduced_at;const summary=latest.observed_at?`I found a verified province state from ${new Date(latest.observed_at).toLocaleString()}. ${awayEvents.length?`${awayEvents.length} recorded event${awayEvents.length===1?'':'s'} occurred since your previous login.`:'No recorded province events were found since your previous login.'}`:'I have your Spartan identity, but there is not yet enough recorded province history for a full situation summary.';const briefingId=`${profile.id}:${latest.observed_at||'no-history'}:${profile.briefing_count||0}`
- await supabase.from('spartan_jeeves_profiles').update({last_briefing_at:new Date().toISOString(),briefing_count:Number(profile.briefing_count||0)+1,province_id:registry.province_id,discord_user_id:account.discord_user_id}).eq('id',profile.id)
- return NextResponse.json({ok:true,firstArrival,historyAvailable:Boolean(latest.observed_at),briefingId,summary,jeeves:{preferredName:profile.preferred_name||account.screen_name||account.province_name,lastBriefingAt:profile.last_briefing_at||null,briefingCount:Number(profile.briefing_count||0)+1},identity:{screenName:account.screen_name||account.province_name,provinceName:account.province_name,provinceLocation:account.province_location,kingdom:registry.kingdom_code,race:race?String(race):null,personality:personality?String(personality):null,lastLoginAt:account.previous_login_at||null,currentLoginAt:account.last_login_at||null},latest:latestState,changes,away:{since:eventDate(account.previous_login_at||account.last_login_at),eventCount:awayEvents.length,troopsLost:sum(awayEvents,'troops_lost'),thievesLost:sum(awayEvents,'thieves_lost'),wizardsLost:sum(awayEvents,'wizards_lost'),alerts:[...new Set(alerts)]}})}catch(error){const message=error instanceof Error?error.message:'Jeeves briefing unavailable';return NextResponse.json({ok:false,error:message},{status:message==='Unauthorized'?401:503})}}
-function eventDate(v:any){return v?new Date(v).toISOString():new Date(0).toISOString()}
-function sum(rows:any[],key:string){return rows.reduce((a,r)=>a+(num(r[key])||0),0)||null}
-export async function POST(request:Request){try{const auth=await createClient();const {data:{user}}=await auth.auth.getUser();if(!user)return NextResponse.json({ok:false,error:'Unauthorized'},{status:401});const body=await request.json().catch(()=>({}));const name=typeof body.screenName==='string'?body.screenName.trim().replace(/\s+/g,' ').slice(0,40):'';if(!name)return NextResponse.json({ok:false,error:'A name is required.'},{status:400});const supabase=db();const {data:account,error:ae}=await supabase.from('spartan_accounts').select('discord_user_id,province_name').eq('auth_user_id',user.id).maybeSingle();if(ae)throw ae;const {data:profile,error:pe}=await supabase.from('spartan_jeeves_profiles').update({preferred_name:name,introduced_at:new Date().toISOString(),discord_user_id:account?.discord_user_id||null}).eq('auth_user_id',user.id).select('*').maybeSingle();if(pe)throw pe;if(!profile)throw new Error('Jeeves profile not found.');return NextResponse.json({ok:true,preferredName:profile.preferred_name})}catch(error){return NextResponse.json({ok:false,error:error instanceof Error?error.message:'Jeeves save failed'},{status:400})}}
+
+function db() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!url || !key) throw new Error('Jeeves service is not configured.')
+  return createAdmin(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
+}
+
+function num(v: unknown): number | null {
+  const n = typeof v === 'number' ? v : Number(String(v ?? '').replace(/,/g, ''))
+  return Number.isFinite(n) ? n : null
+}
+
+function find(obj: unknown, keys: string[]): unknown {
+  if (!obj || typeof obj !== 'object') return null
+  const record = obj as Record<string, unknown>
+  for (const key of keys) if (record[key] != null) return record[key]
+  for (const value of Object.values(record)) {
+    if (value && typeof value === 'object') {
+      const found = find(value, keys)
+      if (found != null) return found
+    }
+  }
+  return null
+}
+
+async function context() {
+  const auth = await createClient()
+  const { data: { user } } = await auth.auth.getUser()
+  if (!user) throw new Error('Unauthorized')
+
+  const supabase = db()
+  const { data: account, error: ae } = await supabase
+    .from('spartan_accounts')
+    .select('screen_name,province_name,province_location,discord_user_id,last_login_at,previous_login_at')
+    .eq('auth_user_id', user.id)
+    .maybeSingle()
+  if (ae) throw ae
+  if (!account) throw new Error('Spartan account identity not found.')
+
+  const { data: registry, error: re } = await supabase
+    .from('spartan_province_registry')
+    .select('province_id,province_name,kingdom_code')
+    .eq('user_id', user.id)
+    .order('updated_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if (re) throw re
+  if (!registry?.province_id) throw new Error('Spartan province registry link is missing.')
+
+  return { user, supabase, account, registry }
+}
+
+export async function GET() {
+  try {
+    const { user, supabase, account, registry } = await context()
+
+    let { data: profile, error: pe } = await supabase
+      .from('spartan_jeeves_profiles')
+      .select('*')
+      .eq('auth_user_id', user.id)
+      .maybeSingle()
+    if (pe) throw pe
+
+    if (!profile) {
+      const created = {
+        auth_user_id: user.id,
+        discord_user_id: account.discord_user_id,
+        province_id: registry.province_id,
+        preferred_name: account.screen_name || account.province_name || 'Commander',
+        briefing_count: 0,
+      }
+      const result = await supabase
+        .from('spartan_jeeves_profiles')
+        .insert(created)
+        .select('*')
+        .single()
+      if (result.error) throw result.error
+      profile = result.data
+    }
+
+    const [{ data: history, error: he }, { data: intel, error: ie }, { data: events, error: ee }] = await Promise.all([
+      supabase
+        .from('spartan_province_history')
+        .select('observed_at,acres,networth,population,soldiers,off_specs,def_specs,elites,thieves,wizards,offense,defense,mana,stealth')
+        .eq('province_id', registry.province_id)
+        .order('observed_at', { ascending: false })
+        .limit(2),
+      supabase
+        .from('spartan_intel_records')
+        .select('captured_at,parsed_payload,raw_payload')
+        .eq('province_id', registry.province_id)
+        .eq('page_kind', 'throne')
+        .order('captured_at', { ascending: false })
+        .limit(1),
+      supabase
+        .from('spartan_event_history')
+        .select('occurred_at,event_type,raw_text,troops_lost,thieves_lost,wizards_lost,acres_change,payload')
+        .eq('province_id', registry.province_id)
+        .order('occurred_at', { ascending: false })
+        .limit(100),
+    ])
+    if (he) throw he
+    if (ie) throw ie
+    if (ee) throw ee
+
+    const latest: any = history?.[0] || {}
+    const previous: any = history?.[1] || {}
+    const snap = intel?.[0]?.parsed_payload || intel?.[0]?.raw_payload || {}
+    const race = find(snap, ['race'])
+    const personality = find(snap, ['personality'])
+
+    const latestState = {
+      acres: num(latest.acres),
+      networth: num(latest.networth),
+      population: num(latest.population),
+      soldiers: num(latest.soldiers),
+      off_specs: num(latest.off_specs),
+      def_specs: num(latest.def_specs),
+      elites: num(latest.elites),
+      thieves: num(latest.thieves),
+      wizards: num(latest.wizards),
+      offense: num(latest.offense),
+      defense: num(latest.defense),
+      mana: num(latest.mana),
+      stealth: num(latest.stealth),
+    } as const
+
+    // Keep the previous snapshot typed exactly like the current snapshot.
+    // Using local values here also lets TypeScript safely narrow nulls before subtraction.
+    const previousState = {
+      acres: num(previous.acres),
+      networth: num(previous.networth),
+      population: num(previous.population),
+      soldiers: num(previous.soldiers),
+      off_specs: num(previous.off_specs),
+      def_specs: num(previous.def_specs),
+      elites: num(previous.elites),
+      thieves: num(previous.thieves),
+      wizards: num(previous.wizards),
+      offense: num(previous.offense),
+      defense: num(previous.defense),
+      mana: num(previous.mana),
+      stealth: num(previous.stealth),
+    } as const
+
+    const changes = Object.fromEntries(
+      (Object.keys(latestState) as Array<keyof typeof latestState>).map((key) => {
+        const current = latestState[key]
+        const prior = previousState[key]
+        return [key, current == null || prior == null ? null : current - prior]
+      }),
+    )
+
+    const since = account.previous_login_at || account.last_login_at
+    const awayEvents = (events || []).filter(
+      (event: any) => !since || new Date(event.occurred_at).getTime() >= new Date(since).getTime(),
+    )
+
+    const alerts: string[] = []
+    for (const event of awayEvents) {
+      const troopsLost = num(event.troops_lost)
+      const thievesLost = num(event.thieves_lost)
+      const wizardsLost = num(event.wizards_lost)
+      if (troopsLost && troopsLost > 0) alerts.push(`Recorded troop losses: ${troopsLost.toLocaleString()}`)
+      if (thievesLost && thievesLost > 0) alerts.push(`Recorded thief losses: ${thievesLost.toLocaleString()}`)
+      if (wizardsLost && wizardsLost > 0) alerts.push(`Recorded wizard losses: ${wizardsLost.toLocaleString()}`)
+    }
+
+    const firstArrival = !profile.introduced_at
+    const summary = latest.observed_at
+      ? `I found a verified province state from ${new Date(latest.observed_at).toLocaleString()}. ${awayEvents.length ? `${awayEvents.length} recorded event${awayEvents.length === 1 ? '' : 's'} occurred since your previous login.` : 'No recorded province events were found since your previous login.'}`
+      : 'I have your Spartan identity, but there is not yet enough recorded province history for a full situation summary.'
+    const briefingId = `${profile.id}:${latest.observed_at || 'no-history'}:${profile.briefing_count || 0}`
+
+    const newBriefingCount = Number(profile.briefing_count || 0) + 1
+    const now = new Date().toISOString()
+    const { error: updateError } = await supabase
+      .from('spartan_jeeves_profiles')
+      .update({
+        last_briefing_at: now,
+        briefing_count: newBriefingCount,
+        province_id: registry.province_id,
+        discord_user_id: account.discord_user_id,
+      })
+      .eq('id', profile.id)
+    if (updateError) throw updateError
+
+    return NextResponse.json({
+      ok: true,
+      firstArrival,
+      historyAvailable: Boolean(latest.observed_at),
+      briefingId,
+      summary,
+      jeeves: {
+        preferredName: profile.preferred_name || account.screen_name || account.province_name,
+        lastBriefingAt: profile.last_briefing_at || null,
+        briefingCount: newBriefingCount,
+      },
+      identity: {
+        screenName: account.screen_name || account.province_name,
+        provinceName: account.province_name,
+        provinceLocation: account.province_location,
+        kingdom: registry.kingdom_code,
+        race: race ? String(race) : null,
+        personality: personality ? String(personality) : null,
+        lastLoginAt: account.previous_login_at || null,
+        currentLoginAt: account.last_login_at || null,
+      },
+      latest: latestState,
+      changes,
+      away: {
+        since: eventDate(account.previous_login_at || account.last_login_at),
+        eventCount: awayEvents.length,
+        troopsLost: sum(awayEvents, 'troops_lost'),
+        thievesLost: sum(awayEvents, 'thieves_lost'),
+        wizardsLost: sum(awayEvents, 'wizards_lost'),
+        alerts: [...new Set(alerts)],
+      },
+    })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Jeeves briefing unavailable'
+    return NextResponse.json({ ok: false, error: message }, { status: message === 'Unauthorized' ? 401 : 503 })
+  }
+}
+
+function eventDate(value: any) {
+  return value ? new Date(value).toISOString() : new Date(0).toISOString()
+}
+
+function sum(rows: any[], key: string) {
+  return rows.reduce((total, row) => total + (num(row[key]) || 0), 0) || null
+}
+
+export async function POST(request: Request) {
+  try {
+    const auth = await createClient()
+    const { data: { user } } = await auth.auth.getUser()
+    if (!user) return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 })
+
+    const body = await request.json().catch(() => ({}))
+    const name = typeof body.screenName === 'string'
+      ? body.screenName.trim().replace(/\s+/g, ' ').slice(0, 40)
+      : ''
+    if (!name) return NextResponse.json({ ok: false, error: 'A name is required.' }, { status: 400 })
+
+    const supabase = db()
+    const { data: account, error: ae } = await supabase
+      .from('spartan_accounts')
+      .select('discord_user_id,province_name')
+      .eq('auth_user_id', user.id)
+      .maybeSingle()
+    if (ae) throw ae
+
+    const { data: profile, error: pe } = await supabase
+      .from('spartan_jeeves_profiles')
+      .update({
+        preferred_name: name,
+        introduced_at: new Date().toISOString(),
+        discord_user_id: account?.discord_user_id || null,
+      })
+      .eq('auth_user_id', user.id)
+      .select('*')
+      .maybeSingle()
+    if (pe) throw pe
+    if (!profile) throw new Error('Jeeves profile not found.')
+
+    return NextResponse.json({ ok: true, preferredName: profile.preferred_name })
+  } catch (error) {
+    return NextResponse.json(
+      { ok: false, error: error instanceof Error ? error.message : 'Jeeves save failed' },
+      { status: 400 },
+    )
+  }
+}
