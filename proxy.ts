@@ -20,11 +20,15 @@ function login(request: NextRequest, reason = 'discord-required') {
 
 export async function proxy(request: NextRequest) {
   const path = request.nextUrl.pathname
+  const stewardKey = request.headers.get('x-spartan-steward-key')
 
-  // Capture ingestion authenticates via its own header-based key/token
-  // (Tampermonkey script) — no Supabase session cookie exists here, so it
-  // must bypass the session/redirect logic entirely, not hit /login.
+  // Capture ingestion and the internal Storage Steward both authenticate with
+  // their own header-based secret. They do not have a Supabase browser session,
+  // so the dashboard auth/session redirect must not intercept these requests.
   if (path.startsWith('/api/capture')) return NextResponse.next()
+  if (path === '/api/internal-storage/process' && stewardKey && stewardKey === process.env.SPARTAN_STEWARD_KEY) {
+    return NextResponse.next()
+  }
 
   const response = await updateSession(request)
 
