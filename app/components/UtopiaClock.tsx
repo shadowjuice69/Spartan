@@ -7,12 +7,12 @@ type ClockData = {
   chicagoTime: string
   chicagoDate: string
   source: string
+  anchorCapturedAt: string
+  anchorGameDate: string
   utopia: { year: number; month: number; day: number; tick: number }
   nextTickAt: string
   ticksUntilNextYear: number
   nextYearLabel: string
-  ticksUntilJan21Yr7: number
-  jan21Yr7Label: string
   sync: boolean
 }
 
@@ -27,7 +27,10 @@ export default function UtopiaClock() {
     let mounted = true
     const load = async () => {
       try {
-        const response = await fetch('/api/time', { cache: 'no-store' })
+        const response = await fetch(`/api/time?live=${Date.now()}`, {
+          cache: 'no-store',
+          headers: { 'Cache-Control': 'no-cache' },
+        })
         if (!response.ok) throw new Error('time sync failed')
         const value = await response.json() as ClockData
         if (mounted) {
@@ -41,9 +44,14 @@ export default function UtopiaClock() {
     }
     load()
     const poll = setInterval(load, 5_000)
-    const clock = setInterval(() => setLiveNow(syncBase ? syncBase.network + (Date.now() - syncBase.local) : Date.now()), 250)
+    const clock = setInterval(() => {
+      setLiveNow((current) => {
+        if (!syncBase) return current + 250
+        return syncBase.network + (Date.now() - syncBase.local)
+      })
+    }, 250)
     return () => { mounted = false; clearInterval(poll); clearInterval(clock) }
-  }, [syncBase])
+  }, [])
 
   const countdown = data ? Math.max(0, Date.parse(data.nextTickAt) - liveNow) : 0
   const totalSeconds = Math.floor(countdown / 1000)
@@ -63,7 +71,7 @@ export default function UtopiaClock() {
       <div className="time-cell utopia-time"><span className="time-kicker">UTOPIA CLOCK</span><strong>{data ? `${month} ${data.utopia.day}, YR${data.utopia.year}` : 'SYNCING…'}</strong><small>{data ? `TICK ${data.utopia.tick} / 24` : 'CALCULATING TICK'}</small></div>
       <div className="time-cell tick-time"><span className="time-kicker">NEXT TICK</span><strong>{data ? `${hh}:${mm}:${ss}` : '--:--:--'}</strong><small>COUNTDOWN · 1 TICK = 1 REAL HOUR</small></div>
       <div className="time-cell real-time"><span className="time-kicker">REAL TIME · CHICAGO</span><strong>{chicagoTime}</strong><small>{chicagoDate} · {data?.sync ? 'SERVER SYNC · LIVE' : 'CLOCK FALLBACK'}</small></div>
-      <div className="time-cell season-time"><span className="time-kicker">NEXT YEAR · {data?.nextYearLabel || 'YR7'}</span><strong>{endDays}D {String(endHours).padStart(2, '0')}H</strong><small>{endTicks > 0 ? `${endTicks.toLocaleString()} TICKS REMAINING` : 'YR7 STARTED'}</small></div>
+      <div className="time-cell season-time"><span className="time-kicker">NEXT YEAR · {data?.nextYearLabel || 'SYNCING'}</span><strong>{endDays}D {String(endHours).padStart(2, '0')}H</strong><small>{endTicks > 0 ? `${endTicks.toLocaleString()} TICKS REMAINING` : 'YEAR BOUNDARY'}</small></div>
     </section>
   </>
 }
