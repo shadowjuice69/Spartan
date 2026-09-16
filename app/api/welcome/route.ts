@@ -5,8 +5,13 @@ import { extractDiscordId } from "@/lib/spartan/security";
 
 export const dynamic = "force-dynamic";
 
-type Row = Record<string, unknown>;
-type Snapshot = Row & { observed_at: string; province_id: string | null; kingdom_id: string | null };
+type Row = Record<string, any>;
+
+type Snapshot = Row & {
+  observed_at: string;
+  province_id: string | null;
+  kingdom_id: string | null;
+};
 
 function adminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -25,61 +30,38 @@ function numberValue(value: unknown): number | null {
 }
 
 function firstValue(row: Row, keys: string[]): unknown {
-  for (const key of keys) {
-    if (row[key] !== undefined && row[key] !== null) return row[key];
-  }
+  for (const key of keys) if (row[key] !== undefined && row[key] !== null) return row[key];
   return null;
 }
 
-function unwrapCapture(capture: Row): Row {
-  let value = asObject(capture.parsed_payload ?? capture.raw_payload);
-  for (let depth = 0; depth < 6; depth += 1) {
-    const next = firstValue(value, ["data", "payload", "throne", "state", "parsed"]);
+function unwrap(value: unknown, preferred: string[] = []): Row {
+  let current = asObject(value);
+  for (let depth = 0; depth < 8; depth += 1) {
+    const next = firstValue(current, [...preferred, "data", "payload", "parsed", "state"]);
     if (!next || typeof next !== "object" || Array.isArray(next)) break;
-    value = asObject(next);
+    current = asObject(next);
   }
-  return value;
+  return current;
 }
 
-function provinceSnapshot(province: Row): Snapshot {
-  const state = asObject(province.state_data);
-  const throne = asObject(state.throne);
-  return {
-    observed_at: String(throne.throne_captured_at ?? province.updated_at ?? new Date().toISOString()),
-    province_id: String(province.id ?? ""),
-    kingdom_id: province.kd_code ? String(province.kd_code) : null,
-    acres: numberValue(throne.acres ?? province.acres),
-    networth: numberValue(throne.nw ?? province.nw),
-    population: numberValue(throne.peons ?? province.peons),
-    soldiers: numberValue(throne.soldiers ?? province.soldiers),
-    off_specs: numberValue(throne.off_specs ?? province.off_specs),
-    def_specs: numberValue(throne.def_specs ?? province.def_specs),
-    elites: numberValue(throne.elites ?? province.elites),
-    thieves: numberValue(throne.thieves ?? province.thieves),
-    wizards: numberValue(throne.wizards ?? province.wizards),
-    offense: numberValue(throne.off ?? province.off),
-    defense: numberValue(throne.def ?? province.def),
-    mana: numberValue(throne.mana ?? province.mana),
-    stealth: numberValue(throne.stlth ?? province.stlth),
-    build_efficiency: numberValue(throne.be ?? province.be),
-    wages: numberValue(throne.wages ?? province.wages),
-    source: "canonical_province",
-  };
-}
+function snapshotFromIntel(row: Row): Snapshot {
+  const raw = asObject(row.raw_payload);
+  const parsed = asObject(row.parsed_payload);
+  const source = { ...raw, ...parsed };
+  const throne = asObject(raw.throne ?? parsed.throne ?? source.throne);
+  const data = Object.keys(throne).length ? throne : unwrap(source, ["throne"]);
 
-function captureSnapshot(capture: Row, province: Row): Snapshot {
-  const data = unwrapCapture(capture);
   return {
-    observed_at: String(capture.captured_at ?? province.updated_at ?? new Date().toISOString()),
-    province_id: String(province.id ?? capture.province_id ?? ""),
-    kingdom_id: String(province.kd_code ?? capture.kingdom_id ?? "") || null,
+    observed_at: String(row.captured_at ?? row.created_at ?? new Date().toISOString()),
+    province_id: row.province_id ? String(row.province_id) : null,
+    kingdom_id: row.kingdom_id ? String(row.kingdom_id) : null,
     acres: numberValue(firstValue(data, ["acres", "land"])),
     networth: numberValue(firstValue(data, ["nw", "networth"])),
-    population: numberValue(firstValue(data, ["population", "peons", "peasants"])),
+    population: numberValue(firstValue(data, ["peons", "peasants", "population"])),
     soldiers: numberValue(firstValue(data, ["soldiers"])),
-    off_specs: numberValue(firstValue(data, ["off_specs", "offSpecs"])),
-    def_specs: numberValue(firstValue(data, ["def_specs", "defSpecs"])),
-    elites: numberValue(firstValue(data, ["elites"])),
+    off_specs: numberValue(firstValue(data, ["off_specs", "offSpecs", "strongarms"])),
+    def_specs: numberValue(firstValue(data, ["def_specs", "defSpecs", "slingers"])),
+    elites: numberValue(firstValue(data, ["elites", "brutes"])),
     thieves: numberValue(firstValue(data, ["thieves"])),
     wizards: numberValue(firstValue(data, ["wizards"])),
     offense: numberValue(firstValue(data, ["offense", "off"])),
@@ -88,18 +70,16 @@ function captureSnapshot(capture: Row, province: Row): Snapshot {
     stealth: numberValue(firstValue(data, ["stealth", "stlth"])),
     build_efficiency: numberValue(firstValue(data, ["build_efficiency", "buildEfficiency", "be"])),
     wages: numberValue(firstValue(data, ["wages"])),
-    source: capture.source ?? "capture_vault",
+    source: row.source ?? "spartan_intel_records",
   };
 }
 
 function fillMissing(current: Snapshot, fallback: Snapshot): Snapshot {
-  const result: Snapshot = { ...fallback, ...current, observed_at: current.observed_at || fallback.observed_at };
+  const result = { ...fallback, ...current } as Snapshot;
   for (const key of [
     "acres", "networth", "population", "soldiers", "off_specs", "def_specs", "elites",
     "thieves", "wizards", "offense", "defense", "mana", "stealth", "build_efficiency", "wages",
-  ]) {
-    if (result[key] == null) result[key] = fallback[key];
-  }
+  ]) if (result[key] == null) result[key] = fallback[key];
   return result;
 }
 
@@ -119,7 +99,7 @@ async function verifiedIdentity() {
 
   const { data: jeeves, error: jeevesError } = await admin
     .from("spartan_jeeves_profiles")
-    .select("preferred_name,introduced_at,last_briefing_at,briefing_count")
+    .select("preferred_name,introduced_at,last_briefing_at,briefing_count,province_id")
     .eq("auth_user_id", auth.user.id)
     .maybeSingle();
   if (jeevesError) throw jeevesError;
@@ -128,18 +108,45 @@ async function verifiedIdentity() {
   return { admin, authUserId: auth.user.id, account, jeeves, discordId };
 }
 
-async function findProvince(admin: ReturnType<typeof adminClient>, account: Row, discordId: string | null, full: boolean) {
-  let query = admin.from("provinces").select(full ? "*" : "id").eq("name", account.province_name || "");
-  if (account.province_location) query = query.eq("kd_code", account.province_location);
-  let { data, error } = await query.limit(1).maybeSingle();
-  if (error) throw error;
-
-  if (!data && discordId) {
-    const fallback = await admin.from("provinces").select(full ? "*" : "id").eq("discord_id", discordId).limit(1).maybeSingle();
-    if (fallback.error) throw fallback.error;
-    data = fallback.data;
+async function findProvince(admin: ReturnType<typeof adminClient>, account: Row, jeeves: Row | null) {
+  if (jeeves?.province_id) {
+    const byId = await admin.from("spartan_province_registry").select("*").eq("province_id", String(jeeves.province_id)).maybeSingle();
+    if (byId.error) throw byId.error;
+    if (byId.data) return byId.data as Row;
   }
-  return data;
+
+  let query = admin
+    .from("spartan_province_registry")
+    .select("*")
+    .eq("province_name", account.province_name || "");
+  if (account.province_location) query = query.eq("kingdom_code", account.province_location);
+  const { data, error } = await query.limit(1).maybeSingle();
+  if (error) throw error;
+  return data as Row | null;
+}
+
+async function latestIntel(admin: ReturnType<typeof adminClient>, province: Row, kingdom: string | null) {
+  const provinceId = String(province.province_id);
+  const query = admin
+    .from("spartan_intel_records")
+    .select("id,capture_id,province_id,kingdom_id,captured_at,created_at,source,page_kind,parsed_payload,raw_payload")
+    .eq("province_id", provinceId)
+    .eq("page_kind", "throne")
+    .order("captured_at", { ascending: false })
+    .limit(20);
+  const { data, error } = await query;
+  if (error) throw error;
+  if (data?.length) return data as Row[];
+
+  const fallback = await admin
+    .from("spartan_intel_records")
+    .select("id,capture_id,province_id,kingdom_id,captured_at,created_at,source,page_kind,parsed_payload,raw_payload")
+    .eq("kingdom_id", kingdom || "")
+    .eq("page_kind", "throne")
+    .order("captured_at", { ascending: false })
+    .limit(20);
+  if (fallback.error) throw fallback.error;
+  return (fallback.data ?? []) as Row[];
 }
 
 export async function POST(request: Request) {
@@ -152,14 +159,14 @@ export async function POST(request: Request) {
     if (!preferredName) return NextResponse.json({ error: "A Spartan name is required." }, { status: 400 });
     if (preferredName.length > 40) return NextResponse.json({ error: "Keep your Spartan name to 40 characters or fewer." }, { status: 400 });
 
-    const province = await findProvince(identity.admin, identity.account, identity.discordId, false);
+    const province = await findProvince(identity.admin, identity.account, identity.jeeves);
     const now = new Date().toISOString();
     const { data: profile, error } = await identity.admin
       .from("spartan_jeeves_profiles")
       .upsert({
         auth_user_id: identity.authUserId,
         discord_user_id: identity.discordId,
-        province_id: province?.id ?? null,
+        province_id: province?.province_id ?? null,
         preferred_name: preferredName,
         introduced_at: identity.jeeves?.introduced_at ?? now,
         updated_at: now,
@@ -185,60 +192,50 @@ export async function GET() {
     const identity = await verifiedIdentity();
     if ("error" in identity) return identity.error;
 
-    const province = await findProvince(identity.admin, identity.account, identity.discordId, true);
-    if (!province) return NextResponse.json({ error: "Your Spartan account is verified, but your province record is not currently available." }, { status: 404 });
+    const province = await findProvince(identity.admin, identity.account, identity.jeeves);
+    if (!province) return NextResponse.json({ error: "Your Spartan account is verified, but your province is not linked to the canonical province registry." }, { status: 404 });
 
+    const kingdom = province.kingdom_code ? String(province.kingdom_code) : identity.account.province_location ? String(identity.account.province_location) : null;
     const since = identity.account.previous_login_at || identity.account.created_at;
-    const [historyResult, captureResult, eventResult] = await Promise.all([
-      identity.admin.from("spartan_province_history").select("*").eq("province_id", province.id).order("observed_at", { ascending: false }).limit(20),
-      identity.admin.from("spartan_capture_vault").select("capture_id,province_id,kingdom_id,captured_at,source,page_kind,parsed_payload,raw_payload").eq("province_id", province.id).eq("page_kind", "throne").order("captured_at", { ascending: false }).limit(20),
-      identity.admin.from("spartan_event_history").select("id,occurred_at,event_type,raw_text,acres_change,troops_lost,thieves_lost,wizards_lost,peasants_change,gold_change,food_change,runes_change,mana_change,payload").eq("province_id", province.id).gte("occurred_at", since).order("occurred_at", { ascending: false }).limit(100),
+    const [intelRows, eventResult] = await Promise.all([
+      latestIntel(identity.admin, province, kingdom),
+      identity.admin
+        .from("spartan_event_history")
+        .select("id,occurred_at,event_type,raw_text,acres_change,troops_lost,thieves_lost,wizards_lost,peasants_change,gold_change,food_change,runes_change,mana_change,payload")
+        .eq("province_id", String(province.province_id))
+        .gte("occurred_at", since)
+        .order("occurred_at", { ascending: false })
+        .limit(100),
     ]);
-    if (historyResult.error) throw historyResult.error;
-    if (captureResult.error) throw captureResult.error;
     if (eventResult.error) throw eventResult.error;
 
-    const canonical = provinceSnapshot(province as Row);
-    const historical: Snapshot[] = [
-      ...(historyResult.data ?? []).map((row) => fillMissing(row as Row as Snapshot, canonical)),
-      ...(captureResult.data ?? []).map((row) => captureSnapshot(row as Row, province as Row)),
-    ].sort((a, b) => Date.parse(a.observed_at) - Date.parse(b.observed_at));
-
-    const previous = historical.length > 0 ? historical[historical.length - 1] : null;
+    const snapshots = intelRows.map(snapshotFromIntel);
+    const latest = snapshots[0] ?? null;
+    const prior = snapshots[1] ?? null;
     const events = (eventResult.data ?? []) as Row[];
-    const change = (key: string): number | null => {
-      const current = numberValue(canonical[key]);
-      const prior = previous ? numberValue(previous[key]) : null;
-      return current != null && prior != null ? current - prior : null;
+    const change = (key: string) => {
+      const current = numberValue(latest?.[key]);
+      const old = numberValue(prior?.[key]);
+      return current != null && old != null ? current - old : null;
     };
-    const total = (key: string): number | null => {
-      if (!events.length) return null;
-      return events.reduce((sum, event) => sum + (numberValue(event[key]) ?? 0), 0);
-    };
+    const total = (key: string) => events.length ? events.reduce((sum, event) => sum + (numberValue(event[key]) ?? 0), 0) : null;
 
     const alerts: string[] = [];
-    const defense = numberValue(canonical.defense);
-    if (defense != null && defense < 0) alerts.push("Your current defensive state needs attention.");
     const criticalEvents = events.filter((event) => /attack|war|ambush|plague|failed|loss|destroy|raze/i.test(`${event.event_type ?? ""} ${event.raw_text ?? ""}`));
     if (criticalEvents.length) alerts.push(`${criticalEvents.length} combat or loss event${criticalEvents.length === 1 ? "" : "s"} occurred while you were away.`);
 
+    const metadata = asObject(province.metadata);
     const firstArrival = !identity.jeeves?.introduced_at;
     const screenName = identity.jeeves?.preferred_name || identity.account.screen_name || "Spartan";
-    const currentLoginAt = identity.account.last_login_at || identity.account.created_at;
-    const briefingId = String(currentLoginAt);
-    const currentAcres = numberValue(canonical.acres);
-    const currentNetworth = numberValue(canonical.networth);
-    const currentOffense = numberValue(canonical.offense);
-    const currentDefense = numberValue(canonical.defense);
-
-    const summary = firstArrival
-      ? "Your province is connected. Once you introduce yourself, I will use this verified province state for your future briefings."
-      : `Your province is currently at ${currentAcres?.toLocaleString() ?? "unknown"} acres and ${currentNetworth?.toLocaleString() ?? "unknown"} networth, with ${currentOffense?.toLocaleString() ?? "unknown"} offense and ${currentDefense?.toLocaleString() ?? "unknown"} defense. ${events.length ? `${events.length} recorded event${events.length === 1 ? "" : "s"} occurred since your previous login.` : "No recorded province events occurred since your previous login."}`;
+    const briefingId = String(latest?.observed_at ?? identity.account.last_login_at ?? identity.account.created_at ?? Date.now());
+    const summary = latest
+      ? `Your province is at ${latest.acres?.toLocaleString?.() ?? "unknown"} acres and ${latest.networth?.toLocaleString?.() ?? "unknown"} networth, with ${latest.offense?.toLocaleString?.() ?? "unknown"} offense and ${latest.defense?.toLocaleString?.() ?? "unknown"} defense. ${events.length ? `${events.length} recorded event${events.length === 1 ? "" : "s"} occurred since your previous login.` : "No recorded province events occurred since your previous login."}`
+      : "Jeeves is connected to your canonical province identity, but no Throne capture has been recorded yet.";
 
     return NextResponse.json({
       ok: true,
       firstArrival,
-      historyAvailable: previous !== null,
+      historyAvailable: prior !== null,
       briefingId,
       summary,
       jeeves: {
@@ -248,15 +245,15 @@ export async function GET() {
       },
       identity: {
         screenName,
-        provinceName: String(province.name ?? identity.account.province_name ?? "Unknown province"),
-        provinceLocation: String(province.location ?? province.slot ?? identity.account.province_location ?? "") || null,
-        kingdom: province.kd_code ? String(province.kd_code) : null,
-        race: province.race ? String(province.race) : null,
-        personality: province.personality ? String(province.personality) : null,
+        provinceName: String(province.province_name ?? identity.account.province_name ?? "Unknown province"),
+        provinceLocation: String(province.slot ?? identity.account.province_location ?? "") || null,
+        kingdom,
+        race: metadata.race ? String(metadata.race) : null,
+        personality: metadata.personality ? String(metadata.personality) : null,
         lastLoginAt: identity.account.previous_login_at ?? null,
-        currentLoginAt: currentLoginAt ? String(currentLoginAt) : null,
+        currentLoginAt: identity.account.last_login_at ?? identity.account.created_at ?? null,
       },
-      latest: canonical,
+      latest: latest ?? {},
       changes: {
         acres: change("acres"),
         networth: change("networth"),
@@ -278,6 +275,7 @@ export async function GET() {
         troopsLost: total("troops_lost"),
         thievesLost: total("thieves_lost"),
         wizardsLost: total("wizards_lost"),
+        acresChange: total("acres_change"),
         alerts,
       },
     });
