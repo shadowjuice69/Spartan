@@ -32,7 +32,7 @@ function adminClient() {
 function parseGameDate(value: unknown): GameDate | null {
   if (typeof value !== 'string') return null
   const normalized = value.replace(/\s+/g, ' ').trim()
-  const match = normalized.match(/([A-Za-z]+)\s+(\d{1,2})(?:st|nd|rd|th)?[,]?\s*YR\s*(\d+)/i)
+  const match = normalized.match(/([A-Za-z]+)\s+(\d{1,2})(?:st|nd|rd|th)?[,]?\s*(?:of\s+)?YR\s*(\d+)/i)
   if (!match) return null
 
   const month = MONTH_NAMES.findIndex((name) => name.toLowerCase() === match[1].toLowerCase()) + 1
