@@ -50,7 +50,7 @@ export async function login(formData: FormData) {
   }
 
   revalidatePath('/', 'layout')
-  redirect('/')
+  return { ok: true as const }
 }
 
 export async function logout() {

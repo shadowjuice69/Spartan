@@ -1,4 +1,5 @@
 import { createSpartanAccount, login, loginWithDiscord } from './actions'
+import LoginForm from './LoginForm'
 
 type LoginPageProps = { searchParams: Promise<Record<string, string | undefined>> }
 
@@ -22,11 +23,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
         <div className="forms">
           <div className="form-card">
             <div className="card-title">SIGN IN</div>
-            <form className="login-form" action={login}>
-              <label>SCREEN NAME<input name="screenName" autoComplete="username" placeholder="Your Spartan name" required /></label>
-              <label>PASSWORD<input name="password" type="password" autoComplete="current-password" placeholder="••••••••••" required /></label>
-              <button className="login-primary" type="submit">ENTER SPARTAN <span>→</span></button>
-            </form>
+            <LoginForm />
           </div>
 
           <div className="form-card register-card">
