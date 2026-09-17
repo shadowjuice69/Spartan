@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
 
 type NumberValue = number | null;
 
@@ -60,11 +61,13 @@ export default function Jeeves() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const loaded = useRef(false);
+  const loaded = useRef<string | null>(null);
+  const pathname = usePathname();
 
   useEffect(() => {
-    if (loaded.current) return;
-    loaded.current = true;
+    if (pathname === "/login") return;
+    if (loaded.current === pathname) return;
+    loaded.current = pathname;
 
     let cancelled = false;
 
@@ -126,7 +129,7 @@ export default function Jeeves() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [pathname]);
 
   async function introduce() {
     const preferredName = name.trim().replace(/\s+/g, " ");
