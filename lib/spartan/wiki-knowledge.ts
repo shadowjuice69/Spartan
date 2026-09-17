@@ -3,6 +3,16 @@ const KNOWLEDGE_SOURCE_PATH = 'lib/spartan/knowledge/utopia-reference.html'
 const KNOWLEDGE_SOURCE_URL = '/knowledge/utopia-reference.html'
 const KNOWLEDGE_AGE = 116
 
+type DbClient = { from: (table: string) => any }
+
+type WikiProvinceContext = {
+  id: string
+  name?: string | null
+  race?: string | null
+  personality?: string | null
+  playRole?: string | null
+} | null
+
 export type WikiKnowledgeContext = {
   sourceKey: string
   sourceUrl: string
@@ -10,13 +20,12 @@ export type WikiKnowledgeContext = {
   authoritative: boolean
   knowledgePath: string
   knowledgeAvailable: boolean
+  province?: WikiProvinceContext
   ruleCounts: Record<string, number>
   wikiEntryCount: number
   relevantWikiEntries: Array<{ id: number; title: string; category: string; source: string | null }>
   refs: string[]
 }
-
-type DbClient = { from: (table: string) => any }
 
 export async function resolveWikiKnowledge(
   _supabase: DbClient,
@@ -29,6 +38,7 @@ export async function resolveWikiKnowledge(
     authoritative: true,
     knowledgePath: KNOWLEDGE_SOURCE_PATH,
     knowledgeAvailable: true,
+    province: null,
     ruleCounts: {},
     wikiEntryCount: 0,
     relevantWikiEntries: [],
