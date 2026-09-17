@@ -68,20 +68,35 @@ export default function Jeeves() {
 
     let cancelled = false;
 
+    async function fetchBriefing() {
+      const response = await fetch("/api/welcome", {
+        method: "GET",
+        cache: "no-store",
+        headers: { accept: "application/json" },
+      });
+      const result = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(result.error || "Jeeves could not reach the Spartan data core.");
+      }
+      if (result.ok !== true || !result.briefingId) {
+        throw new Error("Jeeves returned an incomplete briefing.");
+      }
+      return result;
+    }
+
     async function loadBriefing() {
       try {
-        const response = await fetch("/api/welcome", {
-          method: "GET",
-          cache: "no-store",
-          headers: { accept: "application/json" },
-        });
-        const result = await response.json().catch(() => ({}));
-
-        if (!response.ok) {
-          throw new Error(result.error || "Jeeves could not reach the Spartan data core.");
-        }
-        if (result.ok !== true || !result.briefingId) {
-          throw new Error("Jeeves returned an incomplete briefing.");
+        let result;
+        try {
+          result = await fetchBriefing();
+        } catch (firstAttemptError) {
+          // Right after the OAuth redirect lands on this page, the auth
+          // session cookie can occasionally not be fully settled yet for
+          // the very first request. Retry once after a short delay before
+          // giving up, instead of silently failing until a manual refresh.
+          await new Promise((resolve) => setTimeout(resolve, 900));
+          result = await fetchBriefing();
         }
         if (cancelled) return;
 
