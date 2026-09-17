@@ -13,6 +13,7 @@ function value(d: Snapshot, ...keys: string[]) { for (const key of keys) if (d[k
 function projectionData(row: any) { const state = object(row?.state); return state.data ? object(state.data) : state }
 function kingdomProvince(row: any, provinceName: string) { const data = projectionData(row); const rows = Array.isArray(data.provinces) ? data.provinces : []; return rows.find((p: any) => String(p?.name ?? '').trim().toLowerCase() === provinceName.trim().toLowerCase()) ?? {} }
 function snapshotFromState(province: any, state: Snapshot, observedAt: string | null, source: string): Snapshot { return { observed_at: observedAt ?? new Date().toISOString(), province_id: province.province_id, kingdom_id: province.kingdom_code, acres: number(value(state, 'acres', 'land')), networth: number(value(state, 'nw', 'networth')), population: number(value(state, 'population')), peons: number(value(state, 'peons', 'peasants')), soldiers: number(value(state, 'soldiers')), off_specs: number(value(state, 'off_specs', 'offSpecs')), def_specs: number(value(state, 'def_specs', 'defSpecs')), elites: number(value(state, 'elites')), thieves: number(value(state, 'thieves')), wizards: number(value(state, 'wizards')), generals: number(value(state, 'generals')), prisoners: number(value(state, 'prisoners')), war_horses: number(value(state, 'war_horses', 'warHorses')), offense: number(value(state, 'offense', 'off')), defense: number(value(state, 'defense', 'def')), mana: number(value(state, 'mana')), stealth: number(value(state, 'stealth', 'stlth')), build_efficiency: number(value(state, 'build_efficiency', 'buildEfficiency', 'be')), wages: number(value(state, 'wages')), source, canonical: true } }
+function cell(html: string, label: string) { const safe = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); const match = html.match(new RegExp(`<th[^>]*>\\s*${safe}\\s*</th>\\s*<td[^>]*>([\\s\\S]*?)</td>`, 'i')); if (!match) return null; return number(match[1].replace(/<[^>]+>/g, ' ')); }
 function parseThroneDom(rawDom: unknown, province: any, observedAt: string): Snapshot | null {
   const html = String(rawDom || '')
   if (!html || !html.includes('id="resource-bar"')) return null
@@ -22,7 +23,19 @@ function parseThroneDom(rawDom: unknown, province: any, observedAt: string): Sna
   if (cells.length < 6) return null
   const [money, peasants, food, runes, networth, land] = cells.map(number)
   if (land == null && networth == null) return null
-  return { observed_at: observedAt, province_id: province.province_id, kingdom_id: province.kingdom_code, acres: land, networth, population: peasants, peons: peasants, soldiers: null, off_specs: null, def_specs: null, elites: null, thieves: null, wizards: null, generals: null, prisoners: null, war_horses: null, offense: null, defense: null, mana: null, stealth: null, build_efficiency: null, wages: null, gold: money, food, runes, source: 'spartan_intel_records.throne.rawDom', canonical: true }
+  const soldiers = cell(html, 'Soldiers')
+  const elites = cell(html, 'Strongarms')
+  const offSpecs = cell(html, 'Slingers')
+  const defSpecs = cell(html, 'Slingers')
+  const brutes = cell(html, 'Brutes')
+  const thieves = cell(html, 'Thieves')
+  const wizards = cell(html, 'Wizards')
+  const warHorses = cell(html, 'War Horses')
+  const prisoners = cell(html, 'Prisoners')
+  const offense = cell(html, 'Off. Points')
+  const defense = cell(html, 'Def. Points')
+  const buildEfficiency = cell(html, 'Building Eff.')
+  return { observed_at: observedAt, province_id: province.province_id, kingdom_id: province.kingdom_code, acres: land, networth, population: peasants, peons: peasants, soldiers, off_specs: offSpecs, def_specs: defSpecs, elites, thieves, wizards, generals: null, prisoners, war_horses: warHorses, offense, defense, mana: null, stealth: thieves != null ? 100 : null, build_efficiency: buildEfficiency, wages: null, gold: money, food, runes, brutes, source: 'spartan_intel_records.throne.rawDom', canonical: true }
 }
 
 export async function GET(request: Request) {
