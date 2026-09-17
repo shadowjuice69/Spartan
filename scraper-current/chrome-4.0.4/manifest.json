@@ -2,8 +2,10 @@
   "manifest_version": 3,
   "name": "Spartan Universal Capture",
   "version": "4.0.4",
-  "description": "Utopia page capture client for Spartan.",
-  "permissions": ["clipboardWrite"],
+  "description": "Reliable Utopia page capture for Spartan.",
+  "permissions": [
+    "clipboardWrite"
+  ],
   "host_permissions": [
     "https://www.utopia-game.com/*",
     "https://utopia-game.com/*",
@@ -11,16 +13,22 @@
     "https://intel.utopia.site/*",
     "https://spartan-dashboard.onrender.com/*"
   ],
-  "background": { "service_worker": "background.js" },
-  "content_scripts": [{
-    "matches": [
-      "https://www.utopia-game.com/*",
-      "https://utopia-game.com/*",
-      "https://intel.utopia-game.com/*",
-      "https://intel.utopia.site/*"
-    ],
-    "js": ["content.js"],
-    "run_at": "document_end",
-    "all_frames": false
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.utopia-game.com/*",
+        "https://utopia-game.com/*",
+        "https://intel.utopia-game.com/*",
+        "https://intel.utopia.site/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_end",
+      "all_frames": false
+    }
   ]
 }
