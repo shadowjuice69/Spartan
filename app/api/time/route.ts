@@ -10,6 +10,7 @@ const DAYS_PER_MONTH = 24
 const MONTHS_PER_YEAR = 7
 const DAYS_PER_YEAR = DAYS_PER_MONTH * MONTHS_PER_YEAR
 const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July']
+const MONTH_ABBR = MONTH_NAMES.map(m => m.slice(0, 3).toLowerCase())
 
 type GameDate = { year: number; month: number; day: number }
 type Anchor = GameDate & { tick: number; capturedAt: string; nextTickAt: string; source: string }
@@ -25,7 +26,9 @@ function parseGameDate(v: unknown): GameDate | null {
   const s = text(v).replace(/\s+/g, ' ')
   const m = s.match(/([A-Za-z]+)\s+(\d{1,2})(?:st|nd|rd|th)?[,]?\s*(?:of\s+)?YR\s*(\d+)/i)
   if (!m) return null
-  const month = MONTH_NAMES.findIndex(n => n.toLowerCase() === m[1].toLowerCase()) + 1
+  const word = m[1].toLowerCase()
+  let month = MONTH_NAMES.findIndex(n => n.toLowerCase() === word) + 1
+  if (!month) month = MONTH_ABBR.findIndex(n => n === word.slice(0, 3)) + 1
   const day = Number(m[2]); const year = Number(m[3])
   if (!month || !Number.isInteger(day) || day < 1 || day > DAYS_PER_MONTH || !Number.isInteger(year) || year < 1) return null
   return { year, month, day }
@@ -79,7 +82,7 @@ async function resolveAnchor(): Promise<Anchor> {
   }
   if (!registry?.province_id) throw new Error('Your Spartan province is not linked to the Utopia clock.')
 
-  const { data: captures, error: captureError } = await db.from('spartan_capture_vault').select('captured_at,raw_text,parsed_payload,page_kind').eq('province_id', registry.province_id).eq('page_kind', 'throne').order('captured_at', { ascending: false }).limit(100)
+  const { data: captures, error: captureError } = await db.from('spartan_intel_records').select('captured_at,raw_text,parsed_payload,page_kind').eq('province_id', registry.province_id).eq('page_kind', 'throne').order('captured_at', { ascending: false }).limit(100)
   if (captureError) throw captureError
   for (const capture of captures ?? []) {
     const gameDate = findGameDate(capture.raw_text) ?? findGameDate(capture.parsed_payload)
@@ -90,7 +93,7 @@ async function resolveAnchor(): Promise<Anchor> {
     if (!Number.isFinite(nextTickAt.getTime())) continue
     const boundary = nextTickAt.getTime() - TICK_MS
     const tick = new Date(boundary).getUTCHours() + 1
-    return { ...gameDate, tick, capturedAt: captured.toISOString(), nextTickAt: nextTickAt.toISOString(), source: 'spartan_capture_vault.throne' }
+    return { ...gameDate, tick, capturedAt: captured.toISOString(), nextTickAt: nextTickAt.toISOString(), source: 'spartan_intel_records.throne' }
   }
   throw new Error('No Throne capture containing an authoritative Utopia date has been stored yet.')
 }
