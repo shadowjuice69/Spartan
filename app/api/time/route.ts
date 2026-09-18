@@ -102,8 +102,10 @@ export async function GET() {
   try {
     const now = new Date(); const anchor = await resolveAnchor(); const boundary = Date.parse(anchor.nextTickAt) - TICK_MS
     const elapsedTicks = Math.max(0, Math.floor((now.getTime() - boundary) / TICK_MS))
-    const date = fromCalendarDayIndex(calendarDayIndex(anchor.year, anchor.month, anchor.day) + elapsedTicks)
-    const tick = ((anchor.tick - 1 + elapsedTicks) % TICKS_PER_DAY) + 1
+    const totalTicks = (anchor.tick - 1) + elapsedTicks
+    const elapsedDays = Math.floor(totalTicks / TICKS_PER_DAY)
+    const tick = (totalTicks % TICKS_PER_DAY) + 1
+    const date = fromCalendarDayIndex(calendarDayIndex(anchor.year, anchor.month, anchor.day) + elapsedDays)
     const nextTick = new Date(boundary + (elapsedTicks + 1) * TICK_MS)
     return NextResponse.json({
       now: now.toISOString(),
