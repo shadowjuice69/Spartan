@@ -8,7 +8,14 @@ export const dynamic = 'force-dynamic'
 type Snapshot = Record<string, any>
 function adminClient() { const url = process.env.NEXT_PUBLIC_SUPABASE_URL; const key = process.env.SUPABASE_SERVICE_ROLE_KEY; if (!url || !key) throw new Error('Spartan history service is not configured.'); return createSupabaseAdmin(url, key, { auth: { autoRefreshToken: false, persistSession: false } }) }
 function object(v: unknown): Snapshot { return v && typeof v === 'object' && !Array.isArray(v) ? v as Snapshot : {} }
-function number(v: unknown) { const n = Number(typeof v === 'string' ? v.replace(/,/g, '') : v); return Number.isFinite(n) ? n : null }
+function number(v: unknown) {
+  if (typeof v !== 'string') { const n = Number(v); return Number.isFinite(n) ? n : null }
+  const cleaned = v.replace(/,/g, '')
+  const match = cleaned.match(/-?\d+(?:\.\d+)?/)
+  if (!match) return null
+  const n = Number(match[0])
+  return Number.isFinite(n) ? n : null
+}
 function value(d: Snapshot, ...keys: string[]) { for (const key of keys) if (d[key] !== undefined && d[key] !== null) return d[key]; return null }
 function projectionData(row: any) { const state = object(row?.state); return state.data ? object(state.data) : state }
 function kingdomProvince(row: any, provinceName: string) { const data = projectionData(row); const rows = Array.isArray(data.provinces) ? data.provinces : []; return rows.find((p: any) => String(p?.name ?? '').trim().toLowerCase() === provinceName.trim().toLowerCase()) ?? {} }
