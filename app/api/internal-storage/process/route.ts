@@ -24,7 +24,14 @@ function jsonObject(value: unknown) { return value && typeof value === 'object' 
 function numberValue(value: unknown) { const n = Number(value); return Number.isFinite(n) ? Math.trunc(n) : null }
 
 async function stageVault(db: any, limit: number) {
-  const { data: vaultRows, error } = await db.from('spartan_capture_vault').select('*').order('created_at', { ascending: true }).limit(limit)
+  // Discord-bot captures have their own Spartan processing queue. Keep them in
+  // the capture vault until that queue has projected them; the Storage Steward
+  // must not race the bot processor and delete its source capture first.
+  const { data: vaultRows, error } = await db.from('spartan_capture_vault')
+    .select('*')
+    .neq('source', 'discord-bot')
+    .order('created_at', { ascending: true })
+    .limit(limit)
   if (error) throw new Error(error.message)
   let staged = 0
   for (const vault of vaultRows ?? []) {
