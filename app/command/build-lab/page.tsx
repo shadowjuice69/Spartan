@@ -174,7 +174,7 @@ function BuildDetail({ id, races, personalities, onBack, onDeleted }: { id: stri
       const { build: updated } = await res.json()
       setBuild(updated)
     } catch (e) {
-      setError(e.message)
+      setError(e instanceof Error ? e.message : "Resync failed.")
     } finally {
       setResyncing(false)
     }
