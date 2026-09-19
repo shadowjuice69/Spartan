@@ -59,7 +59,7 @@ export async function POST(request: Request) {
     const resolvedKingdomCode = account.province_location
     const now = new Date().toISOString()
 
-    await supabase.from('spartan_province_registry').update({ user_id: account.auth_user_id, kingdom_code: resolvedKingdomCode, last_seen_at: now, updated_at: now }).eq('province_name', resolvedProvinceName).eq('kingdom_code', resolvedKingdomCode)
+    await supabase.from('spartan_province_registry').update({ province_id: ownerId, user_id: account.auth_user_id, kingdom_code: resolvedKingdomCode, last_seen_at: now, updated_at: now }).eq('province_name', resolvedProvinceName).eq('kingdom_code', resolvedKingdomCode)
 
     if (existingToken) {
       const existing = await supabase.from('spartan_capture_devices').select('id,owner_id').eq('token_hash', hash(existingToken)).maybeSingle()
