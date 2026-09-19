@@ -20,6 +20,8 @@ export interface ParsedMilitaryRequirement {
   wpa: number | null
   dspa: number | null
   epa_ospa: number | null
+  epa_dspa: number | null
+  ospa: number | null
   gcpa: number | null
   notes: string
 }
@@ -55,7 +57,7 @@ export function parseMilitaryRequirementText(raw: string): ParsedMilitaryRequire
   // standalone OSPA, and both EPA/OSPA and EPA/DSPA labels.
   const metricRe = /^\s*([\d.]+)\s*\+?\s*(ppa|tpa|wpa|dspa|ospa|epa\s*\/\s*(?:ospa|dspa)|gcpa)\b/i
   const result: ParsedMilitaryRequirement = {
-    ppa: null, tpa: null, wpa: null, dspa: null, epa_ospa: null, gcpa: null, notes: '',
+    ppa: null, tpa: null, wpa: null, dspa: null, epa_ospa: null, epa_dspa: null, ospa: null, gcpa: null, notes: '',
   }
   const noteLines: string[] = []
   for (const rawLine of text.split('\n')) {
@@ -67,8 +69,11 @@ export function parseMilitaryRequirementText(raw: string): ParsedMilitaryRequire
       const metric = m[2].toLowerCase().replace(/\s+/g, '')
       if (metric === 'epa/dspa') {
         result.dspa = value
+        result.epa_dspa = value
+      } else if (metric === 'ospa') {
+        result.ospa = value
         result.epa_ospa = value
-      } else if (metric === 'ospa' || metric === 'epa/ospa') {
+      } else if (metric === 'epa/ospa') {
         result.epa_ospa = value
       } else {
         const key = metric.replace('/', '_') as keyof ParsedMilitaryRequirement
