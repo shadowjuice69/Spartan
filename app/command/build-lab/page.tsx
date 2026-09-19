@@ -124,7 +124,7 @@ function NewBuildForm({ races, personalities, onSaved }: { races: RaceRule[]; pe
         <div style={{ fontSize: 11, marginTop: 10, color: "#b7c2cc" }}>
           <p style={{ display:"flex", gap:14, flexWrap:"wrap" }}>
             <span>PPA: {parsedMilitary.ppa ?? "—"}</span><span>TPA: {parsedMilitary.tpa ?? "—"}</span><span>WPA: {parsedMilitary.wpa ?? "—"}</span>
-            <span>DSPA: {parsedMilitary.dspa ?? "—"}</span><span>EPA/OSPA: {parsedMilitary.epa_ospa ?? "—"}</span>
+            <span>DSPA: {parsedMilitary.dspa ?? "—"}</span><span>OSPA: {parsedMilitary.ospa ?? "—"}</span><span>EPA/DSPA: {parsedMilitary.epa_dspa ?? "—"}</span>
             {parsedMilitary.gcpa != null && <span>GCPA: {parsedMilitary.gcpa}</span>}
           </p>
           {parsedMilitary.notes && <p style={{ fontStyle:"italic", color:"#8993a1" }}>{parsedMilitary.notes}</p>}
@@ -174,7 +174,7 @@ function BuildDetail({ id, races, personalities, onBack, onDeleted }: { id: stri
       const { build: updated } = await res.json()
       setBuild(updated)
     } catch (e) {
-      setError(e.message)
+      setError(e instanceof Error ? e.message : "Resync failed.")
     } finally {
       setResyncing(false)
     }
@@ -231,7 +231,7 @@ function BuildDetail({ id, races, personalities, onBack, onDeleted }: { id: stri
       <h3 style={{ fontSize:12, color:"#67f0b0", letterSpacing:".1em", marginTop:20 }}>MILITARY REQUIREMENT</h3>
       <p style={{ fontSize:11, display:"flex", gap:14, flexWrap:"wrap" }}>
         <span>PPA: {mil.ppa ?? "—"}</span><span>TPA: {mil.tpa ?? "—"}</span><span>WPA: {mil.wpa ?? "—"}</span>
-        <span>DSPA: {mil.dspa ?? "—"}</span><span>EPA/OSPA: {mil.epa_ospa ?? "—"}</span>
+        <span>DSPA: {mil.dspa ?? "—"}</span><span>OSPA: {mil.ospa ?? "—"}</span><span>EPA/DSPA: {mil.epa_dspa ?? "—"}</span>
         {mil.gcpa != null && <span>GCPA: {mil.gcpa}</span>}
       </p>
       {mil.notes && <p style={{ fontSize:11, color:"#8993a1", fontStyle:"italic" }}>{mil.notes}</p>}

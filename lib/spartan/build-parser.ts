@@ -20,6 +20,8 @@ export interface ParsedMilitaryRequirement {
   wpa: number | null
   dspa: number | null
   epa_ospa: number | null
+  epa_dspa: number | null
+  ospa: number | null
   gcpa: number | null
   notes: string
 }
@@ -51,9 +53,11 @@ export function parseBuildText(raw: string): ParsedBuild {
 /** Box 2 — Military Requirement: per-acre ratios + freeform notes */
 export function parseMilitaryRequirementText(raw: string): ParsedMilitaryRequirement {
   const text = raw || ''
-  const metricRe = /^\s*([\d.]+)\s*(ppa|tpa|wpa|dspa|epa\/ospa|gcpa)\b/i
+  // Accept compact/spaced forms, optional "+" before EPA/OSPA,
+  // standalone OSPA, and both EPA/OSPA and EPA/DSPA labels.
+  const metricRe = /^\s*([\d.]+)\s*\+?\s*(ppa|tpa|wpa|dspa|ospa|epa\s*\/\s*(?:ospa|dspa)|gcpa)\b/i
   const result: ParsedMilitaryRequirement = {
-    ppa: null, tpa: null, wpa: null, dspa: null, epa_ospa: null, gcpa: null, notes: '',
+    ppa: null, tpa: null, wpa: null, dspa: null, epa_ospa: null, epa_dspa: null, ospa: null, gcpa: null, notes: '',
   }
   const noteLines: string[] = []
   for (const rawLine of text.split('\n')) {
@@ -62,8 +66,19 @@ export function parseMilitaryRequirementText(raw: string): ParsedMilitaryRequire
     const m = line.match(metricRe)
     if (m) {
       const value = Number(m[1])
-      const key = m[2].toLowerCase().replace('/', '_') as keyof ParsedMilitaryRequirement
-      if (key in result) (result as any)[key] = value
+      const metric = m[2].toLowerCase().replace(/\s+/g, '')
+      if (metric === 'epa/dspa') {
+        result.dspa = value
+        result.epa_dspa = value
+      } else if (metric === 'ospa') {
+        result.ospa = value
+        result.epa_ospa = value
+      } else if (metric === 'epa/ospa') {
+        result.epa_ospa = value
+      } else {
+        const key = metric.replace('/', '_') as keyof ParsedMilitaryRequirement
+        if (key in result) (result as any)[key] = value
+      }
     } else {
       noteLines.push(line)
     }
@@ -71,7 +86,6 @@ export function parseMilitaryRequirementText(raw: string): ParsedMilitaryRequire
   result.notes = noteLines.join(' ')
   return result
 }
-
 /** Box 3 — Science: 3 categories, each line "Nx Name" (weight) or "N% Name (...)" (fixed target %) */
 export function parseScienceText(raw: string): ParsedScience {
   const text = raw || ''
