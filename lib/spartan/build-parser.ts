@@ -51,20 +51,20 @@ export function parseBuildText(raw: string): ParsedBuild {
 /** Box 2 — Military Requirement: per-acre ratios + freeform notes */
 export function parseMilitaryRequirementText(raw: string): ParsedMilitaryRequirement {
   const text = raw || ''
-  // Accept compact Discord-style forms ("6ppa") and spaced forms ("6 ppa"),
-  // plus combined EPA/OSPA and EPA/DSPA labels.
-  const metricRe = /^\\s*([\\d.]+)\\s*\\+?\\s*(ppa|tpa|wpa|dspa|epa\\s*\\/\\s*(?:ospa|dspa)|gcpa)\\b/i
+  // Accept compact/spaced forms, optional "+" before EPA/OSPA,
+  // standalone OSPA, and both EPA/OSPA and EPA/DSPA labels.
+  const metricRe = /^\s*([\d.]+)\s*\+?\s*(ppa|tpa|wpa|dspa|ospa|epa\s*\/\s*(?:ospa|dspa)|gcpa)\b/i
   const result: ParsedMilitaryRequirement = {
     ppa: null, tpa: null, wpa: null, dspa: null, epa_ospa: null, gcpa: null, notes: '',
   }
   const noteLines: string[] = []
-  for (const rawLine of text.split('\\n')) {
+  for (const rawLine of text.split('\n')) {
     const line = rawLine.trim()
     if (!line || /^military$/i.test(line)) continue
     const m = line.match(metricRe)
     if (m) {
       const value = Number(m[1])
-      const metric = m[2].toLowerCase().replace(/\\s+/g, '')
+      const metric = m[2].toLowerCase().replace(/\s+/g, '')
       if (metric === 'epa/dspa') {
         result.dspa = value
         result.epa_ospa = value
@@ -81,7 +81,6 @@ export function parseMilitaryRequirementText(raw: string): ParsedMilitaryRequire
   result.notes = noteLines.join(' ')
   return result
 }
-
 /** Box 3 — Science: 3 categories, each line "Nx Name" (weight) or "N% Name (...)" (fixed target %) */
 export function parseScienceText(raw: string): ParsedScience {
   const text = raw || ''
