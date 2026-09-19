@@ -12,8 +12,13 @@ const sidebar: any = { width:245, flexShrink:0, minHeight:"100vh", background:"#
 const card: any = { padding:16, border:"1px solid rgba(255,255,255,.08)", borderRadius:10, background:"#081119" }
 const btnPrimary: any = { background:"#d8ff54", color:"#101408", border:"1px solid #91a93a", borderRadius:8, padding:"9px 14px", fontWeight:800, fontSize:11, cursor:"pointer" }
 const btnGhost: any = { background:"rgba(255,255,255,.04)", border:"1px solid rgba(255,255,255,.1)", color:"#dce7ee", borderRadius:8, padding:"9px 14px", fontSize:11, cursor:"pointer" }
+const btnDanger: any = { background:"rgba(255,90,90,.1)", border:"1px solid rgba(255,90,90,.35)", color:"#ff9b9b", borderRadius:8, padding:"9px 14px", fontSize:11, cursor:"pointer" }
 const textarea: any = { width:"100%", height:150, background:"#05080d", border:"1px solid rgba(255,255,255,.08)", borderRadius:8, padding:10, fontSize:11, fontFamily:"monospace", color:"#dce7ee" }
 const input: any = { background:"#05080d", border:"1px solid rgba(255,255,255,.08)", borderRadius:6, padding:"7px 9px", fontSize:11, color:"#dce7ee" }
+const select: any = { ...input }
+
+type RaceRule = { race: string; emoji: string; archetype: string; war_doctrine: string; unique_name: string; unique_desc: string; bonuses: string; penalties: string; units: string; spells: string }
+type PersonalityRule = { personality: string; emoji: string; unique_name: string; unique_desc: string; bonuses: string; start_bonus: string; spells: string }
 
 function Sidebar({ active }: { active: string }) {
   const router = useRouter()
@@ -31,7 +36,33 @@ function Sidebar({ active }: { active: string }) {
   )
 }
 
-function NewBuildForm({ onSaved }: { onSaved: () => void }) {
+function RaceRuleCard({ r }: { r: RaceRule }) {
+  return (
+    <div style={{ ...card, marginBottom: 12 }}>
+      <p style={{ margin:0, fontWeight:700 }}>{r.emoji} {r.race} {r.archetype && <span style={{ fontSize:9, color:"#67f0b0", marginLeft:6 }}>{r.archetype}</span>}</p>
+      {r.war_doctrine && <p style={{ fontSize:11, color:"#8da7ff", marginTop:8 }}><b>War Doctrine:</b> {r.war_doctrine}</p>}
+      {r.unique_name && <p style={{ fontSize:11, color:"#67f0b0", marginTop:6 }}><b>Unique — {r.unique_name}:</b> {r.unique_desc}</p>}
+      {r.bonuses && <p style={{ fontSize:11, color:"#a7e8b0", marginTop:6 }}><b>Bonuses:</b> {r.bonuses}</p>}
+      {r.penalties && <p style={{ fontSize:11, color:"#ff9b9b", marginTop:6 }}><b>Penalties:</b> {r.penalties}</p>}
+      {r.units && <p style={{ fontSize:11, color:"#b7c2cc", marginTop:6 }}><b>Units:</b> {r.units}</p>}
+      {r.spells && <p style={{ fontSize:11, color:"#b7c2cc", marginTop:6 }}><b>Spells:</b> {r.spells}</p>}
+    </div>
+  )
+}
+
+function PersonalityRuleCard({ p }: { p: PersonalityRule }) {
+  return (
+    <div style={{ ...card, marginBottom: 12 }}>
+      <p style={{ margin:0, fontWeight:700 }}>{p.emoji} {p.personality}</p>
+      {p.unique_name && <p style={{ fontSize:11, color:"#67f0b0", marginTop:8 }}><b>Unique — {p.unique_name}:</b> {p.unique_desc}</p>}
+      {p.bonuses && <p style={{ fontSize:11, color:"#a7e8b0", marginTop:6 }}><b>Bonuses:</b> {p.bonuses}</p>}
+      {p.start_bonus && <p style={{ fontSize:11, color:"#b7c2cc", marginTop:6 }}><b>Start:</b> {p.start_bonus}</p>}
+      {p.spells && <p style={{ fontSize:11, color:"#b7c2cc", marginTop:6 }}><b>Spells:</b> {p.spells}</p>}
+    </div>
+  )
+}
+
+function NewBuildForm({ races, personalities, onSaved }: { races: RaceRule[]; personalities: PersonalityRule[]; onSaved: () => void }) {
   const [buildText, setBuildText] = useState("")
   const [militaryText, setMilitaryText] = useState("")
   const [scienceText, setScienceText] = useState("")
@@ -74,8 +105,14 @@ function NewBuildForm({ onSaved }: { onSaved: () => void }) {
             {Object.entries(parsedBuild.buildings).map(([k, v]) => <span key={k}>{k}: <b style={{color:"#d8ff54"}}>{v}%</b></span>)}
           </div>
           <div style={{ display:"flex", gap:8, marginTop:8 }}>
-            <input style={input} placeholder="Race" value={race} onChange={(e) => setRace(e.target.value)} />
-            <input style={input} placeholder="Personality" value={personality} onChange={(e) => setPersonality(e.target.value)} />
+            <select style={select} value={race} onChange={(e) => setRace(e.target.value)}>
+              <option value="">Race…</option>
+              {races.map((r) => <option key={r.race} value={r.race}>{r.emoji} {r.race}</option>)}
+            </select>
+            <select style={select} value={personality} onChange={(e) => setPersonality(e.target.value)}>
+              <option value="">Personality…</option>
+              {personalities.map((p) => <option key={p.personality} value={p.personality}>{p.emoji} {p.personality}</option>)}
+            </select>
           </div>
         </div>
       )}
@@ -114,9 +151,10 @@ function NewBuildForm({ onSaved }: { onSaved: () => void }) {
   )
 }
 
-function BuildDetail({ id, onBack }: { id: string; onBack: () => void }) {
+function BuildDetail({ id, races, personalities, onBack, onDeleted }: { id: string; races: RaceRule[]; personalities: PersonalityRule[]; onBack: () => void; onDeleted: () => void }) {
   const [build, setBuild] = useState<any>(null)
   const [error, setError] = useState("")
+  const [deleting, setDeleting] = useState(false)
   const [books, setBooks] = useState({ economy: 0, military: 0, arcane: 0 })
 
   useEffect(() => {
@@ -124,15 +162,43 @@ function BuildDetail({ id, onBack }: { id: string; onBack: () => void }) {
   }, [id])
 
   const allocations = useMemo(() => build ? calculateAllocations(build.science, books) : [], [build, books])
+  const raceRule = useMemo(() => build?.race ? races.find((r) => r.race.toLowerCase() === build.race.toLowerCase()) : null, [build, races])
+  const personalityRule = useMemo(() => build?.personality ? personalities.find((p) => p.personality.toLowerCase() === build.personality.toLowerCase()) : null, [build, personalities])
+
+  async function handleDelete() {
+    if (!confirm(`Delete "${build.name}"? This can't be undone.`)) return
+    setDeleting(true)
+    try {
+      const res = await fetch(`/api/builds/${id}`, { method: "DELETE" })
+      if (!res.ok) throw new Error((await res.json()).error || "Delete failed.")
+      onDeleted()
+    } catch (e: any) {
+      setError(e.message)
+      setDeleting(false)
+    }
+  }
+
   if (error) return <div style={card}>{error}</div>
   if (!build) return <div style={card}>Loading…</div>
   const mil = build.military_requirement || {}
 
   return (
     <div style={card}>
-      <button style={{ ...btnGhost, marginBottom: 16 }} onClick={onBack}>← Back to Library</button>
+      <div style={{ display:"flex", justifyContent:"space-between", marginBottom: 16 }}>
+        <button style={btnGhost} onClick={onBack}>← Back to Library</button>
+        <button style={btnDanger} disabled={deleting} onClick={handleDelete}>{deleting ? "Deleting…" : "Delete Build"}</button>
+      </div>
+
       <h2 style={{ margin:0 }}>{build.name}</h2>
       <p style={{ color:"#8993a1", fontSize:11 }}>{[build.race, build.personality].filter(Boolean).join(" / ")}{build.author ? ` · set by ${build.author}` : ""}</p>
+
+      {(raceRule || personalityRule) && (
+        <>
+          <h3 style={{ fontSize:12, color:"#67f0b0", letterSpacing:".1em", marginTop:20 }}>RACE &amp; PERSONALITY</h3>
+          {raceRule && <RaceRuleCard r={raceRule} />}
+          {personalityRule && <PersonalityRuleCard p={personalityRule} />}
+        </>
+      )}
 
       <h3 style={{ fontSize:12, color:"#67f0b0", letterSpacing:".1em", marginTop:20 }}>BUILDINGS</h3>
       <div style={{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:2, fontSize:11 }}>
@@ -178,12 +244,17 @@ function BuildLab() {
   const searchParams = useSearchParams()
   const id = searchParams.get("id")
   const [builds, setBuilds] = useState<any[]>([])
+  const [races, setRaces] = useState<RaceRule[]>([])
+  const [personalities, setPersonalities] = useState<PersonalityRule[]>([])
   const [showForm, setShowForm] = useState(false)
   const [error, setError] = useState("")
 
   function loadBuilds() {
     fetch("/api/builds").then((r) => r.json()).then((j) => j.builds ? setBuilds(j.builds) : setError(j.error || "Failed to load builds"))
   }
+  useEffect(() => {
+    fetch("/api/rules").then((r) => r.json()).then((j) => { setRaces(j.races || []); setPersonalities(j.personalities || []) })
+  }, [])
   useEffect(() => { if (!id) loadBuilds() }, [id])
 
   return (
@@ -201,10 +272,10 @@ function BuildLab() {
         {error && <div style={{ ...card, borderColor:"rgba(255,100,100,.3)", color:"#ff9b9b", marginBottom:16 }}>{error}</div>}
 
         {id ? (
-          <BuildDetail id={id} onBack={() => router.push("/command/build-lab")} />
+          <BuildDetail id={id} races={races} personalities={personalities} onBack={() => router.push("/command/build-lab")} onDeleted={() => router.push("/command/build-lab")} />
         ) : (
           <>
-            {showForm && <NewBuildForm onSaved={() => { setShowForm(false); loadBuilds() }} />}
+            {showForm && <NewBuildForm races={races} personalities={personalities} onSaved={() => { setShowForm(false); loadBuilds() }} />}
             <div style={{ display:"grid", gap:10 }}>
               {builds.map((b) => (
                 <button key={b.id} onClick={() => router.push(`/command/build-lab?id=${b.id}`)} style={{ ...card, textAlign:"left", cursor:"pointer" }}>
