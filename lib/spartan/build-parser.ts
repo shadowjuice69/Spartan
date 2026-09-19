@@ -51,19 +51,27 @@ export function parseBuildText(raw: string): ParsedBuild {
 /** Box 2 — Military Requirement: per-acre ratios + freeform notes */
 export function parseMilitaryRequirementText(raw: string): ParsedMilitaryRequirement {
   const text = raw || ''
-  const metricRe = /^\s*([\d.]+)\s*(ppa|tpa|wpa|dspa|epa\/ospa|gcpa)\b/i
+  // Accept compact Discord-style forms ("6ppa") and spaced forms ("6 ppa"),
+  // plus combined EPA/OSPA and EPA/DSPA labels.
+  const metricRe = /^\\s*([\\d.]+)\\s*\\+?\\s*(ppa|tpa|wpa|dspa|epa\\s*\\/\\s*(?:ospa|dspa)|gcpa)\\b/i
   const result: ParsedMilitaryRequirement = {
     ppa: null, tpa: null, wpa: null, dspa: null, epa_ospa: null, gcpa: null, notes: '',
   }
   const noteLines: string[] = []
-  for (const rawLine of text.split('\n')) {
+  for (const rawLine of text.split('\\n')) {
     const line = rawLine.trim()
     if (!line || /^military$/i.test(line)) continue
     const m = line.match(metricRe)
     if (m) {
       const value = Number(m[1])
-      const key = m[2].toLowerCase().replace('/', '_') as keyof ParsedMilitaryRequirement
-      if (key in result) (result as any)[key] = value
+      const metric = m[2].toLowerCase().replace(/\\s+/g, '')
+      if (metric === 'epa/dspa') {
+        result.dspa = value
+        result.epa_ospa = value
+      } else {
+        const key = metric.replace('/', '_') as keyof ParsedMilitaryRequirement
+        if (key in result) (result as any)[key] = value
+      }
     } else {
       noteLines.push(line)
     }
