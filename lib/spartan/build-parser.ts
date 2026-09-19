@@ -68,6 +68,8 @@ export function parseMilitaryRequirementText(raw: string): ParsedMilitaryRequire
       if (metric === 'epa/dspa') {
         result.dspa = value
         result.epa_ospa = value
+      } else if (metric === 'ospa' || metric === 'epa/ospa') {
+        result.epa_ospa = value
       } else {
         const key = metric.replace('/', '_') as keyof ParsedMilitaryRequirement
         if (key in result) (result as any)[key] = value
