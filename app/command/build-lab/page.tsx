@@ -162,8 +162,23 @@ function BuildDetail({ id, races, personalities, onBack, onDeleted }: { id: stri
   }, [id])
 
   const allocations = useMemo(() => build ? calculateAllocations(build.science, books) : [], [build, books])
-  const raceRule = useMemo(() => build?.race ? races.find((r) => r.race.toLowerCase() === build.race.toLowerCase()) : null, [build, races])
-  const personalityRule = useMemo(() => build?.personality ? personalities.find((p) => p.personality.toLowerCase() === build.personality.toLowerCase()) : null, [build, personalities])
+  const raceRule = build?.race_rule_snapshot || null
+  const personalityRule = build?.personality_rule_snapshot || null
+  const [resyncing, setResyncing] = useState(false)
+
+  async function handleResync() {
+    setResyncing(true)
+    try {
+      const res = await fetch(`/api/builds/${id}/resync`, { method: "POST" })
+      if (!res.ok) throw new Error((await res.json()).error || "Resync failed.")
+      const { build: updated } = await res.json()
+      setBuild(updated)
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setResyncing(false)
+    }
+  }
 
   async function handleDelete() {
     if (!confirm(`Delete "${build.name}"? This can't be undone.`)) return
@@ -186,11 +201,19 @@ function BuildDetail({ id, races, personalities, onBack, onDeleted }: { id: stri
     <div style={card}>
       <div style={{ display:"flex", justifyContent:"space-between", marginBottom: 16 }}>
         <button style={btnGhost} onClick={onBack}>← Back to Library</button>
-        <button style={btnDanger} disabled={deleting} onClick={handleDelete}>{deleting ? "Deleting…" : "Delete Build"}</button>
+        <div style={{ display:"flex", gap:8 }}>
+          {(build.race || build.personality) && (
+            <button style={btnGhost} disabled={resyncing} onClick={handleResync}>{resyncing ? "Resyncing…" : "Resync to Latest Rules"}</button>
+          )}
+          <button style={btnDanger} disabled={deleting} onClick={handleDelete}>{deleting ? "Deleting…" : "Delete Build"}</button>
+        </div>
       </div>
 
       <h2 style={{ margin:0 }}>{build.name}</h2>
-      <p style={{ color:"#8993a1", fontSize:11 }}>{[build.race, build.personality].filter(Boolean).join(" / ")}{build.author ? ` · set by ${build.author}` : ""}</p>
+      <p style={{ color:"#8993a1", fontSize:11 }}>
+        {[build.race, build.personality].filter(Boolean).join(" / ")}{build.author ? ` · set by ${build.author}` : ""}
+        {build.rules_age_number != null && ` · rules pinned to Age ${build.rules_age_number}`}
+      </p>
 
       {(raceRule || personalityRule) && (
         <>

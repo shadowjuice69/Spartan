@@ -16,6 +16,23 @@ async function requireAccount() {
   return { ok: true as const, db, discordId: account?.discord_user_id ? String(account.discord_user_id) : null }
 }
 
+async function lookupRuleSnapshots(db: any, race: string | null, personality: string | null) {
+  const [raceRes, personalityRes] = await Promise.all([
+    race
+      ? db.from('spartan_race_rules').select('*').ilike('race', race).order('age_number', { ascending: false }).limit(1).maybeSingle()
+      : Promise.resolve({ data: null }),
+    personality
+      ? db.from('spartan_personality_rules').select('*').ilike('personality', personality).order('age_number', { ascending: false }).limit(1).maybeSingle()
+      : Promise.resolve({ data: null }),
+  ])
+  const ages = [raceRes.data?.age_number, personalityRes.data?.age_number].filter((n) => typeof n === 'number')
+  return {
+    race_rule_snapshot: raceRes.data || null,
+    personality_rule_snapshot: personalityRes.data || null,
+    rules_age_number: ages.length ? Math.max(...ages) : null,
+  }
+}
+
 export async function GET(request: Request) {
   const auth = await requireAccount()
   if (!auth.ok) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -42,6 +59,8 @@ export async function POST(request: Request) {
           raw_build_text, raw_military_text, raw_science_text } = body
   if (!name) return NextResponse.json({ error: 'Build name is required.' }, { status: 400 })
 
+  const snapshots = await lookupRuleSnapshots(auth.db, race || null, personality || null)
+
   const { data, error } = await auth.db
     .from('spartan_builds')
     .insert({
@@ -50,6 +69,7 @@ export async function POST(request: Request) {
       buildings: buildings || {}, science: science || {}, military_requirement: military_requirement || {},
       raw_build_text: raw_build_text || null, raw_military_text: raw_military_text || null,
       raw_science_text: raw_science_text || null,
+      ...snapshots,
     })
     .select()
     .single()
