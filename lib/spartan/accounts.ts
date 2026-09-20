@@ -24,49 +24,36 @@ export async function registerSpartanAccount({ screenName, password, provinceNam
   if (province.length < 2 || province.length > 80) throw new Error('Enter your registered province name.')
 
   const supabase = adminClient()
-
-  // Province verification is anchored to Spartan's canonical registry.
-  // The legacy public.provinces table no longer exists in production.
-  const { data: registryRows, error: registryError } = await supabase
+  // NOTE: the canonical registry is `spartan_province_registry`, not a
+  // `provinces` table (that name never existed in this schema). It keys
+  // location as `kingdom_code` and has no `discord_id` column — Discord
+  // identity only lives in `spartan_access`, matched by screen name below.
+  const { data: provinceRows, error: provinceError } = await supabase
     .from('spartan_province_registry')
     .select('province_id,province_name,kingdom_code,user_id')
     .ilike('province_name', province)
     .limit(20)
-  if (registryError) throw new Error(`Province verification failed: ${registryError.message}`)
+  if (provinceError) throw new Error(`Province verification failed: ${provinceError.message}`)
 
-  const provinceRow = (registryRows ?? []).find((row) => {
-    const rowLocation = String(row.kingdom_code ?? '').replace(/\s+/g, '')
-    return rowLocation === location
+  const provinceRow = (provinceRows ?? []).find((row) => {
+    const rowKd = String(row.kingdom_code ?? '').replace(/\s+/g, '')
+    return rowKd === location
   })
   if (!provinceRow) throw new Error('That province name and location are not currently registered in Spartan. Have the province send a fresh capture, then try again.')
 
-  let discordUserId: string | null = null
-
-  let role = 'member'
-
-  if (!discordUserId) {
-    const { data: namedAccess, error: namedAccessError } = await supabase
-      .from('spartan_access')
-      .select('discord_user_id,status,role')
-      .ilike('username', name)
-      .maybeSingle()
-    if (namedAccessError) throw new Error(`Spartan registration verification failed: ${namedAccessError.message}`)
-    if (namedAccess) {
-      if (namedAccess.status !== 'active') throw new Error('The Discord identity associated with this Spartan registration is not currently authorized.')
-      discordUserId = String(namedAccess.discord_user_id)
-      role = namedAccess.role || role
-    }
-  }
-
-  if (!discordUserId) {
+  const { data: namedAccess, error: namedAccessError } = await supabase
+    .from('spartan_access')
+    .select('discord_user_id,status,role')
+    .ilike('username', name)
+    .maybeSingle()
+  if (namedAccessError) throw new Error(`Spartan registration verification failed: ${namedAccessError.message}`)
+  if (!namedAccess) {
     throw new Error('This province is registered, but its Discord identity is not linked yet. Use the same Spartan screen name you registered with the Discord bot, or have the province send a fresh capture.')
   }
+  if (namedAccess.status !== 'active') throw new Error('The Discord identity associated with this Spartan registration is not currently authorized.')
 
-  const { data: access, error: accessError } = await supabase
-    .from('spartan_access').select('discord_user_id,status,role').eq('discord_user_id', discordUserId).maybeSingle()
-  if (accessError) throw new Error(`Spartan registration verification failed: ${accessError.message}`)
-  if (access?.status !== 'active') throw new Error('The Discord identity associated with this province is not currently authorized by Spartan.')
-  role = access.role || role
+  const discordUserId = String(namedAccess.discord_user_id)
+  const role = namedAccess.role || 'member'
 
   const { data: existing } = await supabase
     .from('spartan_accounts')
@@ -120,6 +107,13 @@ export async function registerSpartanAccount({ screenName, password, provinceNam
   const { error: accessUpdateError } = await supabase.from('spartan_access')
     .update({ username: name, updated_at: new Date().toISOString() }).eq('discord_user_id', discordUserId)
   if (accessUpdateError) throw new Error(`Spartan access profile update failed: ${accessUpdateError.message}`)
+
+  // Link this Spartan account back onto the province registry row so future
+  // lookups (war room, drafts, etc.) can resolve owner -> province directly.
+  await supabase
+    .from('spartan_province_registry')
+    .update({ user_id: authUserId, updated_at: new Date().toISOString() })
+    .eq('province_id', provinceRow.province_id)
 
   return { screenName: name, discordUserId, provinceName: province, provinceLocation: location, ip }
 }
