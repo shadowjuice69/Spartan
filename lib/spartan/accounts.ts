@@ -24,18 +24,24 @@ export async function registerSpartanAccount({ screenName, password, provinceNam
   if (province.length < 2 || province.length > 80) throw new Error('Enter your registered province name.')
 
   const supabase = adminClient()
-  const { data: provinceRows, error: provinceError } = await supabase
-    .from('provinces').select('id,name,location,kd_code,discord_id,user_id').eq('name', province).limit(20)
-  if (provinceError) throw new Error(`Province verification failed: ${provinceError.message}`)
 
-  const provinceRow = (provinceRows ?? []).find((row) => {
-    const rowLocation = String(row.location ?? '').replace(/\s+/g, '')
-    const rowKd = String(row.kd_code ?? '').replace(/\s+/g, '')
-    return rowLocation === location || rowKd === location
+  // Province verification is anchored to Spartan's canonical registry.
+  // The legacy public.provinces table no longer exists in production.
+  const { data: registryRows, error: registryError } = await supabase
+    .from('spartan_province_registry')
+    .select('province_id,province_name,kingdom_code,user_id')
+    .ilike('province_name', province)
+    .limit(20)
+  if (registryError) throw new Error(`Province verification failed: ${registryError.message}`)
+
+  const provinceRow = (registryRows ?? []).find((row) => {
+    const rowLocation = String(row.kingdom_code ?? '').replace(/\s+/g, '')
+    return rowLocation === location
   })
   if (!provinceRow) throw new Error('That province name and location are not currently registered in Spartan. Have the province send a fresh capture, then try again.')
 
-  let discordUserId = provinceRow.discord_id ? String(provinceRow.discord_id) : null
+  let discordUserId: string | null = null
+
   let role = 'member'
 
   if (!discordUserId) {
