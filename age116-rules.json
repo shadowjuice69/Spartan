@@ -1,0 +1,216 @@
+{
+  "age_number": 116,
+  "races": [
+    {
+      "race": "Avian",
+      "emoji": "⚡",
+      "role_tag": "Fast Attack",
+      "war_doctrine": "In War: up to −10% Attack Time and −12.5% Military Wage Cost to you and your kingdom",
+      "unique_passive": "Aerial Supremacy — Successful attacks destroy 8% of the target's current War Horses and 8% of the target's current Prisoners.",
+      "bonuses": "−25% Attack Time · −25% Training Time · −25% Military Wage Cost",
+      "penalties": "No Access to Stables/War Horses · +30% Rune Cost",
+      "units": "Soldier 3/0 · Off Spec 12/0 (4.8nw) · Def Spec 0/10 (5nw) · Elite 16/2 (750gc, 6.5nw) · Merc 8/0 · Prisoner 8/0 · War Horse n/a",
+      "spells": "Town Watch · Illuminate Shadows"
+    },
+    {
+      "race": "Dark Elf",
+      "emoji": "🌑",
+      "role_tag": "Magic Offense",
+      "war_doctrine": "In War: up to +12.5% Instant Spell Damage and −12.5% Rune Cost to you and all your kingdom",
+      "unique_passive": "Dark Ritual — After a successful attack, gain +20% Instant Spell Damage for 6 ticks. Successful Traditional Marches generate 1 Wizard for every 4 acres gained.",
+      "bonuses": "+30% Offensive WPA · +30% Instant Spell Damage · Can train Thieves using Specialist Credits",
+      "penalties": "−15% Birth Rates · +30% Damage taken from sabotage",
+      "units": "Soldier 3/0 · Off Spec 14/0 (5.6nw) · Def Spec 0/12 (6nw) · Elite 16/2 (700gc, 6.5nw) · Merc 8/0 · Prisoner 8/0 · War Horse 2/0 (0.6nw)",
+      "spells": "Blizzard · Mage's Fury · Mind Focus · Fool's Gold"
+    },
+    {
+      "race": "Dryad",
+      "emoji": "🌳",
+      "role_tag": "Defensive",
+      "war_doctrine": "In War: up to +10% Defensive Military Efficiency and −12.5% Defensive Military Casualties to you and your kingdom",
+      "unique_passive": "Thick Bark — After being successfully attacked, gain +5% Defensive Military Efficiency for 6 ticks. Does not stack, only refreshes.",
+      "bonuses": "+12.5% DME · −40% Defensive Military Losses · +20% Birth Rate",
+      "penalties": "+10% Attack Time · +1 Cost to Offensive Spells · Cannot use Forts",
+      "units": "Soldier 3/0 · Off Spec 10/0 (4.0nw) · Def Spec 0/11 (5.5nw) · Elite 16/3 (800gc, 7.0nw) · Merc 8/0 · Prisoner 8/0 · War Horse 2/0 (0.6nw)",
+      "spells": "Aggression · Greater Protection · Clearsight"
+    },
+    {
+      "race": "Dwarf",
+      "emoji": "⛏",
+      "role_tag": "Builder",
+      "war_doctrine": "In War: up to −12.5% Construction Costs and +12.5% Building Efficiency for you and all your kingdom",
+      "unique_passive": "Mountain Hold — After being successfully attacked, Construction Time is reduced by an additional 30% for 6 ticks.",
+      "bonuses": "+30% Building Efficiency · −50% Construction Time · −50% Construction Cost",
+      "penalties": "Cannot Accelerate Construction · +90% Food Consumption",
+      "units": "Soldier 3/0 · Off Spec 10/0 (4.0nw) · Def Spec 0/10 (5.0nw) · Elite 15/7 (900gc, 7.0nw) · Merc 8/0 · Prisoner 8/0 · War Horse 2/0 (0.6nw)",
+      "spells": "Miner's Mystique · Town Watch · Reflect Magic"
+    },
+    {
+      "race": "Elf",
+      "emoji": "🌿",
+      "role_tag": "Magic WPA",
+      "war_doctrine": "In War: up to −12.5% Damage from Enemy Sorcery and +12.5% Spell Duration to you and all your kingdom",
+      "unique_passive": "Arcane Mastery — Chastity cast by Elves reduces Birth Rates by 70%. Offensive duration spells cast by Elves last +2 ticks.",
+      "bonuses": "+40% Magic Effectiveness (WPA) · +30% Offensive Spell Duration · +1 Mana Per Tick in War",
+      "penalties": "+35% Draft Costs",
+      "units": "Soldier 3/0 · Off Spec 10/0 (4.0nw) · Def Spec 0/13 (6.5nw) · Elite 14/4 (700gc, 7.0nw) · Merc 8/0 · Prisoner 8/0 · War Horse 2/0 (0.6nw)",
+      "spells": "Pitfalls · Sloth · Reflect Magic · Chastity · Vermin"
+    },
+    {
+      "race": "Faery",
+      "emoji": "🧚",
+      "role_tag": "All Spells",
+      "war_doctrine": "In War: up to +12.5% Defensive WPA and −12.5% Damage from Enemy Thievery to you and all your kingdom",
+      "unique_passive": "Leyline Interference — Enemy spells cast against Faery provinces have a 15% chance to fail.",
+      "bonuses": "+30% Self Spell Duration · +20% WPA/TPA · +1 Mana Recovery per Tick",
+      "penalties": "−5% Population · +15% Military Casualties",
+      "units": "Soldier 3/0 · Off Spec 10/0 (4.0nw) · Def Spec 0/10 (5.0nw) · Elite 4/16 (1150gc, 8.5nw) · Merc 8/0 · Prisoner 8/0 · War Horse 2/0 (0.6nw)",
+      "spells": "Greater Protection · Reflect Magic · Illuminate Shadows · Tree of Gold · Revelation · Fountain of Knowledge"
+    },
+    {
+      "race": "Halfling",
+      "emoji": "🌾",
+      "role_tag": "Thievery",
+      "war_doctrine": "In War: up to +12.5% Sabotage Damage and −12.5% Thief Losses to you and all your kingdom",
+      "unique_passive": "Burrowed Networks — Each successful sabotage against the same target increases that Halfling's sabotage damage against it by 3%, up to +15%. Resets on a different target. Does not stack.",
+      "bonuses": "+12.5% Population · +1 Stealth Regeneration Per Tick · +30% Thievery Effectiveness (TPA)",
+      "penalties": "−25% Draft Speed",
+      "units": "Soldier 3/0 · Off Spec 11/0 (4.4nw) · Def Spec 0/10 (5.0nw) · Elite 10/13 (900gc, 7.5nw) · Merc 8/0 · Prisoner 8/0 · War Horse 2/0 (0.6nw)",
+      "spells": "Tree of Gold · Greater Protection · Invisibility"
+    },
+    {
+      "race": "Human",
+      "emoji": "👤",
+      "role_tag": "Economy",
+      "war_doctrine": "In War: up to +12.5% Specialist Credit Gains and −12.5% Training Costs to you and your kingdom",
+      "unique_passive": "Muster the Realm — After a successful attack, gain Building Credits equal to 25% of acres gained and Specialist Credits equal to 100% of acres gained. Training Time −20% for 6 ticks. Does not stack.",
+      "bonuses": "+30% Income · −30% Training Costs · +20% Draft Speed",
+      "penalties": "+25% Military Wages",
+      "units": "Soldier 3/0 · Off Spec 15/0 (6.0nw) · Def Spec 0/12 (6.0nw) · Elite 15/5 (800gc, 7.0nw) · Merc 8/0 · Prisoner 8/0 · War Horse 3/0 (0.9nw)",
+      "spells": "Fountain of Knowledge · Invisibility · Guile · Steal War Horses"
+    },
+    {
+      "race": "Orc",
+      "emoji": "💀",
+      "role_tag": "Offensive",
+      "war_doctrine": "In War: up to +10% Offensive Military Efficiency and +12.5% Raze Damage to you and all your kingdom",
+      "unique_passive": "Blood Spoils — Successful attacks convert 25% of enemy military casualties into Specialist Credits.",
+      "bonuses": "+10% Gains OOW & +15% Gains in War · +15% Enemy Military Casualties · −40% Draft Cost",
+      "penalties": "+20% Instant Damage from Sabotage and Sorcery",
+      "units": "Soldier 3/0 · Off Spec 13/0 (5.2nw) · Def Spec 0/10 (5nw) · Elite 18/3 (850gc, 7.0nw) · Merc 8/0 · Prisoner 8/0 · War Horse 2/0 (0.6nw)",
+      "spells": "Bloodlust · Wrath · Aggression"
+    },
+    {
+      "race": "Undead",
+      "emoji": "☠",
+      "role_tag": "Attrition",
+      "war_doctrine": "In War: up to −12.5% Enemy Battle Gains and +12.5% Increased Plague Spread Chance (does not grant ability to spread Plague)",
+      "unique_passive": "Death March — Converts 25% of offensive losses into Soldiers instantly.",
+      "bonuses": "−45% Military Losses · Plague Immunity · Always carries Plague, chance to spread · No Food Requirement",
+      "penalties": "Cannot build Hospitals",
+      "units": "Soldier 3/0 · Off Spec 11/0 (4.4nw) · Def Spec 0/10 (5.0nw) · Elite 16/4 (800gc, 7nw) · Merc 8/0 · Prisoner 8/0 · War Horse 2/0 (0.6nw)",
+      "spells": "Animate Dead · Vermin · Ghost Workers"
+    }
+  ],
+  "personalities": [
+    {
+      "personality": "The Artisan",
+      "emoji": "🏗",
+      "unique_passive": "Master Craftsmanship — When razing buildings, Artisans recover 25% of buildings razed as Building Credits.",
+      "bonuses": "+25% Building Capacity (Homes/Stables/Dungeons) · +25% Building Production · −25% Construction Costs (incl. Raze) · Immune to Greed/Incite Riots/Fool's Gold · +25% Economy Science",
+      "penalties": null,
+      "start": "+600 Soldiers · +600 Spec Credits · +200 Build Credits",
+      "spells": "Ghost Workers · Greater Protection"
+    },
+    {
+      "personality": "The Cleric",
+      "emoji": "⛪",
+      "unique_passive": "Divine Favour — Self-spells cast by Clerics have their duration increased by 4 ticks.",
+      "bonuses": "+1 Elite Defensive Value (NW) · +1 Defensive Specialist Strength (NW) · −40% Damage from Instant Spells · +25% Military Science",
+      "penalties": null,
+      "start": "+800 Soldiers · +800 Spec Credits",
+      "spells": "Salvation · Revelation · Divine Shield · Illuminate Shadows · Hero's Inspiration"
+    },
+    {
+      "personality": "The General",
+      "emoji": "⚔️",
+      "unique_passive": "Relentless Assault — Each successful attack grants +5% Enemy Military Defensive Casualties against that enemy for 3 ticks, stacking up to +15%. New attacks refresh all stacks; resets after 3 ticks without a hit or when attacking a different enemy.",
+      "bonuses": "+1 General · +2 Offensive Elite Strength (NW) · −25% Training Cost & Speed · Train 1 Elite per 2 Spec Credits · +25% Military Science",
+      "penalties": null,
+      "start": "+800 Soldiers · +800 Spec Credits",
+      "spells": "Mist · Wrath"
+    },
+    {
+      "personality": "The Heretic",
+      "emoji": "🔥",
+      "unique_passive": "Arcane Frenzy — After each successful attack, gain +1 Mana, +1 Stealth, and +10% Instant Spell/Sabotage Damage for 6 ticks. Does not stack, only refreshes.",
+      "bonuses": "+35% Offensive TPA · +35% Offensive WPA · −50% Thief Losses · Immune to Expose Thieves · +50% Guild Effectiveness · +25% Arcane Science",
+      "penalties": null,
+      "start": "+400 Wizards · +400 Thieves",
+      "spells": "Nightmares · Fools Gold · Vermin · Magic Ward"
+    },
+    {
+      "personality": "The Mystic",
+      "emoji": "✨",
+      "unique_passive": "Focused Channelling — While above 60% mana, spells gain +20% WPA.",
+      "bonuses": "+100% Guilds Effectiveness · +1 Mana Recovery per Tick · +25% WPA · +40% Channeling Science",
+      "penalties": null,
+      "start": "+800 Wizards",
+      "spells": "Pitfalls · Meteor Showers · Chastity · Fools Gold"
+    },
+    {
+      "personality": "The Necromancer",
+      "emoji": "💀",
+      "unique_passive": "Dark Pact — After each successful attack, converts 7.5% of enemy killed units into Wizards, 17.5% into Soldiers, and 10% into Peasants.",
+      "bonuses": "+25% WPA · +7.5% ME · −40% Rune Cost (not Ritual) · +40% Channeling Science",
+      "penalties": null,
+      "start": "+400 Wizards · +400 Spec Credits",
+      "spells": "Animate Dead · Mind Focus · Soul Blight · Nightmare · Guile · Lightning Strike"
+    },
+    {
+      "personality": "The Rogue",
+      "emoji": "🗡",
+      "unique_passive": "Shadow Persistence — Rogue provinces may perform thievery operations while overpopulated.",
+      "bonuses": "+100% Thieves' Dens Effectiveness · +25% TPA · +1 Stealth Recovery per Tick · Access to All Thievery Operations · +40% Crime Science",
+      "penalties": null,
+      "start": "+800 Thieves",
+      "spells": "All Thievery Operations"
+    },
+    {
+      "personality": "The Sage",
+      "emoji": "📖",
+      "unique_passive": "Focused Resolve — While in War, Science Effects increase by 1% each tick, up to a maximum of 15%. Resets when war ends.",
+      "bonuses": "+20% Book Generation · +20% Scientist Generation · +50% Learn Protection · +15% Science Efficiency",
+      "penalties": null,
+      "start": "+2 Scientist · +800 Soldiers · +800 Spec Credits",
+      "spells": "Revelation · Fountain of Knowledge"
+    },
+    {
+      "personality": "The Tactician",
+      "emoji": "🗺",
+      "unique_passive": "Interdiction — Successful attacks in War destroy 15% of gold, 15% of runes, and 15% of food.",
+      "bonuses": "−20% Attack Time · +40% Specialist Credits Gains · +40% Draft Speed · No Thieves Lost on Intel · +40% Siege Science",
+      "penalties": null,
+      "start": "+800 Soldiers · +800 Spec Credits",
+      "spells": "Clearsight"
+    },
+    {
+      "personality": "The Warrior",
+      "emoji": "🪓",
+      "unique_passive": "Battle Cry — Upon a successful attack, destroys 1.5% of the entire target population.",
+      "bonuses": "+15% Offensive Military Efficiency · +5 Mercenary & Prisoner Strength · Merc/Prisoner sendable 1-for-4 normal troops · +35% Tactics Science",
+      "penalties": null,
+      "start": "+800 Soldiers · +800 Spec Credits",
+      "spells": "None"
+    },
+    {
+      "personality": "The War Hero",
+      "emoji": "🏆",
+      "unique_passive": "Rising Renown — Successful attacks in War grant +5% Honour Effects for 6 ticks, stacking up to +15%. Each successful attack refreshes all stacks; resets after 6 ticks without a hit.",
+      "bonuses": "+10% Battle Gains (War Only) · −25% Honor Loss · +100% Honor Effects · Off Specialist +2 strength (NW) · +40% Valor Science",
+      "penalties": null,
+      "start": "+800 Soldiers · +800 Spec Credits",
+      "spells": "Quick Feet · Righteous Aggressor · Hero's Inspiration"
+    }
+  ]
+}
