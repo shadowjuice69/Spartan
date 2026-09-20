@@ -14,6 +14,7 @@ export const DRAFT_RATES: Record<string, number> = {
 
 export const BASE_BIRTH_RATE = 0.0205
 export const TICKS_PER_DAY = 24
+export const RITUAL_DRAFT_PCT = 10
 
 /** Extract Draft Speed / Draft Rate modifiers from stored rule text. */
 export function extractDraftMultiplier(...texts: (string | null | undefined)[]): number {
@@ -31,16 +32,25 @@ export function extractDraftMultiplier(...texts: (string | null | undefined)[]):
   return mult
 }
 
+export interface DraftModifier {
+  label: string
+  pct: number
+}
+
 export interface DraftCalcInputs {
   totalPopulation: number
   currentSoldiers: number
   targetDraftPct: number
   draftRatePct: number
   heroismDraftSpeedPct: number
+  raceName?: string | null
   raceBonusText?: string | null
   racePenaltyText?: string | null
+  raceBonusActive?: boolean
+  personalityName?: string | null
   personalityBonusText?: string | null
   personalityPenaltyText?: string | null
+  personalityBonusActive?: boolean
   patriotismActive: boolean
   patriotismDraftSpeedPct?: number
   ritualDraftPct: number
@@ -69,6 +79,7 @@ export interface DraftCalcResult {
   targetReached: boolean
   ticksToTarget: number | null
   hoursToTarget: number | null
+  modifiers: DraftModifier[]
 }
 
 function clamp(value: number, min: number, max: number) {
@@ -82,8 +93,13 @@ export function simulateDraft(inputs: DraftCalcInputs): DraftCalcResult {
   const targetSoldiers = Math.round(totalPopulation * targetDraftPct / 100)
   const startingPeasants = Math.max(0, totalPopulation - currentSoldiers)
 
-  const raceMult = extractDraftMultiplier(inputs.raceBonusText, inputs.racePenaltyText)
-  const personalityMult = extractDraftMultiplier(inputs.personalityBonusText, inputs.personalityPenaltyText)
+  const raceActive = inputs.raceBonusActive !== false
+  const personalityActive = inputs.personalityBonusActive !== false
+
+  const raceMult = raceActive ? extractDraftMultiplier(inputs.raceBonusText, inputs.racePenaltyText) : 1
+  const personalityMult = personalityActive
+    ? extractDraftMultiplier(inputs.personalityBonusText, inputs.personalityPenaltyText)
+    : 1
   const heroismMult = 1 + (inputs.heroismDraftSpeedPct || 0) / 100
   const patriotismPct = inputs.patriotismActive ? (inputs.patriotismDraftSpeedPct ?? 30) : 0
   const patriotismMult = 1 + patriotismPct / 100
@@ -94,6 +110,15 @@ export function simulateDraft(inputs: DraftCalcInputs): DraftCalcResult {
   const combinedMultiplier = raceMult * personalityMult * heroismMult * patriotismMult * ritualMult
   const effectiveDraftRatePct = Math.max(0, (inputs.draftRatePct || 0) * combinedMultiplier)
   const combinedModifierPct = (combinedMultiplier - 1) * 100
+
+  const modifiers: DraftModifier[] = []
+  if (inputs.patriotismActive && patriotismPct) modifiers.push({ label: "Patriotism", pct: patriotismPct })
+  if (raceActive && raceMult !== 1) modifiers.push({ label: inputs.raceName || "Race", pct: (raceMult - 1) * 100 })
+  if (personalityActive && personalityMult !== 1) {
+    modifiers.push({ label: inputs.personalityName || "Personality", pct: (personalityMult - 1) * 100 })
+  }
+  if (inputs.heroismDraftSpeedPct) modifiers.push({ label: "Heroism", pct: inputs.heroismDraftSpeedPct })
+  if (inputs.ritualDraftPct) modifiers.push({ label: "Ritual", pct: inputs.ritualDraftPct })
 
   let peasants = startingPeasants
   let soldiers = currentSoldiers
@@ -147,5 +172,6 @@ export function simulateDraft(inputs: DraftCalcInputs): DraftCalcResult {
     targetReached: ticksToTarget !== null,
     ticksToTarget,
     hoursToTarget: ticksToTarget,
+    modifiers,
   }
 }
