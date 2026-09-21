@@ -28,6 +28,8 @@ export async function registerSpartanAccount({ screenName, password, provinceNam
   // `provinces` table (that name never existed in this schema). It keys
   // location as `kingdom_code` and has no `discord_id` column — Discord
   // identity only lives in `spartan_access`, matched by screen name below.
+  // Resolve the canonical province by BOTH name and kingdom location. Do not
+  // depend on the old `provinces` table or on a stale access.username value.
   const { data: provinceRows, error: provinceError } = await supabase
     .from('spartan_province_registry')
     .select('province_id,province_name,kingdom_code,user_id')
@@ -36,17 +38,32 @@ export async function registerSpartanAccount({ screenName, password, provinceNam
   if (provinceError) throw new Error(`Province verification failed: ${provinceError.message}`)
 
   const provinceRow = (provinceRows ?? []).find((row) => {
+    const rowName = String(row.province_name ?? '').trim().toLowerCase()
     const rowKd = String(row.kingdom_code ?? '').replace(/\s+/g, '')
-    return rowKd === location
+    return rowName === province.toLowerCase() && rowKd === location
   })
   if (!provinceRow) throw new Error('That province name and location are not currently registered in Spartan. Have the province send a fresh capture, then try again.')
 
-  const { data: namedAccess, error: namedAccessError } = await supabase
+  // Discord registration historically stored the province name/location in
+  // spartan_access.metadata and, for some registrations, put the province
+  // name into username instead of the chosen Spartan screen name. Resolve
+  // the active Discord identity from the canonical province first, then fall
+  // back to username matching for older correctly-linked registrations.
+  const { data: accessRows, error: accessError } = await supabase
     .from('spartan_access')
-    .select('discord_user_id,status,role')
-    .ilike('username', name)
-    .maybeSingle()
-  if (namedAccessError) throw new Error(`Spartan registration verification failed: ${namedAccessError.message}`)
+    .select('discord_user_id,status,role,username,metadata')
+    .eq('status', 'active')
+    .limit(500)
+  if (accessError) throw new Error(`Spartan registration verification failed: ${accessError.message}`)
+
+  const namedAccess = (accessRows ?? []).find((row) => {
+    const rowUsername = String(row.username ?? '').trim().toLowerCase()
+    if (rowUsername === name.toLowerCase()) return true
+    const metadata = row.metadata && typeof row.metadata === 'object' ? row.metadata as Record<string, unknown> : {}
+    const metaProvince = String(metadata.province ?? '').trim().toLowerCase()
+    const metaLocation = String(metadata.coordinates ?? '').replace(/\s+/g, '')
+    return metaProvince === String(provinceRow.province_name ?? '').trim().toLowerCase() && metaLocation === location
+  })
   if (!namedAccess) {
     throw new Error('This province is registered, but its Discord identity is not linked yet. Use the same Spartan screen name you registered with the Discord bot, or have the province send a fresh capture.')
   }
