@@ -243,6 +243,11 @@ function GM_xmlhttpRequest(opts) {
 
   function structured() {
     const fields = {}, sources = {}, tables = [];
+    // Declared early: thronePage (below) reads this, and a `const` reference
+    // before its declaration throws ReferenceError — which the safe() wrapper
+    // around this whole function silently swallows, turning it into an empty
+    // {fields:{}} on every single page, with no visible error anywhere.
+    const visible = text(document.body?.innerText || '');
     const add = (key, value, source) => {
       if (value === null || value === '') return;
       const normalized = text(key).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 80) || 'field';
@@ -357,7 +362,6 @@ function GM_xmlhttpRequest(opts) {
     });
     document.querySelectorAll('dt').forEach((dt, i) => { const dd = dt.nextElementSibling; if (dd?.matches('dd')) add(dt.innerText, /^[-+]?\d[\d,.]*%?$/.test(text(dd.innerText)) ? num(dd.innerText) : text(dd.innerText), `dl:${i}`); });
     document.querySelectorAll('label').forEach((label, i) => { const input = label.htmlFor ? document.getElementById(label.htmlFor) : label.querySelector('input,select,textarea'); if (input) add(label.innerText, /^[-+]?\d[\d,.]*%?$/.test(text(input.value)) ? num(input.value) : text(input.value), `label:${i}`); });
-    const visible = text(document.body?.innerText || '');
     const patterns = {
       acres: [/\bAcres?\b[^\d]{0,20}([\d,]+)/i,/\bLand\b[^\d]{0,20}([\d,]+)/i],
       networth: [/\bNet\s*worth\b[^\d]{0,20}([\d,]+)/i,/\bNW\b[^\d]{0,20}([\d,]+)/i],
@@ -701,3 +705,6 @@ function GM_xmlhttpRequest(opts) {
 
   if (document.readyState === 'loading') addEventListener('DOMContentLoaded', boot, { once:true }); else boot();
 })();
+
+
+
