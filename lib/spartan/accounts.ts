@@ -24,64 +24,49 @@ export async function registerSpartanAccount({ screenName, password, provinceNam
   if (province.length < 2 || province.length > 80) throw new Error('Enter your registered province name.')
 
   const supabase = adminClient()
-  // NOTE: the canonical registry is `spartan_province_registry`, not a
-  // `provinces` table (that name never existed in this schema). It keys
-  // location as `kingdom_code` and has no `discord_id` column — Discord
-  // identity only lives in `spartan_access`, matched by screen name below.
-  // Resolve the canonical province by BOTH name and kingdom location. Do not
-  // depend on the old `provinces` table or on a stale access.username value.
-  // Resolve the Discord registration by its canonical location first. This
-  // prevents a harmless form-name variation from blocking an otherwise valid
-  // province whose active Discord registration is uniquely tied to this KD slot.
+  // The Discord bot registration is the authorization record.
+  // Account creation is authorized ONLY by the registered province + KD.
+  // The website screen name is a NEW account name and must never be compared
+  // with the Discord username.
   const { data: accessRows, error: accessError } = await supabase
     .from('spartan_access')
     .select('discord_user_id,status,role,username,metadata')
     .eq('status', 'active')
     .limit(500)
-  if (accessError) throw new Error(`Spartan registration verification failed: ${accessError.message}`)
+  if (accessError) throw new Error('Spartan registration verification failed: ' + accessError.message)
 
-  const locationMatches = (accessRows ?? []).filter((row) => {
+  const submittedProvince = province.toLowerCase()
+  const authorizedAccessRows = (accessRows ?? []).filter((row) => {
     const metadata = row.metadata && typeof row.metadata === 'object' ? row.metadata as Record<string, unknown> : {}
-    return String(metadata.coordinates ?? '').replace(/\s+/g, '') === location
+    const registeredProvince = String(metadata.province ?? '').trim().toLowerCase()
+    const registeredLocation = String(metadata.coordinates ?? '').replace(/\s+/g, '')
+    return registeredProvince === submittedProvince && registeredLocation === location
   })
 
-  const locationAccess = locationMatches.length === 1 ? locationMatches[0] : null
-  const locationMetadata = locationAccess?.metadata && typeof locationAccess.metadata === 'object'
-    ? locationAccess.metadata as Record<string, unknown>
-    : {}
-  const canonicalProvince = String(locationMetadata.province ?? '').trim()
+  if (authorizedAccessRows.length !== 1) {
+    throw new Error('That province and KD are not currently authorized for Spartan account creation. Register the province with the Discord bot first.')
+  }
+
+  const authorizedAccess = authorizedAccessRows[0]
 
   const { data: provinceRows, error: provinceError } = await supabase
     .from('spartan_province_registry')
     .select('province_id,province_name,kingdom_code,user_id')
-    .ilike('province_name', canonicalProvince || province)
+    .ilike('province_name', province)
     .limit(20)
-  if (provinceError) throw new Error(`Province verification failed: ${provinceError.message}`)
+  if (provinceError) throw new Error('Province verification failed: ' + provinceError.message)
 
   const provinceRow = (provinceRows ?? []).find((row) => {
     const rowName = String(row.province_name ?? '').trim().toLowerCase()
     const rowKd = String(row.kingdom_code ?? '').replace(/\s+/g, '')
-    return rowName === String(canonicalProvince || province).toLowerCase() && rowKd === location
+    return rowName === submittedProvince && rowKd === location
   })
-  if (!provinceRow) throw new Error('That province name and location are not currently registered in Spartan. Have the province send a fresh capture, then try again.')
-
-  // Match the active Discord identity by its canonical province/location
-  // first, then retain screen-name matching for legacy registrations.
-  const namedAccess = locationAccess ?? (accessRows ?? []).find((row) => {
-    const rowUsername = String(row.username ?? '').trim().toLowerCase()
-    if (rowUsername === name.toLowerCase()) return true
-    const metadata = row.metadata && typeof row.metadata === 'object' ? row.metadata as Record<string, unknown> : {}
-    const metaProvince = String(metadata.province ?? '').trim().toLowerCase()
-    const metaLocation = String(metadata.coordinates ?? '').replace(/\s+/g, '')
-    return metaProvince === String(provinceRow.province_name ?? '').trim().toLowerCase() && metaLocation === location
-  })
-  if (!namedAccess) {
-    throw new Error('This province is registered, but its Discord identity is not linked yet. Use the same Spartan screen name you registered with the Discord bot, or have the province send a fresh capture.')
+  if (!provinceRow) {
+    throw new Error('That province and KD are not currently registered in Spartan. Register the province with the Discord bot first.')
   }
-  if (namedAccess.status !== 'active') throw new Error('The Discord identity associated with this Spartan registration is not currently authorized.')
 
-  const discordUserId = String(namedAccess.discord_user_id)
-  const role = namedAccess.role || 'member'
+  const discordUserId = String(authorizedAccess.discord_user_id)
+  const role = authorizedAccess.role || 'member'
 
   const { data: existing } = await supabase
     .from('spartan_accounts')
