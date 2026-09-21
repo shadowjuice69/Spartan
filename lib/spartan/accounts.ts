@@ -24,49 +24,52 @@ export async function registerSpartanAccount({ screenName, password, provinceNam
   if (province.length < 2 || province.length > 80) throw new Error('Enter your registered province name.')
 
   const supabase = adminClient()
-  // The Discord bot registration is the authorization record.
-  // Account creation is authorized ONLY by the registered province + KD.
-  // The website screen name is a NEW account name and must never be compared
-  // with the Discord username.
+
+  // The Discord identity is the real gate: you must have run `/spartan
+  // register` with the bot first, which writes an active spartan_access row
+  // whose metadata.province/coordinates match what you're typing here.
   const { data: accessRows, error: accessError } = await supabase
     .from('spartan_access')
-    .select('discord_user_id,status,role,username,metadata')
+    .select('discord_user_id,status,role,metadata')
     .eq('status', 'active')
     .limit(500)
-  if (accessError) throw new Error('Spartan registration verification failed: ' + accessError.message)
+  if (accessError) throw new Error(`Spartan registration verification failed: ${accessError.message}`)
 
-  const submittedProvince = province.toLowerCase()
   const authorizedAccessRows = (accessRows ?? []).filter((row) => {
-    const metadata = row.metadata && typeof row.metadata === 'object' ? row.metadata as Record<string, unknown> : {}
-    const registeredProvince = String(metadata.province ?? '').trim().toLowerCase()
-    const registeredLocation = String(metadata.coordinates ?? '').replace(/\s+/g, '')
-    return registeredProvince === submittedProvince && registeredLocation === location
+    const meta = (row.metadata ?? {}) as Record<string, unknown>
+    const registeredProvince = String(meta.province ?? '').trim().toLowerCase()
+    const registeredLocation = String(meta.coordinates ?? '').trim().replace(/\s+/g, '')
+    return registeredProvince === province.toLowerCase() && registeredLocation === location
   })
-
-  if (authorizedAccessRows.length !== 1) {
-    throw new Error('That province and KD are not currently authorized for Spartan account creation. Register the province with the Discord bot first.')
+  if (authorizedAccessRows.length === 0) {
+    throw new Error('That province and KD are not currently authorized for Spartan account creation. Register with the Discord bot (`/spartan register`) using this exact province name and location first, then try again.')
   }
+  if (authorizedAccessRows.length > 1) {
+    throw new Error('Multiple Discord identities are registered to that province and KD. Contact a kingdom admin to resolve the conflict before creating an account.')
+  }
+  const discordUserId = String(authorizedAccessRows[0].discord_user_id)
+  const role = authorizedAccessRows[0].role || 'member'
 
-  const authorizedAccess = authorizedAccessRows[0]
-
-  const { data: provinceRows, error: provinceError } = await supabase
+  // Unlike before, we no longer require spartan_province_registry to already
+  // have a matching row — that created a circular dependency (captures need
+  // an account, and the registry only fills up from captures). Instead we
+  // upsert the row here, so account creation is itself what establishes the
+  // province in the registry for provinces that have never been captured yet.
+  const { data: existingProvinceRows, error: provinceError } = await supabase
     .from('spartan_province_registry')
     .select('province_id,province_name,kingdom_code,user_id')
     .ilike('province_name', province)
     .limit(20)
-  if (provinceError) throw new Error('Province verification failed: ' + provinceError.message)
+  if (provinceError) throw new Error(`Province registry lookup failed: ${provinceError.message}`)
 
-  const provinceRow = (provinceRows ?? []).find((row) => {
-    const rowName = String(row.province_name ?? '').trim().toLowerCase()
+  let provinceRow = (existingProvinceRows ?? []).find((row) => {
     const rowKd = String(row.kingdom_code ?? '').replace(/\s+/g, '')
-    return rowName === submittedProvince && rowKd === location
-  })
-  if (!provinceRow) {
-    throw new Error('That province and KD are not currently registered in Spartan. Register the province with the Discord bot first.')
-  }
+    return rowKd === location
+  }) ?? null
 
-  const discordUserId = String(authorizedAccess.discord_user_id)
-  const role = authorizedAccess.role || 'member'
+  if (provinceRow && provinceRow.user_id) {
+    throw new Error('That province is already linked to a different Spartan account. Contact a kingdom admin if this is a mistake.')
+  }
 
   const { data: existing } = await supabase
     .from('spartan_accounts')
@@ -121,12 +124,26 @@ export async function registerSpartanAccount({ screenName, password, provinceNam
     .update({ username: name, updated_at: new Date().toISOString() }).eq('discord_user_id', discordUserId)
   if (accessUpdateError) throw new Error(`Spartan access profile update failed: ${accessUpdateError.message}`)
 
-  // Link this Spartan account back onto the province registry row so future
-  // lookups (war room, drafts, etc.) can resolve owner -> province directly.
-  await supabase
-    .from('spartan_province_registry')
-    .update({ user_id: authUserId, updated_at: new Date().toISOString() })
-    .eq('province_id', provinceRow.province_id)
+  // Create or claim the province registry row now, whichever is needed. This
+  // is what removes the old chicken-and-egg requirement.
+  if (provinceRow) {
+    await supabase
+      .from('spartan_province_registry')
+      .update({ user_id: authUserId, updated_at: new Date().toISOString() })
+      .eq('province_id', provinceRow.province_id)
+  } else {
+    const { error: insertProvinceError } = await supabase.from('spartan_province_registry').insert({
+      province_id: crypto.randomUUID(),
+      province_name: province,
+      kingdom_code: location,
+      user_id: authUserId,
+      metadata: { source: 'account-registration-bootstrap' },
+    })
+    // Don't fail the whole registration over this — the account itself
+    // already succeeded, and a missing registry row can be backfilled by
+    // the next real capture. Log-only failure.
+    if (insertProvinceError) console.error(`[SPARTAN REGISTER] Failed to bootstrap province registry row: ${insertProvinceError.message}`)
+  }
 
   return { screenName: name, discordUserId, provinceName: province, provinceLocation: location, ip }
 }
