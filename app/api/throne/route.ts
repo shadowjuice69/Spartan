@@ -71,7 +71,7 @@ export async function GET(request: Request) {
       || projections?.find((p: any) => projectionData(p)?.raw_kind === 'kingdom_details')
       || null
     const data = projectionData(projection)
-    const captured = findProvince(data, province.province_name)
+    const captured = Array.isArray(data?.provinces) ? findProvince(data, province.province_name) : (data || {})
 
     const { data: history, error: historyError } = await db
       .from('spartan_province_history')
@@ -93,6 +93,12 @@ export async function GET(request: Request) {
       peasants: captured.peons ?? captured.peasants ?? null,
       thieves: captured.thieves ?? null,
       wizards: captured.wizards ?? null,
+      mana: captured.mana ?? null,
+      stealth: captured.stealth ?? captured.stlth ?? null,
+      be: captured.build_efficiency ?? captured.buildEfficiency ?? captured.be ?? null,
+      wages: captured.wages ?? null,
+      tpa: captured.tpa ?? null,
+      wpa: captured.wpa ?? null,
       troops: {
         soldiers: captured.soldiers ?? null,
         off_specs: captured.off_specs ?? null,
