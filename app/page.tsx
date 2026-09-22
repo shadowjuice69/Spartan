@@ -26,10 +26,13 @@ type Snapshot = {
 type History = { snapshots: Snapshot[]; events: Array<{ id: number; occurred_at: string; event_type: string; raw_text?: string | null }>; identity?: { provinceName?: string | null; kingdomId?: string | null } };
 type Clock = { chicagoTime: string; chicagoDate: string; utopia: { year: number; month: number; day: number; tick: number }; nextTickAt: string; nextYearLabel: string; ticksUntilNextYear: number; sync: boolean; anchorGameDate?: string; anchorCapturedAt?: string };
 
-const nav = [
-  ["Command", "/"], ["Kingdom", "/command/kingdom"], ["Province", "/command/province"], ["War Room", "/command/war-room"],
-  ["Build Lab", "/command/build-lab"], ["Military", "/command/military"], ["Magic", "/command/magic"], ["Thievery", "/command/thievery"],
-  ["Science", "/command/science"], ["Wiki", "/command/wiki"], ["Tools", "/command/tools"],
+const navCommand = [
+  ["Command", "/"], ["Province", "/command/province"], ["War Room", "/command/war-room"],
+  ["Build Lab", "/command/build-lab"], ["Draft Calc", "/command/draft-calc"], ["Wiki", "/command/wiki"], ["Tools", "/command/tools"],
+] as const;
+const navIntel = [
+  ["Kingdom", "/command/kingdom"], ["Military", "/command/military"], ["Magic", "/command/magic"], ["Thievery", "/command/thievery"],
+  ["Science", "/command/science"], ["Buildings", "/command/buildings"], ["Throne", "/command/throne"],
 ] as const;
 const months = ["January", "February", "March", "April", "May", "June", "July"];
 
@@ -66,7 +69,9 @@ export default function Home() {
     <aside className="side">
       <div className="brand"><b>S</b><div><strong>SPARTAN</strong><small>UTOPIA COMMAND</small></div></div>
       <div className="label">COMMAND SYSTEMS</div>
-      {nav.map(([name, path]) => <Link key={name} href={path} className={name === "Command" ? "nav active" : "nav"}>{name}{name === "Command" && <em>LIVE</em>}</Link>)}
+      {navCommand.map(([name, path]) => <Link key={name} href={path} className={name === "Command" ? "nav active" : "nav"}>{name}{name === "Command" && <em>LIVE</em>}</Link>)}
+      <div className="label">INTEL DATA</div>
+      {navIntel.map(([name, path]) => <Link key={name} href={path} className="nav">{name}</Link>)}
       <div className="online"><i/> <div><strong>DATA CORE ONLINE</strong><small>Persistent capture storage</small></div></div>
     </aside>
 
