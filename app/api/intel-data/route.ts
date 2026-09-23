@@ -19,6 +19,7 @@ const kinds: Record<string, string[]> = {
   buildings: ['survey', 'buildings'],
   throne: ['throne'],
   kingdom: ['kingdom', 'news', 'som', 'survey', 'science', 'magic', 'thievery', 'throne', 'universal'],
+  'war-room': ['news'],
 }
 
 function payload(row: any) {
