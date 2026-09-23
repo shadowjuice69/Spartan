@@ -1,6 +1,14 @@
 const WIKI_SOURCE =
   "https://raw.githubusercontent.com/shadowjuice69/utopia-nexus/main/utopia-wiki.html";
 
+const WIKI_RETURN_BUTTON = `
+<a href="/" aria-label="Return to Command Center" style="
+  position:fixed;top:16px;right:18px;z-index:99999;
+  background:#101c23;border:1px solid #d8ff54;color:#d8ff54;
+  padding:11px 16px;border-radius:9px;font:900 10px/1 Arial,sans-serif;
+  letter-spacing:.08em;text-decoration:none;box-shadow:0 8px 24px rgba(0,0,0,.35);
+">← RETURN TO COMMAND CENTER</a>`;
+
 const SPARTAN_THEME = `
 <style id="spartan-theme">
   :root {
@@ -102,11 +110,17 @@ export async function GET() {
   let html = await response.text();
 
   // Keep the original wiki HTML/JS/navigation intact. Only layer Spartan's
-  // visual system on top so the wiki remains the user's authoritative file.
+  // visual system and a return link on top so the wiki remains the user's authoritative file.
   if (html.includes("</head>")) {
     html = html.replace("</head>", `${SPARTAN_THEME}</head>`);
   } else {
     html = `${SPARTAN_THEME}${html}`;
+  }
+
+  if (html.includes("</body>")) {
+    html = html.replace("</body>", `${WIKI_RETURN_BUTTON}</body>`);
+  } else {
+    html = `${html}${WIKI_RETURN_BUTTON}`;
   }
 
   return new Response(html, {
