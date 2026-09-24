@@ -5,15 +5,18 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start",
-    "lint": "next lint"
+    "start": "node scripts/start-all.js",
+    "lint": "next lint",
+    "start:web": "next start",
+    "start:bot": "node node_modules/utopia-nexus-bot/bot/bot.js"
   },
   "dependencies": {
     "@supabase/ssr": "latest",
     "@supabase/supabase-js": "latest",
     "next": "15.5.7",
     "react": "19.1.0",
-    "react-dom": "19.1.0"
+    "react-dom": "19.1.0",
+    "utopia-nexus-bot": "github:shadowjuice69/utopia-nexus#c9e557c12b638df9d958bf474df4a37ba979355c"
   },
   "devDependencies": {
     "@types/node": "24.0.10",
