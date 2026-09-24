@@ -24,58 +24,68 @@ function Attack(){const [yn,setYn]=useState(100000),[tn,setTn]=useState(100000),
 
 function Thievery(){
   const ops=[
-    {name:"Rob the Granaries",resource:"Food",capOow:.315,capWar:.46,perOow:95,perWar:135,unit:"bushels"},
-    {name:"Rob the Vaults",resource:"Gold",capOow:.052,capWar:.14,perOow:40,perWar:106,unit:"gc"},
-    {name:"Rob the Towers",resource:"Runes",capOow:.245,capWar:.35,perOow:18.2,perWar:26,unit:"runes"},
-    {name:"Kidnapping",resource:"Peasants",capOow:.0185,capWar:.04,perOow:null,perWar:null,unit:"peasants"},
-    {name:"Steal Horses",resource:"War Horses",capOow:.1275,capWar:.136,perOow:null,perWar:null,unit:"horses"},
+    {name:"Rob the Granaries",resource:"Food",capOow:.315,capWar:.46,perOow:95,perWar:135,lost:0.10,unit:"bushels",notes:"10% of stolen food is lost."},
+    {name:"Rob the Vaults",resource:"Gold",capOow:.052,capWar:.14,perOow:40,perWar:106,lost:0,unit:"gc",notes:"No resource-loss modifier listed."},
+    {name:"Rob the Towers",resource:"Runes",capOow:.245,capWar:.35,perOow:18.2,perWar:26,lost:0,unit:"runes",notes:"No resource-loss modifier listed."},
+    {name:"Kidnapping",resource:"Peasants",capOow:.0185,capWar:.04,perOow:.132,perWar:.285,lost:0,unit:"peasants",notes:"Gains can drop by 50% against a low-population target."},
+    {name:"Steal War Horses",resource:"War Horses",capOow:.1275,capWar:.136,perOow:.094,perWar:.10,lost:0.50,unit:"horses",notes:"Only half of the horses released are kept."},
+    {name:"Free Prisoners",resource:"Prisoners",capOow:.12,capWar:.17,perOow:.06,perWar:.07,lost:0.50,unit:"prisoners",notes:"You gain half of the prisoners freed."},
   ]
   const [opName,setOpName]=useState("Rob the Granaries")
   const [war,setWar]=useState(false),[available,setAvailable]=useState(10000),[targetResource,setTargetResource]=useState(100000)
+  const [racialMod,setRacialMod]=useState(1)
   const [yourTpa,setYourTpa]=useState(8),[targetTpa,setTargetTpa]=useState(4),[watchTowers,setWatchTowers]=useState(0)
-  const [crime,setCrime]=useState(1),[race,setRace]=useState(1),[dens,setDens]=useState(1),[honor,setHonor]=useState(1),[invis,setInvis]=useState(1),[ritual,setRitual]=useState(1)
+  const [selfNW,setSelfNW]=useState(100000),[targetNW,setTargetNW]=useState(100000),[targetRaceMod,setTargetRaceMod]=useState(1),[targetPersonalityMod,setTargetPersonalityMod]=useState(1),[guile,setGuile]=useState(1),[cunning,setCunning]=useState(1),[targetIlluminate,setTargetIlluminate]=useState(1),[targetShielding,setTargetShielding]=useState(1),[stance,setStance]=useState(1)
   const op=ops.find(x=>x.name===opName)||ops[0]
   const r=useMemo(function(){
     const cap=war?op.capWar:op.capOow
     const per=war?op.perWar:op.perOow
+    const targetNWRatio=Math.min(targetNW/Math.max(selfNW,1),selfNW/Math.max(targetNW,1))
     const watch=Math.max(0,1-Math.min(watchTowers*0.024,.625))
-    const attacker=invis*crime*race*dens*honor*ritual
-    const ratio=targetTpa>0?yourTpa/targetTpa:999
-    const maxReturn=targetResource*cap
-    const effectivePer=per===null?null:per*watch*attacker
-    const rawNeed=effectivePer===null?null:Math.ceil(maxReturn/Math.max(effectivePer,Number.EPSILON))
-    const thievesNeeded=rawNeed===null?0:Math.min(Math.max(rawNeed,0),Math.max(available,0))
-    const projected=rawNeed===null||effectivePer===null?null:Math.min(maxReturn,Math.max(0,thievesNeeded*effectivePer))
-    return {cap,per,watch,attacker,ratio,maxReturn,rawNeed,thievesNeeded,projected}
-  },[op,war,targetResource,available,targetTpa,yourTpa,watchTowers,crime,race,dens,honor,invis,ritual])
+    const yieldMultiplier=targetNWRatio*(war?1:1)*per*(1-op.lost)*racialMod*targetRaceMod*targetPersonalityMod*guile*cunning*targetIlluminate*watch*targetShielding*stance
+    const maxGross=targetResource*cap
+    const rawNeed=Math.ceil(maxGross/Math.max(per*racialMod,Number.EPSILON))
+    const recommended=Math.max(0,rawNeed)
+    const canSend=Math.max(0,available)
+    const actualSend=Math.min(recommended,canSend)
+    const theoreticalGross=Math.min(maxGross,actualSend*per*racialMod)
+    const estimatedNet=Math.max(0,theoreticalGross*(1-op.lost)*targetNWRatio*targetRaceMod*targetPersonalityMod*guile*cunning*targetIlluminate*watch*targetShielding*stance)
+    return {cap,per,targetNWRatio,watch,maxGross,rawNeed,recommended,actualSend,theoreticalGross,estimatedNet,yieldMultiplier}
+  },[op,war,targetResource,available,racialMod,selfNW,targetNW,targetRaceMod,targetPersonalityMod,guile,cunning,targetIlluminate,targetShielding,stance,watchTowers])
   const fmt=(n:number)=>Math.round(n).toLocaleString()
-  return <Card title="🗡️ Thievery Calculator" subtitle="Wiki-based max-return planning: calculate how many thieves are needed to reach the operation's maximum return.">
+  return <Card title="🗡️ Thievery Calculator" subtitle="Wiki-based instant-sabotage planning. The recommended send count uses the documented optimal-thieves formula; yield factors are shown separately.">
     <Grid>
       <label><span style={label}>Operation</span><select style={input} value={opName} onChange={e=>setOpName(e.target.value)}>{ops.map(x=><option key={x.name}>{x.name}</option>)}</select></label>
       <Field name="Target resource / troops" value={targetResource} setValue={setTargetResource}/>
       <Field name="Thieves available" value={available} setValue={setAvailable}/>
-      <Field name="Your effective raw TPA" value={yourTpa} setValue={setYourTpa} step=".01"/>
+      <Field name="Your racial mod" value={racialMod} setValue={setRacialMod} step=".01"/>
+      <Field name="Your raw TPA" value={yourTpa} setValue={setYourTpa} step=".01"/>
       <Field name="Target raw TPA" value={targetTpa} setValue={setTargetTpa} step=".01"/>
       <Field name="Target Watch Towers %" value={watchTowers} setValue={setWatchTowers} step=".1"/>
-      <Field name="Crime science multiplier" value={crime} setValue={setCrime} step=".01"/>
-      <Field name="Race TPA multiplier" value={race} setValue={setRace} step=".01"/>
-      <Field name="Dens multiplier" value={dens} setValue={setDens} step=".01"/>
-      <Field name="Honor multiplier" value={honor} setValue={setHonor} step=".01"/>
-      <Field name="Invisibility multiplier" value={invis} setValue={setInvis} step=".01"/>
-      <Field name="Ritual TPA multiplier" value={ritual} setValue={setRitual} step=".01"/>
+      <Field name="Your NW" value={selfNW} setValue={setSelfNW}/>
+      <Field name="Target NW" value={targetNW} setValue={setTargetNW}/>
+      <Field name="Target race mod" value={targetRaceMod} setValue={setTargetRaceMod} step=".01"/>
+      <Field name="Target personality mod" value={targetPersonalityMod} setValue={setTargetPersonalityMod} step=".01"/>
+      <Field name="Guile modifier" value={guile} setValue={setGuile} step=".01"/>
+      <Field name="Cunning modifier" value={cunning} setValue={setCunning} step=".01"/>
+      <Field name="Target Illuminate Shadows" value={targetIlluminate} setValue={setTargetIlluminate} step=".01"/>
+      <Field name="Target Shielding" value={targetShielding} setValue={setTargetShielding} step=".01"/>
+      <Field name="Stance modifier" value={stance} setValue={setStance} step=".01"/>
     </Grid>
     <label style={{display:"flex",gap:8,margin:"14px 0",fontSize:11}}><input type="checkbox" checked={war} onChange={e=>setWar(e.target.checked)}/> In War</label>
     <Results rows={[
-      ["TPA ratio",r.ratio.toFixed(2)+"x"],
-      ["Watch Tower damage factor",r.watch.toFixed(3)+"x"],
-      ["Maximum wiki return",fmt(r.maxReturn)+" "+op.unit],
-      ["Thieves needed for max",r.rawNeed===null?"Wiki does not specify a per-thief yield":fmt(r.rawNeed)],
-      ["Thieves you can send",r.thievesNeeded===null?"—":fmt(r.thievesNeeded)],
-      ["Gross return if successful",r.projected===null?"Wiki does not give a per-thief yield":fmt(r.projected)+" "+op.unit],
-      ["Max-return cap reached",r.rawNeed===null?"NOT CALCULATED":(r.rawNeed<=available?"YES":"NO — not enough thieves")],
+      ["Optimal thieves to send",fmt(r.recommended),"(documented formula)"],
+      ["Thieves available",fmt(r.available||available)],
+      ["Thieves you can actually send",fmt(r.actualSend),r.actualSend<r.recommended?"NOT ENOUGH TO HIT CAP":"CAP SEND"],
+      ["Maximum operation amount",fmt(r.maxGross)+" "+op.unit],
+      ["Gross amount at your send",fmt(r.theoreticalGross)+" "+op.unit],
+      ["Estimated net received",fmt(r.estimatedNet)+" "+op.unit],
+      ["Target NW / self NW factor",r.targetNWRatio.toFixed(4)+"x"],
+      ["Watch Tower factor",r.watch.toFixed(4)+"x"],
+      ["Cap reached",r.actualSend>=r.recommended?"YES":"NO"],
     ]}/>
     <div style={{fontSize:10,color:"#718091",marginTop:10}}>
-      Wiki basis: Mod TPA = Raw TPA × Invisibility × Crime Science × Race × Dens × Honor × Ritual. Watch Towers reduce thief damage by 2.4% per tower percentage, capped at 62.5%. Resource operations use the wiki's listed per-thief yields and maximum percentage caps. The wiki does not provide an exact success-probability equation here, so no made-up success percentage is used.
+      Accurate send-count formula: (Target Resources × Max % of Total) ÷ Gains Per Thief ÷ Racial Mod. TPA, NW ratio, target modifiers, Watch Towers, losses and stance affect the operation's yield, not the documented optimal send-count formula. For Kidnapping, low target population can reduce gains by 50%.
     </div>
   </Card>
 }
