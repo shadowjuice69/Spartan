@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { createRequire } from 'node:module';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -10,7 +11,9 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.text();
-    const { decodeRequest, handleCapture } = require('../../node_modules/utopia-nexus-bot/bot/services/universalReceiver');
+    const runtimeRequire = createRequire(import.meta.url);
+    const receiverPath = process.cwd() + '/node_modules/utopia-nexus-bot/bot/services/universalReceiver.js';
+    const { decodeRequest, handleCapture } = runtimeRequire(receiverPath);
     const form = new URLSearchParams(body);
     const expectedKey = process.env.INTEL_KEY || null;
     if (expectedKey && form.get('key') !== expectedKey) {
