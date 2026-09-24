@@ -34,23 +34,23 @@ function Thievery(){
   const [opName,setOpName]=useState("Rob the Granaries")
   const [war,setWar]=useState(false),[available,setAvailable]=useState(10000),[targetResource,setTargetResource]=useState(100000)
   const [racialMod,setRacialMod]=useState(1)
-  const [yourTpa,setYourTpa]=useState(8),[targetTpa,setTargetTpa]=useState(4),[watchTowers,setWatchTowers]=useState(0)
-  const [selfNW,setSelfNW]=useState(100000),[targetNW,setTargetNW]=useState(100000),[targetRaceMod,setTargetRaceMod]=useState(1),[targetPersonalityMod,setTargetPersonalityMod]=useState(1),[guile,setGuile]=useState(1),[cunning,setCunning]=useState(1),[targetIlluminate,setTargetIlluminate]=useState(1),[targetShielding,setTargetShielding]=useState(1),[stance,setStance]=useState(1)
+  const [watchTowers,setWatchTowers]=useState(0)
+  const [selfNW,setSelfNW]=useState(100000),[targetNW,setTargetNW]=useState(100000),[targetRaceMod,setTargetRaceMod]=useState(1),[targetPersonalityMod,setTargetPersonalityMod]=useState(1),[guile,setGuile]=useState(1),[cunning,setCunning]=useState(1),[targetIlluminate,setTargetIlluminate]=useState(1),[targetShielding,setTargetShielding]=useState(0),[stance,setStance]=useState(1)
   const op=ops.find(x=>x.name===opName)||ops[0]
   const r=useMemo(function(){
     const cap=war?op.capWar:op.capOow
     const per=war?op.perWar:op.perOow
     const targetNWRatio=Math.min(targetNW/Math.max(selfNW,1),selfNW/Math.max(targetNW,1))
     const watch=Math.max(0,1-Math.min(watchTowers*0.024,.625))
-    const yieldMultiplier=targetNWRatio*(war?1:1)*per*(1-op.lost)*racialMod*targetRaceMod*targetPersonalityMod*guile*cunning*targetIlluminate*watch*targetShielding*stance
+    const baseYield=targetNWRatio*per*(1-op.lost)*racialMod*targetRaceMod*targetPersonalityMod*guile*cunning*targetIlluminate*watch*(1-targetShielding)*stance
     const maxGross=targetResource*cap
     const rawNeed=Math.ceil(maxGross/Math.max(per*racialMod,Number.EPSILON))
     const recommended=Math.max(0,rawNeed)
     const canSend=Math.max(0,available)
     const actualSend=Math.min(recommended,canSend)
     const theoreticalGross=Math.min(maxGross,actualSend*per*racialMod)
-    const estimatedNet=Math.max(0,theoreticalGross*(1-op.lost)*targetNWRatio*targetRaceMod*targetPersonalityMod*guile*cunning*targetIlluminate*watch*targetShielding*stance)
-    return {cap,per,targetNWRatio,watch,maxGross,rawNeed,recommended,actualSend,theoreticalGross,estimatedNet,yieldMultiplier}
+    const estimatedNet=war?null:Math.max(0,theoreticalGross*(1-op.lost)*targetNWRatio*targetRaceMod*targetPersonalityMod*guile*cunning*targetIlluminate*watch*(1-targetShielding)*stance)
+    return {cap,per,targetNWRatio,watch,maxGross,rawNeed,recommended,actualSend,theoreticalGross,estimatedNet,baseYield}
   },[op,war,targetResource,available,racialMod,selfNW,targetNW,targetRaceMod,targetPersonalityMod,guile,cunning,targetIlluminate,targetShielding,stance,watchTowers])
   const fmt=(n:number)=>Math.round(n).toLocaleString()
   return <Card title="🗡️ Thievery Calculator" subtitle="Wiki-based instant-sabotage planning. The recommended send count uses the documented optimal-thieves formula; yield factors are shown separately.">
@@ -75,14 +75,14 @@ function Thievery(){
     <label style={{display:"flex",gap:8,margin:"14px 0",fontSize:11}}><input type="checkbox" checked={war} onChange={e=>setWar(e.target.checked)}/> In War</label>
     <Results rows={[
       ["Optimal thieves to send",fmt(r.recommended),"(documented formula)"],
-      ["Thieves available",fmt(r.available||available)],
+      ["Thieves available",fmt(available)],
       ["Thieves you can actually send",fmt(r.actualSend),r.actualSend<r.recommended?"NOT ENOUGH TO HIT CAP":"CAP SEND"],
       ["Maximum operation amount",fmt(r.maxGross)+" "+op.unit],
       ["Gross amount at your send",fmt(r.theoreticalGross)+" "+op.unit],
-      ["Estimated net received",fmt(r.estimatedNet)+" "+op.unit],
+      ["Estimated net received",r.estimatedNet===null?"Not exact in war (war bonus value not documented here)":fmt(r.estimatedNet)+" "+op.unit],
       ["Target NW / self NW factor",r.targetNWRatio.toFixed(4)+"x"],
       ["Watch Tower factor",r.watch.toFixed(4)+"x"],
-      ["Cap reached",r.actualSend>=r.recommended?"YES":"NO"],
+      ["Base yield per thief",r.baseYield.toFixed(3)+" "+op.unit],\n      ["Cap reached",r.actualSend>=r.recommended?"YES":"NO"],
     ]}/>
     <div style={{fontSize:10,color:"#718091",marginTop:10}}>
       Accurate send-count formula: (Target Resources × Max % of Total) ÷ Gains Per Thief ÷ Racial Mod. TPA, NW ratio, target modifiers, Watch Towers, losses and stance affect the operation's yield, not the documented optimal send-count formula. For Kidnapping, low target population can reduce gains by 50%.
