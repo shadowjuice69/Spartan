@@ -32,7 +32,7 @@ const navCommand = [
 ] as const;
 const navIntel = [
   ["Kingdom", "/command/kingdom"], ["Military", "/command/military"], ["Magic", "/command/magic"], ["Thievery", "/command/thievery"],
-  ["Science", "/command/science"], ["Buildings", "/command/buildings"], ["Throne", "/command/throne"],
+  ["Science", "/command/science"], ["Buildings", "/command/buildings"], ["Throne", "/command/throne"], ["Enemy Intel", "/command/enemy-intel"],
 ] as const;
 const months = ["January", "February", "March", "April", "May", "June", "July"];
 
