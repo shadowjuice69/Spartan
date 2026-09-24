@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "node scripts/start-all.js",
-    "lint": "next lint"
+    "lint": "next lint",
+    "postinstall": "node scripts/install-bot.js"
   },
   "dependencies": {
     "@supabase/ssr": "latest",
