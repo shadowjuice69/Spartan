@@ -1,0 +1,497 @@
+const database = require("../services/database");
+const { getKingdomInfo } = require("../services/kingdomService");
+const supabaseService = require("../services/supabase");
+const { MessageFlags, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require("discord.js");
+const { parseThrone, parseMilitary, summarizeIntel } = require("../parsers/throneParser");
+
+module.exports = async function modalHandler(interaction) {
+  console.log("[MODAL RECEIVED]", interaction.customId);
+
+  const db = database.getDb();
+  const supabase = supabaseService.getClient();
+
+  if (interaction.customId === "utopia_register_1") {
+    if (!interaction.client._pendingRegistrations) {
+      interaction.client._pendingRegistrations = new Map();
+    }
+
+    const regData = {
+      id: interaction.user.id,
+      discord_id: interaction.user.id,
+      username: interaction.user.username,
+      province: interaction.fields.getTextInputValue("province"),
+      coordinates: interaction.fields.getTextInputValue("coordinates"),
+      _reg_race: interaction.fields.getTextInputValue("race"),
+      _reg_personality: interaction.fields.getTextInputValue("personality"),
+      _reg_play_role: interaction.fields.getTextInputValue("play_role"),
+    };
+
+    interaction.client._pendingRegistrations.set(interaction.user.id, regData);
+    console.log("[REGISTER] Stored pending reg for", interaction.user.id, regData.province);
+
+    const button = new ButtonBuilder()
+      .setCustomId("continue_registration")
+      .setLabel("Continue Registration")
+      .setStyle(ButtonStyle.Primary);
+
+    return interaction.reply({
+      content: "✅ Step 1 complete. Click below to continue.",
+      components: [new ActionRowBuilder().addComponents(button)],
+    });
+  }
+
+  if (interaction.customId === "utopia_register_2") {
+    if (!interaction.client._pendingRegistrations) {
+      interaction.client._pendingRegistrations = new Map();
+    }
+    let user = interaction.client._pendingRegistrations.get(interaction.user.id);
+    if (!user) {
+      return interaction.reply({
+        content: "❌ Registration session expired. Please start over with /utopia register.",
+        flags: MessageFlags.Ephemeral,
+      });
+    }
+
+    const timezone = interaction.fields.getTextInputValue("timezone");
+    const waveTimes = interaction.fields.getTextInputValue("wave_times");
+    user.timezone = timezone;
+    user.wave_times = waveTimes;
+    await db.write();
+
+    if (supabase) {
+      // Try to find existing CSV-imported row by name (no user_id yet)
+      const { data: existing } = await supabase
+        .from("provinces")
+        .select("id, name, user_id")
+        .ilike("name", user.province.trim())
+        .is("user_id", null)
+        .limit(1);
+
+      let error;
+      if (existing && existing.length > 0) {
+        console.log("[REGISTER] Found existing row by name, updating:", existing[0].id);
+        const result = await supabase
+          .from("provinces")
+          .update({
+            user_id: interaction.user.id,
+            discord_id: interaction.user.id,
+            name: user.province,
+            coordinates: user.coordinates,
+            race: user._reg_race,
+            personality: user._reg_personality,
+            play_role: user._reg_play_role,
+            timezone,
+            wave_times: waveTimes,
+            updated_at: new Date().toISOString()
+          })
+          .eq("id", existing[0].id);
+        error = result.error;
+      } else {
+        console.log("[REGISTER] No existing row found, upserting by user_id");
+        const result = await supabase
+          .from("provinces")
+          .upsert({
+            user_id: interaction.user.id,
+            discord_id: interaction.user.id,
+            name: user.province,
+            coordinates: user.coordinates,
+            race: user._reg_race,
+            personality: user._reg_personality,
+            play_role: user._reg_play_role,
+            timezone,
+            wave_times: waveTimes,
+            updated_at: new Date().toISOString()
+          }, { onConflict: "user_id" });
+        error = result.error;
+      }
+
+      if (error) {
+        console.error("[REGISTER SUPABASE ERROR]", error.message);
+        return interaction.reply({
+          content: "❌ Registration failed. Please try again or contact an admin.",
+          flags: MessageFlags.Ephemeral,
+        });
+      }
+
+      const { data: verify } = await supabase
+        .from("provinces")
+        .select("user_id, discord_id")
+        .eq("user_id", interaction.user.id)
+        .single();
+
+      if (!verify || verify.user_id !== interaction.user.id || verify.discord_id !== interaction.user.id) {
+        console.error("[REGISTER VERIFY FAILED]", verify);
+        return interaction.reply({
+          content: "❌ Registration verification failed. Please try again.",
+          flags: MessageFlags.Ephemeral,
+        });
+      }
+
+      console.log("[REGISTER VERIFIED]", interaction.user.id);
+    }
+
+    return interaction.reply({
+      content:
+        `✅ **Registration Complete!**\n\n` +
+        `🏰 Province: ${user.province}\n` +
+        `📍 Coordinates: ${user.coordinates}\n` +
+        `⚔️ Race: ${user._reg_race}\n` +
+        `🧠 Personality: ${user._reg_personality}\n` +
+        `🎯 Role: ${user._reg_play_role}\n` +
+        `🕐 Timezone: ${timezone}\n` +
+        `⏰ Best Wave Times: ${waveTimes}`,
+    });
+  }
+
+  // Intel paste handler
+  if (
+  interaction.customId === "intel_paste" ||
+  interaction.customId === "intel_paste_throne" ||
+  interaction.customId === "intel_paste_news"
+) {
+    await interaction.deferReply({ ephemeral: true });
+
+    console.log("[MODAL CUSTOM ID]", interaction.customId);
+    const text = interaction.fields.getTextInputValue("intel_text");
+    
+    console.log("[INTEL RAW END]", text.slice(-1000));
+    console.log("[INTEL RAW]", JSON.stringify(text.slice(0, 500)));
+    // Auto-detect news log by content
+    if (text.includes('Province Logs') || text.includes('Province Reporter') || text.includes('books allocated to') || (text.includes('of YR0') && text.includes('captured'))) {
+      const { parseNewsLog, saveNewsIntel } = require('../parsers/newsParser');
+      const parsedNews = parseNewsLog(text);
+      const result = await saveNewsIntel(parsedNews, interaction.user.id);
+      return interaction.editReply(
+        `✅ **News log processed**\n\n🗡️ Spy reports: ${result.spyCount}\n⚔️ Attacks: ${result.attackCount}\n💾 Saved: ${result.saved}`
+      );
+    }
+    // Detect science page and handle separately
+    const isSciencePage = text.includes("Economy -") || text.includes("Alchemy") && text.includes("Tools") && text.includes("Production");
+    if (isSciencePage && supabase) {
+      // Look up user's registered province
+      const { data: userRow } = await supabase
+        .from("provinces")
+        .select("name, kd_code")
+        .eq("user_id", interaction.user.id)
+        .limit(1);
+      const provinceName = userRow?.[0]?.name || "Unknown";
+      const kdCode = userRow?.[0]?.kd_code || "unknown";
+
+      // Parse science from text
+      const scienceData = {};
+      const scienceEffects = {};
+      const KNOWN = ["Alchemy","Tools","Housing","Production","Bookkeeping","Artisan","Strategy","Siege","Tactics","Valor","Heroism","Resilience","Crime","Channeling","Shielding","Cunning","Sorcery","Finesse","Arcana"];
+      for (const line of text.split("\n")) {
+        const tabs = line.split("\t");
+        if (tabs.length >= 2 && KNOWN.includes(tabs[0].trim())) {
+          const books = parseInt(tabs[1].replace(/,/g,""), 10);
+          const effect = tabs[2] ? tabs[2].trim() : null;
+          if (!isNaN(books)) {
+            scienceData[tabs[0].trim().toLowerCase()] = books;
+            if (effect) scienceEffects[tabs[0].trim().toLowerCase()] = effect;
+          }
+        }
+        // Also handle "Name  1234  +X.X% Effect" space-separated format
+        const m = line.match(/^(Alchemy|Tools|Housing|Production|Bookkeeping|Artisan|Strategy|Siege|Tactics|Valor|Heroism|Resilience|Crime|Channeling|Shielding|Cunning|Sorcery|Finesse|Arcana)\s+([\d,]+)\s+([+\-][\d.]+%.*)?$/);
+        if (m && !scienceData[m[1].toLowerCase()]) {
+          scienceData[m[1].toLowerCase()] = parseInt(m[2].replace(/,/g,""), 10);
+          if (m[3]) scienceEffects[m[1].toLowerCase()] = m[3].trim();
+        }
+      }
+
+      const sci = scienceData;
+      const { error: sciErr } = await supabase.from("intel_science").upsert({
+        province: provinceName,
+        kd_code: kdCode,
+        alchemy:     parseInt(sci.alchemy     || 0),
+        artisan:     parseInt(sci.artisan     || 0),
+        bookkeeping: parseInt(sci.bookkeeping || 0),
+        channeling:  parseInt(sci.channeling  || 0),
+        crime:       parseInt(sci.crime       || 0),
+        finesse:     parseInt(sci.finesse     || 0),
+        heroism:     parseInt(sci.heroism     || 0),
+        housing:     parseInt(sci.housing     || 0),
+        production:  parseInt(sci.production  || 0),
+        resilience:  parseInt(sci.resilience  || 0),
+        shielding:   parseInt(sci.shielding   || 0),
+        siege:       parseInt(sci.siege       || 0),
+        strategy:    parseInt(sci.strategy    || 0),
+        tactics:     parseInt(sci.tactics     || 0),
+        tools:       parseInt(sci.tools       || 0),
+        valor:       parseInt(sci.valor       || 0),
+        arcana:      parseInt(sci.arcana || 0) + parseInt(sci.cunning || 0) + parseInt(sci.sorcery || 0),
+        science_effects: Object.keys(scienceEffects).length > 0 ? scienceEffects : null,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "province" });
+
+      if (sciErr) {
+        console.error("[SCIENCE MODAL SAVE ERROR]", sciErr.message);
+        return interaction.editReply(`❌ Science save failed: ${sciErr.message}`);
+      }
+      const totalBooks = Object.values(scienceData).reduce((a,b) => a + (parseInt(b)||0), 0);
+      return interaction.editReply(`✅ **Science intel saved for ${provinceName}**\n\n📚 ${totalBooks.toLocaleString()} total books across ${Object.keys(scienceData).filter(k => scienceData[k] > 0).length} sciences`);
+    }
+
+    const parsed = parseThrone(text);
+
+console.log("[THIEVERY DEBUG]", {
+  thieves: parsed.thieves,
+  wizards: parsed.wizards,
+  o_tpa: parsed.o_tpa,
+  d_tpa: parsed.d_tpa,
+  o_wpa: parsed.o_wpa,
+  d_wpa: parsed.d_wpa
+});
+
+console.log("[THIEVERY DEBUG]", {
+  thieves: parsed.thieves,
+  wizards: parsed.wizards,
+  o_tpa: parsed.o_tpa,
+  d_tpa: parsed.d_tpa,
+  o_wpa: parsed.o_wpa,
+  d_wpa: parsed.d_wpa
+});
+
+    // Save throne intel snapshot
+    if (supabase && parsed.name) {
+      const { error } = await supabase
+        .from("intel_throne")
+        .upsert({
+          province: parsed.name,
+          kd_code: parsed.coordinates || "unknown",
+          race: parsed.race,
+          ruler: parsed.ruler,
+          land: parsed.acres,
+          networth: parsed.nw,
+          honor: parsed.honor,
+          offense: parsed.off,
+          defense: parsed.def,
+          be: parsed.be,
+          peasants: parsed.peons,
+          troops: {
+            soldiers: parsed.soldiers,
+            off_specs: parsed.off_specs,
+            def_specs: parsed.def_specs,
+            elites: parsed.elites,
+            thieves: parsed.thieves,
+            wizards: parsed.wizards,
+            war_horses: parsed.war_horses,
+            prisoners: parsed.prisoners
+          },
+          thieves: Number(parsed.thieves || 0),
+        wizards: Number(parsed.wizards || 0),
+        tpa: Number(parsed.o_tpa || parsed.d_tpa || 0),
+        wpa: Number(parsed.o_wpa || parsed.d_wpa || 0),
+
+        spells: parsed.good_spells,
+          updated_at: new Date().toISOString()
+        }, { onConflict: "province,kd_code" });
+
+      if (error) {
+        console.error("[THRONE INTEL SAVE ERROR]", error.message);
+      } else {
+        console.log("[THRONE INTEL SAVED]", parsed.name);
+      }
+    }
+
+    // Look up province by ruler name if name not parsed
+    if (!parsed.name && parsed.ruler && supabase) {
+      const { data: byRuler } = await supabase
+        .from("provinces")
+        .select("name")
+        .ilike("ruler", `%${parsed.ruler}%`)
+        .limit(1);
+
+      if (byRuler?.[0]) parsed.name = byRuler[0].name;
+    }
+
+    // Match province by NW + acres from intel summary
+    if (!parsed.name && parsed.nw && parsed.acres && supabase) {
+      const { data: byStats } = await supabase
+        .from("provinces")
+        .select("name")
+        .eq("nw", parsed.nw)
+        .eq("acres", parsed.acres)
+        .limit(1);
+
+      if (byStats?.[0]) parsed.name = byStats[0].name;
+    }
+    if (!parsed.name && !parsed.nw && !parsed.acres && !parsed.off && !parsed.def && !parsed.off_specs && !parsed.def_specs && !parsed.science && !parsed.buildings) {
+      return interaction.editReply("❌ Could not parse intel from that text. Make sure you're pasting a throne or military page.");
+    }
+
+    // Try to find existing province or create new one
+    if (supabase && parsed.name) {
+      let existing = null;
+
+      // Match existing province by name + coordinates first
+      const { data: found } = await supabase
+        .from("provinces")
+        .select("id, name, coordinates")
+        .ilike("name", parsed.name)
+        .limit(1);
+
+      if (found && found.length > 0) {
+        existing = found[0];
+      }
+
+      const updateData = {
+        name: parsed.name,
+        updated_at: new Date().toISOString(),
+        intel_age: "0",
+      };
+
+      // Only update fields that were parsed
+      if (parsed.combo) updateData.combo = parsed.combo;
+      if (parsed.race) updateData.race = parsed.race;
+      if (parsed.nw) updateData.nw = parsed.nw;
+      if (parsed.acres) updateData.acres = parsed.acres;
+      if (parsed.off) updateData.off = parsed.off;
+      if (parsed.def) updateData.def = parsed.def;
+      if (parsed.be) updateData.be = parsed.be;
+      if (parsed.wages) updateData.wages = parsed.wages;
+      if (parsed.stlth) updateData.stlth = parsed.stlth;
+      if (parsed.mana) updateData.mana = parsed.mana;
+      if (parsed.peons) updateData.peons = parsed.peons;
+      if (parsed.honor) updateData.honor = parsed.honor;
+      if (parsed.o_tpa) updateData.o_tpa = parsed.o_tpa;
+      if (parsed.d_tpa) updateData.d_tpa = parsed.d_tpa;
+      if (parsed.o_wpa) updateData.o_wpa = parsed.o_wpa;
+      if (parsed.d_wpa) updateData.d_wpa = parsed.d_wpa;
+      if (parsed.pop_pct) updateData.pop_pct = parsed.pop_pct;
+      if (parsed.good_spells) updateData.good_spells = parsed.good_spells;
+      if (parsed.map) updateData.map = parsed.map;
+      if (parsed.coordinates) updateData.coordinates = parsed.coordinates;
+      if (parsed.kingdom) updateData.kingdom_name = parsed.kingdom;
+      if (parsed.soldiers) updateData.soldiers = parsed.soldiers;
+      if (parsed.off_specs) updateData.off_specs = parsed.off_specs;
+      if (parsed.def_specs) updateData.def_specs = parsed.def_specs;
+      if (parsed.elites) updateData.elites = parsed.elites;
+      if (parsed.thieves) updateData.thieves = parsed.thieves;
+      if (parsed.wizards) updateData.wizards = parsed.wizards;
+      if (parsed.war_horses) updateData.war_horses = parsed.war_horses;
+      if (parsed.prisoners) updateData.prisoners = parsed.prisoners;
+      if (parsed.ruler) updateData.ruler = parsed.ruler;
+      if (parsed.game_type) updateData.game_type = parsed.game_type;
+      if (parsed.buildings) updateData.buildings = parsed.buildings;
+      if (parsed.buildings && parsed.buildings.libraries) updateData.libraries_pct = parseFloat(parsed.buildings.libraries.pct) || 0;
+      if (parsed.ome) updateData.ome = parsed.ome;
+      if (parsed.dme) updateData.dme = parsed.dme;
+
+    if (parsed.science && supabase) {
+      const sci = parsed.science;
+      const sciData = {
+        province: parsed.name,
+        kd_code: parsed.coordinates || "unknown",
+        user_id: interaction.user.id || null,
+        alchemy:     parseInt(sci.alchemy     || 0),
+        artisan:     parseInt(sci.artisan     || 0),
+        bookkeeping: parseInt(sci.bookkeeping || 0),
+        channeling:  parseInt(sci.channeling  || 0),
+        crime:       parseInt(sci.crime       || 0),
+        finesse:     parseInt(sci.finesse     || 0),
+        heroism:     parseInt(sci.heroism     || 0),
+        housing:     parseInt(sci.housing     || 0),
+        production:  parseInt(sci.production  || 0),
+        resilience:  parseInt(sci.resilience  || 0),
+        shielding:   parseInt(sci.shielding   || 0),
+        siege:       parseInt(sci.siege       || 0),
+        strategy:    parseInt(sci.strategy    || 0),
+        tactics:     parseInt(sci.tactics     || 0),
+        tools:       parseInt(sci.tools       || 0),
+        valor:       parseInt(sci.valor       || 0),
+        arcana:      parseInt(sci.arcana || 0) + parseInt(sci.cunning || 0) + parseInt(sci.sorcery || 0),
+        science_effects: parsed.science_effects || null,
+        updated_at:  new Date().toISOString(),
+      };
+      const { error: sciErr } = await supabase
+        .from("intel_science")
+        .upsert(sciData, { onConflict: "province" });
+      if (sciErr) console.error("[SCIENCE SAVE ERROR]", sciErr.message);
+    }
+
+      let error;
+      if (existing && existing.length > 0) {
+        const result = await supabase
+          .from("provinces")
+          .update(updateData)
+          .eq("id", existing[0].id);
+        error = result.error;
+      } else {
+        // Intel paste - no user_id to avoid conflicts with registered provinces
+        const result = await supabase
+          .from("provinces")
+          .insert(updateData);
+        error = result.error;
+      }
+
+      if (error) {
+        console.error("[INTEL SAVE ERROR]", error.message);
+        return interaction.editReply(`❌ Failed to save intel: ${error.message}`);
+      }
+    }
+
+    const summary = summarizeIntel(parsed);
+    const fields = Object.entries(parsed)
+      .filter(([k, v]) => v && !["name", "combo", "kingdom"].includes(k))
+      .map(([k, v]) => `• **${k}:** ${typeof v === "object" ? JSON.stringify(v) : v}`)
+      .join('\n');
+
+    return interaction.editReply(
+      `✅ **Intel saved for ${parsed.name || "Unknown"}**\n\n${summary}\n\n${fields}`.slice(0, 1900)
+    );
+  }
+
+  // Broadcast modal handler
+  if (interaction.customId === "intel_paste_news") {
+    await interaction.deferReply({ ephemeral: true });
+    const text = interaction.fields.getTextInputValue("intel_text");
+    const { parseNewsLog, saveNewsIntel } = require("../parsers/newsParser");
+    const parsed = parseNewsLog(text);
+    const result = await saveNewsIntel(parsed, interaction.user.id);
+    return interaction.editReply(
+      `✅ **News log processed**\n\n` +
+      `🗡️ Spy reports found: ${result.spyCount}\n` +
+      `⚔️ Attacks found: ${result.attackCount}\n` +
+      `💾 Records saved: ${result.saved}` +
+      (result.errors > 0 ? `\n⚠️ Errors: ${result.errors}` : "")
+    );
+  }
+  if (interaction.customId === "broadcast_modal") {
+    await interaction.deferReply({ ephemeral: true });
+
+    const title = interaction.fields.getTextInputValue("broadcast_title") || "📢 Kingdom Broadcast";
+    const message = interaction.fields.getTextInputValue("broadcast_message");
+
+    const { data: provinces } = await supabase
+      .from("provinces")
+      .select("discord_id, name")
+      .not("discord_id", "is", null);
+
+    if (!provinces || provinces.length === 0) {
+      return interaction.editReply("❌ No registered members found.");
+    }
+
+    let sent = 0;
+    let failed = 0;
+
+    for (const p of provinces) {
+      try {
+        const user = await interaction.client.users.fetch(p.discord_id);
+        await user.send([
+          `🏰 **${title}**`,
+          `From: ${interaction.user.username} (${kd.name} ${kd.code})`,
+          ``,
+          message
+        ].join("\n"));
+        sent++;
+      } catch (e) {
+        failed++;
+      }
+    }
+
+    return interaction.editReply(
+      `✅ Broadcast sent to **${sent}** members${failed > 0 ? ` (${failed} failed — DMs may be closed)` : ""}.`
+    );
+  }
+};

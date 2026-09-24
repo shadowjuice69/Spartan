@@ -6,13 +6,22 @@
     "dev": "next dev",
     "build": "next build",
     "start": "node scripts/start-all.js",
-    "lint": "next lint",
-    "postinstall": "node scripts/install-bot.js"
+    "lint": "next lint"
   },
   "dependencies": {
+    "@discordjs/rest": "^2.6.3",
+    "@discordjs/voice": "^0.19.2",
+    "@snazzah/davey": "^0.1.12",
     "@supabase/ssr": "latest",
-    "@supabase/supabase-js": "latest",
+    "@supabase/supabase-js": "^2.117.1",
+    "axios": "^1.20.0",
+    "discord-api-types": "^0.38.55",
+    "discord.js": "^14.27.0",
+    "dotenv": "^17.4.2",
+    "lowdb": "^1.0.0",
     "next": "15.5.7",
+    "opusscript": "^0.0.8",
+    "pdf-parse": "^2.4.5",
     "react": "19.1.0",
     "react-dom": "19.1.0"
   },
