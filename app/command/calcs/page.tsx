@@ -42,9 +42,10 @@ function Thievery(){
     const attacker=invis*crime*race*dens*honor*ritual
     const ratio=targetTpa>0?yourTpa/targetTpa:999
     const maxReturn=targetResource*cap
-    const rawNeed=per?Math.ceil(maxReturn/(per*watch*attacker)):null
+    const effectivePer=per===null?null:per*watch*attacker
+    const rawNeed=effectivePer===null?null:Math.ceil(maxReturn/Math.max(effectivePer,Number.EPSILON))
     const thievesNeeded=rawNeed===null?0:Math.min(Math.max(rawNeed,0),Math.max(available,0))
-    const projected=rawNeed===null?null:Math.min(maxReturn,Math.max(0,thievesNeeded*per*watch*attacker))
+    const projected=rawNeed===null||effectivePer===null?null:Math.min(maxReturn,Math.max(0,thievesNeeded*effectivePer))
     return {cap,per,watch,attacker,ratio,maxReturn,rawNeed,thievesNeeded,projected}
   },[op,war,targetResource,available,targetTpa,yourTpa,watchTowers,crime,race,dens,honor,invis,ritual])
   const fmt=(n:number)=>Math.round(n).toLocaleString()
