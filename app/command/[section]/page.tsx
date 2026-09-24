@@ -5,8 +5,8 @@ import { useParams, useRouter } from "next/navigation"
 
 const labels: Record<string,string> = { kingdom:"KINGDOM INTELLIGENCE", "war-room":"WAR ROOM", "build-lab":"BUILD LAB", military:"MILITARY INTELLIGENCE", magic:"MAGIC INTELLIGENCE", thievery:"THIEVERY INTELLIGENCE", science:"SCIENCE INTELLIGENCE", buildings:"BUILDING INTELLIGENCE", throne:"THRONE INTELLIGENCE", tools:"SPARTAN TOOLS" }
 const navCommand = ["Command","Province","War Room","Build Lab","Draft Calc","Wiki","Tools"]
-const navIntel = ["Kingdom","Military","Magic","Thievery","Science","Buildings","Throne"]
-const paths: Record<string,string> = { Command:"/", Kingdom:"/command/kingdom", Province:"/command/province", "War Room":"/command/war-room", "Build Lab":"/command/build-lab", "Draft Calc":"/command/draft-calc", Military:"/command/military", Magic:"/command/magic", Thievery:"/command/thievery", Science:"/command/science", Buildings:"/command/buildings", Throne:"/command/throne", Wiki:"/command/wiki", Tools:"/command/tools" }
+const navIntel = ["Kingdom","Military","Magic","Thievery","Science","Buildings","Throne","Enemy Intel"]
+const paths: Record<string,string> = { Command:"/", Kingdom:"/command/kingdom", Province:"/command/province", "War Room":"/command/war-room", "Build Lab":"/command/build-lab", "Draft Calc":"/command/draft-calc", Military:"/command/military", Magic:"/command/magic", Thievery:"/command/thievery", Science:"/command/science", Buildings:"/command/buildings", Throne:"/command/throne", Wiki:"/command/wiki", Tools:"/command/tools", "Enemy Intel":"/command/enemy-intel" }
 
 function sectionTitle(section:string){ return labels[section] || section.replaceAll("-"," ").toUpperCase() }
 function prettyKey(key:string){ return key.replaceAll("_"," ").replace(/\b\w/g,c=>c.toUpperCase()) }
