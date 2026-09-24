@@ -59,8 +59,6 @@ function Thievery(){
       <Field name="Target resource / troops" value={targetResource} setValue={setTargetResource}/>
       <Field name="Thieves available" value={available} setValue={setAvailable}/>
       <Field name="Your racial mod" value={racialMod} setValue={setRacialMod} step=".01"/>
-      <Field name="Your raw TPA" value={yourTpa} setValue={setYourTpa} step=".01"/>
-      <Field name="Target raw TPA" value={targetTpa} setValue={setTargetTpa} step=".01"/>
       <Field name="Target Watch Towers %" value={watchTowers} setValue={setWatchTowers} step=".1"/>
       <Field name="Your NW" value={selfNW} setValue={setSelfNW}/>
       <Field name="Target NW" value={targetNW} setValue={setTargetNW}/>
