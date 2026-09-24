@@ -43,7 +43,7 @@ function Thievery(){
     const ratio=targetTpa>0?yourTpa/targetTpa:999
     const maxReturn=targetResource*cap
     const rawNeed=per?Math.ceil(maxReturn/(per*watch*attacker)):null
-    const thievesNeeded=rawNeed===null?null:Math.min(Math.max(rawNeed,0),Math.max(available,0))
+    const thievesNeeded=rawNeed===null?0:Math.min(Math.max(rawNeed,0),Math.max(available,0))
     const projected=rawNeed===null?null:Math.min(maxReturn,Math.max(0,thievesNeeded*per*watch*attacker))
     return {cap,per,watch,attacker,ratio,maxReturn,rawNeed,thievesNeeded,projected}
   },[op,war,targetResource,available,targetTpa,yourTpa,watchTowers,crime,race,dens,honor,invis,ritual])
