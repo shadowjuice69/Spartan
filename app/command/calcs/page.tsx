@@ -41,13 +41,11 @@ function Thievery(){
     const watch=Math.max(0,1-Math.min(watchTowers*0.024,.625))
     const attacker=invis*crime*race*dens*honor*ritual
     const ratio=targetTpa>0?yourTpa/targetTpa:999
-    const success=ratio>=2?1:ratio>=1.5?.9:ratio>=1.25?.75:.5
     const maxReturn=targetResource*cap
     const rawNeed=per?Math.ceil(maxReturn/(per*watch*attacker)):null
     const thievesNeeded=rawNeed===null?null:Math.min(Math.max(rawNeed,0),Math.max(available,0))
-    const projected=rawNeed===null?null:Math.min(maxReturn,Math.max(0,thievesNeeded*per*watch*attacker)*success)
-    const theoretical=Math.min(maxReturn,Math.max(0,(available)* (per||0)*watch*attacker)*success)
-    return {cap,per,watch,attacker,ratio,success,maxReturn,rawNeed,thievesNeeded,projected,theoretical}
+    const projected=rawNeed===null?null:Math.min(maxReturn,Math.max(0,thievesNeeded*per*watch*attacker))
+    return {cap,per,watch,attacker,ratio,maxReturn,rawNeed,thievesNeeded,projected}
   },[op,war,targetResource,available,targetTpa,yourTpa,watchTowers,crime,race,dens,honor,invis,ritual])
   const fmt=(n:number)=>Math.round(n).toLocaleString()
   return <Card title="🗡️ Thievery Calculator" subtitle="Wiki-based max-return planning: calculate how many thieves are needed to reach the operation's maximum return.">
@@ -72,11 +70,11 @@ function Thievery(){
       ["Maximum wiki return",fmt(r.maxReturn)+" "+op.unit],
       ["Thieves needed for max",r.rawNeed===null?"Wiki does not specify a per-thief yield":fmt(r.rawNeed)],
       ["Thieves you can send",r.thievesNeeded===null?"—":fmt(r.thievesNeeded)],
-      ["Projected return",r.projected===null?"Use operation cap/TPA to determine":fmt(r.projected)+" "+op.unit],
+      ["Gross return if successful",r.projected===null?"Wiki does not give a per-thief yield":fmt(r.projected)+" "+op.unit],
       ["Max-return cap reached",r.rawNeed===null?"NOT CALCULATED":(r.rawNeed<=available?"YES":"NO — not enough thieves")],
     ]}/>
     <div style={{fontSize:10,color:"#718091",marginTop:10}}>
-      Wiki basis: Mod TPA = Raw TPA × Invisibility × Crime Science × Race × Dens × Honor × Ritual. Watch Towers reduce thief damage by 2.4% per tower percentage, capped at 62.5%. Resource operations use the wiki's listed per-thief yields and maximum percentage caps.
+      Wiki basis: Mod TPA = Raw TPA × Invisibility × Crime Science × Race × Dens × Honor × Ritual. Watch Towers reduce thief damage by 2.4% per tower percentage, capped at 62.5%. Resource operations use the wiki's listed per-thief yields and maximum percentage caps. The wiki does not provide an exact success-probability equation here, so no made-up success percentage is used.
     </div>
   </Card>
 }
