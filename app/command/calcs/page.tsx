@@ -82,7 +82,8 @@ function Thievery(){
       ["Estimated net received",r.estimatedNet===null?"Not exact in war (war bonus value not documented here)":fmt(r.estimatedNet)+" "+op.unit],
       ["Target NW / self NW factor",r.targetNWRatio.toFixed(4)+"x"],
       ["Watch Tower factor",r.watch.toFixed(4)+"x"],
-      ["Base yield per thief",r.baseYield.toFixed(3)+" "+op.unit],\n      ["Cap reached",r.actualSend>=r.recommended?"YES":"NO"],
+      ["Base yield per thief",r.baseYield.toFixed(3)+" "+op.unit],
+      ["Cap reached",r.actualSend>=r.recommended?"YES":"NO"],
     ]}/>
     <div style={{fontSize:10,color:"#718091",marginTop:10}}>
       Accurate send-count formula: (Target Resources × Max % of Total) ÷ Gains Per Thief ÷ Racial Mod. TPA, NW ratio, target modifiers, Watch Towers, losses and stance affect the operation's yield, not the documented optimal send-count formula. For Kidnapping, low target population can reduce gains by 50%.
