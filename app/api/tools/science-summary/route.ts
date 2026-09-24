@@ -6,9 +6,12 @@ import { createClient } from "@supabase/supabase-js"
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
-const PERS: Record<string,Record<string,number>>={artisan:{artisan:1.25,_all:1},tactician:{siege:1.4,_all:1},mystic:{channeling:1.75,_all:1},necromancer:{channeling:1.3,_all:1},heretic:{channeling:1.3,crime:1.3,_all:1},rogue:{crime:1.5,_all:1},warhero:{valor:1.4,_all:1},sage:{_all:1.15}}
-const RACE: Record<string,number>={undead:.9}
-const keys=["alchemy","artisan","bookkeeping","channeling","crime","cunning","finesse","heroism","housing","production","resilience","shielding","siege","sorcery","strategy","tactics","tools","valor","arcana"]
+const keys=["alchemy","artisan","bookkeeping","channeling","crime","cunning","finesse","heroism","housing","production","resilience","shielding","siege","sorcery","strategy","tactics","tools","valor"]
+
+function parseEffect(value:any){
+  const m=String(value||"").match(/([+-]?\d+(?:\.\d+)?)%/)
+  return m?Number(m[1]):0
+}
 
 export async function GET(req:NextRequest){
  try{
@@ -17,7 +20,7 @@ export async function GET(req:NextRequest){
   const libraries=Number(u.searchParams.get("libraries")||0)
   const books=JSON.parse(u.searchParams.get("books")||"{}")
   const sb=createClient(process.env.SUPABASE_URL!,process.env.SUPABASE_SERVICE_ROLE_KEY!)
-  if(!province)return NextResponse.json({error:"Enter a province name for the science summary."},{status:400})
+  if(!province)return NextResponse.json({error:"Enter your province name for the science summary."},{status:400})
 
   const pv=await sb.from("spartan_province_registry")
     .select("province_id,province_name,kingdom_code,metadata")
@@ -28,18 +31,38 @@ export async function GET(req:NextRequest){
 
   const p=pv.data[0]
   const metadata=(p.metadata&&typeof p.metadata==="object")?p.metadata as Record<string,any>:{}
-  const race=String(metadata.race||metadata.Race||"").toLowerCase()
-  const pers=String(metadata.personality||metadata.Personality||"").toLowerCase().replace(/\s/g,"")
+  const capturedScience=(metadata.science&&typeof metadata.science==="object")?metadata.science as Record<string,any>:{}
+  const capturedEffects=(metadata.science_effects&&typeof metadata.science_effects==="object")?metadata.science_effects as Record<string,any>:{}
 
-  const settings=await sb.from("bot_settings").select("key,value").in("key",["current_age","kingdom_code"])
-  const sm=Object.fromEntries((settings.data||[]).map((x:any)=>[x.key,x.value]))
-  const age=Number(sm.current_age),kd=String(sm.kingdom_code||p.kingdom_code||"").trim()
-  const rr=await sb.from("science_rules").select("science_name,category,multiplier,effect").eq("active",true).eq("kd_code",kd).eq("age_number",age).not("multiplier","is",null)
-  if(rr.error||!rr.data?.length)return NextResponse.json({error:"Active science rules are not configured for the current age/kingdom."},{status:503})
-
-  const pm=PERS[pers]||{_all:1},all=(pm._all||1)*(1+libraries/100),rm=RACE[race]||1
   const summary:any={}
-  for(const k of keys){const rule=rr.data.find((x:any)=>String(x.science_name).toLowerCase()===k);if(!rule)continue;const n=Number(books[k]||0);const bonus=n?Math.pow(n,1/2.125)*Number(rule.multiplier)*Number(pm[k]||1)*all*rm:0;summary[k]={books:n,bonus:Number(bonus.toFixed(1)),effect:rule.effect,category:rule.category}}
-  return NextResponse.json({province:p.province_name,race,personality:pers,age,kingdom:kd,summary})
- }catch(e:any){return NextResponse.json({error:e?.message||"Science summary failed"},{status:500})}
+  for(const k of keys){
+    const currentBooks=Number(capturedScience[k]||0)
+    const currentEffect=parseEffect(capturedEffects[k])
+    const requestedBooks=Number(books[k]||0)
+    let bonus=0
+    if(requestedBooks>0&&currentBooks>0&&currentEffect!==0){
+      const inferredMultiplier=currentEffect/Math.pow(currentBooks,1/2.125)
+      bonus=inferredMultiplier*Math.pow(requestedBooks,1/2.125)*(1+libraries/100)
+    }else if(requestedBooks>0&&currentEffect!==0){
+      bonus=currentEffect*(1+libraries/100)
+    }
+    summary[k]={
+      books:requestedBooks,
+      bonus:Number(bonus.toFixed(1)),
+      currentBooks,
+      currentEffect,
+      effect:capturedEffects[k]||"No captured effect"
+    }
+  }
+
+  return NextResponse.json({
+    province:p.province_name,
+    kingdom:p.kingdom_code,
+    summary,
+    source:"Spartan province registry / latest captured Science page",
+    capturedAt:metadata.science_captured_at||null
+  })
+ }catch(e:any){
+  return NextResponse.json({error:e?.message||"Science summary failed"},{status:500})
+ }
 }
