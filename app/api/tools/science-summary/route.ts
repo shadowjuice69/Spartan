@@ -18,17 +18,28 @@ export async function GET(req:NextRequest){
   const books=JSON.parse(u.searchParams.get("books")||"{}")
   const sb=createClient(process.env.SUPABASE_URL!,process.env.SUPABASE_SERVICE_ROLE_KEY!)
   if(!province)return NextResponse.json({error:"Enter a province name for the science summary."},{status:400})
-  const pv=await sb.from("provinces").select("name,race,personality").ilike("name","%"+province+"%").limit(1)
-  if(pv.error||!pv.data?.length)return NextResponse.json({error:"Province not found."},{status:404})
+
+  const pv=await sb.from("spartan_province_registry")
+    .select("province_id,province_name,kingdom_code,metadata")
+    .ilike("province_name","%"+province+"%")
+    .limit(1)
+
+  if(pv.error||!pv.data?.length)return NextResponse.json({error:"Province not found in Spartan's current province registry."},{status:404})
+
   const p=pv.data[0]
+  const metadata=(p.metadata&&typeof p.metadata==="object")?p.metadata as Record<string,any>:{}
+  const race=String(metadata.race||metadata.Race||"").toLowerCase()
+  const pers=String(metadata.personality||metadata.Personality||"").toLowerCase().replace(/\s/g,"")
+
   const settings=await sb.from("bot_settings").select("key,value").in("key",["current_age","kingdom_code"])
   const sm=Object.fromEntries((settings.data||[]).map((x:any)=>[x.key,x.value]))
-  const age=Number(sm.current_age),kd=String(sm.kingdom_code||"").trim()
+  const age=Number(sm.current_age),kd=String(sm.kingdom_code||p.kingdom_code||"").trim()
   const rr=await sb.from("science_rules").select("science_name,category,multiplier,effect").eq("active",true).eq("kd_code",kd).eq("age_number",age).not("multiplier","is",null)
   if(rr.error||!rr.data?.length)return NextResponse.json({error:"Active science rules are not configured for the current age/kingdom."},{status:503})
-  const pers=String(p.personality||"").toLowerCase().replace(/\s/g,""),race=String(p.race||"").toLowerCase(),pm=PERS[pers]||{_all:1},all=(pm._all||1)*(1+libraries/100),rm=RACE[race]||1
+
+  const pm=PERS[pers]||{_all:1},all=(pm._all||1)*(1+libraries/100),rm=RACE[race]||1
   const summary:any={}
   for(const k of keys){const rule=rr.data.find((x:any)=>String(x.science_name).toLowerCase()===k);if(!rule)continue;const n=Number(books[k]||0);const bonus=n?Math.pow(n,1/2.125)*Number(rule.multiplier)*Number(pm[k]||1)*all*rm:0;summary[k]={books:n,bonus:Number(bonus.toFixed(1)),effect:rule.effect,category:rule.category}}
-  return NextResponse.json({province:p.name,race,personality:pers,age,kingdom:kd,summary})
+  return NextResponse.json({province:p.province_name,race,personality:pers,age,kingdom:kd,summary})
  }catch(e:any){return NextResponse.json({error:e?.message||"Science summary failed"},{status:500})}
 }
