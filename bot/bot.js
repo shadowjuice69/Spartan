@@ -140,4 +140,4 @@ client.on('shardDisconnect', () => {
   loggedIn = false;
   // Do not call client.login() here. discord.js automatically reconnects
   // recoverable shard disconnects and emits shardReconnecting/shardReady.
-}
+});
