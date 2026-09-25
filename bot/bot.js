@@ -97,4 +97,47 @@ const universalReceiver = require('./services/universalReceiver');
 if (process.env.EMBEDDED_SPARTAN !== 'true') universalReceiver.start();
 logger.info(`🚀 Nexus clean core starting | Node ${process.version} | discord.js ${discordJsVersion}`);
 
-// Let discord.js own the Gateway reconnect lifecycle.\n// The old Promise.race() timeout could abandon a live login attempt and start\n// another client.login() while the first WebSocket was still opening. That can\n// create overlapping Gateway sessions and turn a transient network stall into\n// a persistent reconnect loop. discord.js already has Gateway handshake/hello/\n// ready timeouts and reconnect handling, so only retry a login after login()\n// itself actually rejects.\nconst MAX_BACKOFF_MS = 5 * 60 * 1000;\nlet backoffMs = 15 * 1000;\nlet loggedIn = false;\nlet loginInProgress = false;\nlet retryTimer = null;\n\nasync function attemptLogin() {\n  if (loggedIn || loginInProgress) return;\n  loginInProgress = true;\n  logger.info('[DISCORD] Starting gateway login...');\n  try {\n    await client.login(process.env.DISCORD_TOKEN);\n    loggedIn = true;\n    backoffMs = 15 * 1000;\n    logger.info('[DISCORD] Login promise resolved');\n  } catch (error) {\n    logger.error(`[DISCORD LOGIN FAILED] ${error.stack || error.message}`);\n    try { client.destroy(); } catch {}\n    const delay = backoffMs;\n    backoffMs = Math.min(backoffMs * 2, MAX_BACKOFF_MS);\n    logger.warn(`[DISCORD] Login failed; retrying in ${Math.round(delay / 1000)}s`);\n    retryTimer = setTimeout(() => {\n      retryTimer = null;\n      attemptLogin().catch(() => {});\n    }, delay);\n  } finally {\n    loginInProgress = false;\n  }\n}\n\nattemptLogin().catch(() => {});\n\nclient.on('shardDisconnect', () => {\n  loggedIn = false;\n  // Do not call client.login() here. discord.js automatically reconnects\n  // recoverable shard disconnects and emits shardReconnecting/shardReady.\n}
+// Let discord.js own the Gateway reconnect lifecycle.
+// The old Promise.race() timeout could abandon a live login attempt and start
+// another client.login() while the first WebSocket was still opening. That can
+// create overlapping Gateway sessions and turn a transient network stall into
+// a persistent reconnect loop. discord.js already has Gateway handshake/hello/
+// ready timeouts and reconnect handling, so only retry a login after login()
+// itself actually rejects.
+const MAX_BACKOFF_MS = 5 * 60 * 1000;
+let backoffMs = 15 * 1000;
+let loggedIn = false;
+let loginInProgress = false;
+let retryTimer = null;
+
+async function attemptLogin() {
+  if (loggedIn || loginInProgress) return;
+  loginInProgress = true;
+  logger.info('[DISCORD] Starting gateway login...');
+  try {
+    await client.login(process.env.DISCORD_TOKEN);
+    loggedIn = true;
+    backoffMs = 15 * 1000;
+    logger.info('[DISCORD] Login promise resolved');
+  } catch (error) {
+    logger.error(`[DISCORD LOGIN FAILED] ${error.stack || error.message}`);
+    try { client.destroy(); } catch {}
+    const delay = backoffMs;
+    backoffMs = Math.min(backoffMs * 2, MAX_BACKOFF_MS);
+    logger.warn(`[DISCORD] Login failed; retrying in ${Math.round(delay / 1000)}s`);
+    retryTimer = setTimeout(() => {
+      retryTimer = null;
+      attemptLogin().catch(() => {});
+    }, delay);
+  } finally {
+    loginInProgress = false;
+  }
+}
+
+attemptLogin().catch(() => {});
+
+client.on('shardDisconnect', () => {
+  loggedIn = false;
+  // Do not call client.login() here. discord.js automatically reconnects
+  // recoverable shard disconnects and emits shardReconnecting/shardReady.
+}
