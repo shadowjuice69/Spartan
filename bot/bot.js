@@ -14,7 +14,14 @@ const spartanAI = require('./services/spartanAI');
 if (!process.env.DISCORD_TOKEN) throw new Error('DISCORD_TOKEN is required');
 const CLEANUP_CHANNEL_ID = '1546379989484830730';
 const CLEANUP_AUTHOR_ID = '1518122625354956820';
-const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.GuildVoiceStates, GatewayIntentBits.MessageContent] });
+const client = new Client({
+  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.GuildVoiceStates, GatewayIntentBits.MessageContent],
+  ws: {
+    handshakeTimeout: 60000,
+    helloTimeout: 90000,
+    readyTimeout: 30000,
+  },
+});
 global.__NEXUS_DISCORD_CLIENT = client;
 
 client.on('raw', packet => { if (packet?.t === 'MESSAGE_CREATE') logger.info(`[DISCORD RAW MESSAGE_CREATE] channel=${packet.d?.channel_id || 'unknown'} guild=${packet.d?.guild_id || 'DM'} author=${packet.d?.author?.username || 'unknown'} id=${packet.d?.id || 'unknown'}`); });
@@ -63,7 +70,11 @@ client.on('messageCreate', async message => {
   }
 });
 
-client.on('debug', message => { if (!/heartbeat acknowledged|sending heartbeat/i.test(message)) logger.info(`[DISCORD DEBUG] ${message}`); });
+client.on('debug', message => {
+  // Never log the bot token. discord.js may include it in debug output.
+  if (/provided token/i.test(message)) return;
+  if (!/heartbeat acknowledged|sending heartbeat/i.test(message)) logger.info(`[DISCORD DEBUG] ${message}`);
+});
 client.on('warn', message => logger.warn(`[DISCORD WARN] ${message}`));
 client.on('error', error => logger.error(`[DISCORD CLIENT ERROR] ${error.stack || error.message}`));
 client.on('shardError', (error, shardId) => logger.error(`[DISCORD SHARD ${shardId} ERROR] ${error.stack || error.message}`));
@@ -86,47 +97,4 @@ const universalReceiver = require('./services/universalReceiver');
 if (process.env.EMBEDDED_SPARTAN !== 'true') universalReceiver.start();
 logger.info(`🚀 Nexus clean core starting | Node ${process.version} | discord.js ${discordJsVersion}`);
 
-// Retry connecting to Discord with exponential backoff instead of giving up
-// permanently on the first failure. A transient 429 (Discord/Cloudflare rate
-// limit) or a slow gateway handshake should self-heal, not leave the bot
-// silently disconnected while the HTTP health server keeps Render thinking
-// everything is fine.
-const MAX_BACKOFF_MS = 5 * 60 * 1000; // cap at 5 minutes between attempts
-let backoffMs = 15 * 1000; // start at 15 seconds
-let loggedIn = false;
-
-async function attemptLogin() {
-  if (loggedIn) return;
-  logger.info('[DISCORD] Starting gateway login...');
-  try {
-    const loginPromise = client.login(process.env.DISCORD_TOKEN);
-    const loginTimeout = new Promise((_, reject) => setTimeout(() => reject(new Error('Discord gateway login timed out after 30 seconds')), 30000));
-    await Promise.race([loginPromise, loginTimeout]);
-    loggedIn = true;
-    logger.info('[DISCORD] Login promise resolved');
-  } catch (error) {
-    logger.error(`[DISCORD LOGIN FAILED] ${error.stack || error.message}`);
-    logger.warn(`[DISCORD] Retrying login in ${Math.round(backoffMs / 1000)}s`);
-    setTimeout(attemptLogin, backoffMs);
-    backoffMs = Math.min(backoffMs * 2, MAX_BACKOFF_MS);
-  }
-}
-attemptLogin();
-
-client.on('shardDisconnect', () => { loggedIn = false; });
-
-const SELF_URL = process.env.RENDER_EXTERNAL_URL || 'https://utopia-nexus.onrender.com';
-const SELF_HEALTH_URL = `${SELF_URL.replace(/\/$/, '')}/health`;
-setInterval(() => { require('https').get(SELF_HEALTH_URL, res => { res.resume(); logger.info(`[SELF-PING] ${res.statusCode} ${SELF_HEALTH_URL}`); }).on('error', err => logger.warn(`[SELF-PING ERROR] ${err.message}`)); }, 10 * 60 * 1000);
-
-// Graceful shutdown: log out of Discord cleanly on deploy/restart instead of
-// letting Render just kill the process. Without this, a rolling deploy can
-// briefly run two bot instances against the same token simultaneously, both
-// processing every interaction and message.
-function shutdown(signal) {
-  logger.info(`[SHUTDOWN] Received ${signal}, destroying Discord client...`);
-  client.destroy();
-  process.exit(0);
-}
-process.on('SIGTERM', () => shutdown('SIGTERM'));
-process.on('SIGINT', () => shutdown('SIGINT'));
+// Let discord.js own the Gateway reconnect lifecycle.\n// The old Promise.race() timeout could abandon a live login attempt and start\n// another client.login() while the first WebSocket was still opening. That can\n// create overlapping Gateway sessions and turn a transient network stall into\n// a persistent reconnect loop. discord.js already has Gateway handshake/hello/\n// ready timeouts and reconnect handling, so only retry a login after login()\n// itself actually rejects.\nconst MAX_BACKOFF_MS = 5 * 60 * 1000;\nlet backoffMs = 15 * 1000;\nlet loggedIn = false;\nlet loginInProgress = false;\nlet retryTimer = null;\n\nasync function attemptLogin() {\n  if (loggedIn || loginInProgress) return;\n  loginInProgress = true;\n  logger.info('[DISCORD] Starting gateway login...');\n  try {\n    await client.login(process.env.DISCORD_TOKEN);\n    loggedIn = true;\n    backoffMs = 15 * 1000;\n    logger.info('[DISCORD] Login promise resolved');\n  } catch (error) {\n    logger.error(`[DISCORD LOGIN FAILED] ${error.stack || error.message}`);\n    try { client.destroy(); } catch {}\n    const delay = backoffMs;\n    backoffMs = Math.min(backoffMs * 2, MAX_BACKOFF_MS);\n    logger.warn(`[DISCORD] Login failed; retrying in ${Math.round(delay / 1000)}s`);\n    retryTimer = setTimeout(() => {\n      retryTimer = null;\n      attemptLogin().catch(() => {});\n    }, delay);\n  } finally {\n    loginInProgress = false;\n  }\n}\n\nattemptLogin().catch(() => {});\n\nclient.on('shardDisconnect', () => {\n  loggedIn = false;\n  // Do not call client.login() here. discord.js automatically reconnects\n  // recoverable shard disconnects and emits shardReconnecting/shardReady.\n}
