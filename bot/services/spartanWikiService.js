@@ -22,8 +22,8 @@ function detectAgeNumber(html) {
 
 function htmlToText(html) {
   return String(html)
-    .replace(/<script[\\s\\S]*?<\\/script>/gi, ' ')
-    .replace(/<style[\\s\\S]*?<\\/style>/gi, ' ')
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
     .replace(/<[^>]+>/g, ' ')
     .replace(/&nbsp;/gi, ' ')
     .replace(/&amp;/gi, '&')
@@ -31,7 +31,7 @@ function htmlToText(html) {
     .replace(/&gt;/gi, '>')
     .replace(/&quot;/gi, '"')
     .replace(/&#39;/gi, "'")
-    .replace(/\\s+/g, ' ')
+    .replace(/\s+/g, ' ')
     .trim();
 }
 
@@ -40,7 +40,7 @@ async function syncWikiFile() {
   if (!supabase) return { ok: false, error: 'supabase_unavailable' };
   if (!fs.existsSync(WIKI_PATH)) return { ok: false, error: 'wiki_file_missing' };
 
-  const contentHtml = fs.readFileSync(WIKI_PATH, 'utf8').replace(/\\u0000/g, '');
+  const contentHtml = fs.readFileSync(WIKI_PATH, 'utf8').replace(/\u0000/g, '');
   const ageNumber = detectAgeNumber(contentHtml);
   if (!ageNumber) return { ok: false, error: 'wiki_age_not_detected' };
 
@@ -70,7 +70,7 @@ async function syncWikiHtml(updateText, source = 'age_update') {
   if (!supabase) return { ok: false, error: 'supabase_unavailable' };
 
   const contentHtml = String(updateText || '');
-  if (!/<html[\\s>]/i.test(contentHtml) || !/<body[\\s>]/i.test(contentHtml)) {
+  if (!/<html[\s>]/i.test(contentHtml) || !/<body[\s>]/i.test(contentHtml)) {
     return { ok: false, error: 'not_full_wiki_html' };
   }
 
