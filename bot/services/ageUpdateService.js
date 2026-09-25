@@ -2,6 +2,7 @@ const supabaseService = require("./supabase");
 const logger = require("./logger");
 const { parseAgeFileChunked: parseAgeFile, summarize } = require("../parsers/ageParser");
 const { recalculateBuildLibrary } = require("./buildAgeRecalculator");
+const { syncWikiHtml } = require("./spartanWikiService");
 
 async function saveAgeUpdate(updateText, userId, filename) {
   const supabase = supabaseService.getClient();
@@ -33,6 +34,17 @@ async function saveAgeUpdate(updateText, userId, filename) {
 
     const parsed = parseAgeFile(updateText);
     const parsedSummary = summarize(parsed);
+
+    // If the submitted Age file is actually the complete authoritative Wiki,
+    // archive that full document too. This makes Age 117+ rollover automatic.
+    if (/<html[\s>]/i.test(updateText) && /<body[\s>]/i.test(updateText)) {
+      try {
+        await syncWikiHtml(updateText, "discord_age_update");
+      } catch (wikiError) {
+        logger.error(`[WIKI SYNC ERROR] ${wikiError.message}`);
+      }
+    }
+
     const { data, error } = await supabase.from("age_updates").insert({
       age_number: ageNumber,
       raw_text: updateText,
