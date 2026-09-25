@@ -13,7 +13,70 @@ const musicCommand={name:'spartan-music',description:'Spartan music',options:[{n
 const intelCommand={name:'spartan-intel',description:'Spartan intelligence',options:[
 {name:'check',description:'Intel coverage',type:1},{name:'capturehealth',description:'Capture health',type:1},{name:'incoming',description:'Incoming armies',type:1},{name:'eta',description:'Returning armies',type:1},{name:'status',description:'Province status',type:1},{name:'left',description:'Kingdom offense',type:1},{name:'plunders',description:'Plunder candidates',type:1},{name:'survey',description:'Building survey',type:1,options:[{name:'province',description:'Province',type:3,required:true}]},{name:'oprate',description:'Operation rates',type:1},{name:'kdecon',description:'Kingdom economy',type:1},{name:'econ',description:'Province economy',type:1},{name:'tppa',description:'Kingdom density',type:1} ]};
 
-const calcCommand={name:'spartan-calc',description:'Spartan calculators',options:[{name:'thievery',description:'Thievery calculator',type:1},{name:'attack',description:'Attack calculator',type:1},{name:'invest',description:'Science investment planner',type:1},{name:'declare',description:'Legality checker',type:1},{name:'spellcheck',description:'Spell checker',type:1},{name:'science',description:'Science calculator',type:1},{name:'science-summary',description:'Science summary',type:1}]};
+// --- spartan-calc choice lists (thievery rebuild — wiki-accurate success + yield model) ---
+const RACE_CHOICES=[
+{name:'Avian',value:'avian'},{name:'Dark Elf',value:'darkelf'},
+{name:'Dryad',value:'dryad'},{name:'Dwarf',value:'dwarf'},
+{name:'Elf',value:'elf'},{name:'Faery',value:'faery'},
+{name:'Halfling',value:'halfling'},{name:'Human',value:'human'},
+{name:'Orc',value:'orc'},{name:'Undead',value:'undead'},
+];
+
+const PERS_CHOICES=[
+{name:'None',value:'none'},{name:'Heretic',value:'heretic'},
+{name:'Mystic',value:'mystic'},{name:'Necromancer',value:'necromancer'},
+{name:'Cleric',value:'cleric'},{name:'General',value:'general'},
+{name:'Artisan',value:'artisan'},{name:'Rogue',value:'rogue'},
+{name:'Sage',value:'sage'},{name:'Tactician',value:'tactician'},
+{name:'Warrior',value:'warrior'},{name:'War Hero',value:'warhero'},
+];
+
+const THIEVERY_OP_CHOICES=[
+{name:'Rob the Granaries',value:'Rob the Granaries'},
+{name:'Rob the Vaults',value:'Rob the Vaults'},
+{name:'Rob the Towers',value:'Rob the Towers'},
+{name:'Kidnapping',value:'Kidnapping'},
+{name:'Steal Horses',value:'Steal Horses'},
+{name:'Steal War Horses',value:'Steal War Horses'},
+{name:'Free Prisoners',value:'Free Prisoners'},
+{name:'Night Strike',value:'Night Strike'},
+{name:'Greater Arson',value:'Greater Arson'},
+{name:'Assassinate Wizards',value:'Assassinate Wizards'},
+];
+
+const calcCommand={name:'spartan-calc',description:'Spartan calculators',options:[
+{name:'thievery',description:'Wiki-accurate thievery: op success + yield',type:1,options:[
+  {name:'op',description:'Operation to run',type:3,required:true,choices:THIEVERY_OP_CHOICES},
+  {name:'my_thieves',description:'Your available thieves',type:4,required:true},
+  {name:'my_land',description:'Your land (acres)',type:4,required:true},
+  {name:'their_thieves',description:"Target's thieves (for catch-chance ratio)",type:4,required:true},
+  {name:'their_land',description:"Target's land (acres)",type:4,required:true},
+  {name:'target_resource',description:"Target's resource/troop count for this op",type:4,required:true},
+  {name:'my_race',description:'Your race',type:3,required:true,choices:RACE_CHOICES},
+  {name:'my_personality',description:'Your personality',type:3,required:false,choices:PERS_CHOICES},
+  {name:'their_race',description:"Target's race",type:3,required:false,choices:RACE_CHOICES},
+  {name:'war',description:'In a declared war?',type:5,required:false},
+  {name:'invisibility',description:'Invisibility spell active?',type:5,required:false},
+  {name:'my_crime_science_pct',description:'Your invested Crime Science bonus (e.g. 0.15 for +15%)',type:10,required:false},
+  {name:'my_dens_pct',description:"Your Thieves' Dens %",type:10,required:false},
+  {name:'my_honor_mod',description:'Your Honor modifier (default 1.0)',type:10,required:false},
+  {name:'my_ritual_mod',description:'Your Ritual modifier (default 1.0)',type:10,required:false},
+  {name:'their_watchtowers',description:"Target's Watch Towers %",type:10,required:false},
+  {name:'my_nw',description:'Your networth',type:10,required:false},
+  {name:'their_nw',description:"Target's networth",type:10,required:false},
+  {name:'guile',description:'Guile modifier (default 1.0)',type:10,required:false},
+  {name:'cunning',description:'Cunning modifier (default 1.0)',type:10,required:false},
+  {name:'their_illuminate',description:"Target's Illuminate Shadows modifier (default 1.0)",type:10,required:false},
+  {name:'their_shielding',description:"Target's Shielding (0-1, default 0)",type:10,required:false},
+  {name:'stance',description:'Stance modifier (default 1.0)',type:10,required:false},
+]},
+{name:'attack',description:'Attack calculator',type:1},
+{name:'invest',description:'Science investment planner',type:1},
+{name:'declare',description:'Legality checker',type:1},
+{name:'spellcheck',description:'Spell checker',type:1},
+{name:'science',description:'Science calculator',type:1},
+{name:'science-summary',description:'Science summary',type:1}
+]};
 
 const warCommand={name:'spartan-war',description:'Spartan war operations',options:[{name:'analyze',description:'Analyze war',type:1},{name:'summary',description:'War summary',type:1},{name:'board',description:'War board',type:1},{name:'status',description:'War status',type:1},{name:'target',description:'Target operations',type:1},{name:'ambush',description:'Ambush planning',type:1},{name:'intel',description:'War intelligence',type:1}]};
 
