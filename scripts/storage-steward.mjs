@@ -1,4 +1,4 @@
-const baseUrl = String(process.env.SPARTAN_DASHBOARD_URL || 'https://spartan-dashboard.onrender.com').replace(/\/$/, '')
+const baseUrl = String(process.env.SPARTAN_DASHBOARD_URL || 'https://sparta-west.onrender.com').replace(/\/$/, '')
 const key = process.env.SPARTAN_STEWARD_KEY
 const limit = Math.min(Math.max(Number(process.env.SPARTAN_STEWARD_BATCH || 10) || 10, 1), 25)
 
