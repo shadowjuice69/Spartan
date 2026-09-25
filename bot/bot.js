@@ -10,6 +10,7 @@ const commands = require('./core/commands');
 const spartanQueueProcessor = require('./services/spartanQueueProcessor');
 const spartanBotBridge = require('./services/spartanBotBridge');
 const spartanAI = require('./services/spartanAI');
+const { syncWikiFile } = require('./services/spartanWikiService');
 
 if (!process.env.DISCORD_TOKEN) throw new Error('DISCORD_TOKEN is required');
 const CLEANUP_CHANNEL_ID = '1546379989484830730';
@@ -63,7 +64,7 @@ client.on('messageCreate', async message => {
       if (batch.size < 100) break;
     }
     await message.reply(`✅ Cleared ${deleted} message(s) from <#${channelId}> posted by <@${authorId}>. Scanned ${scanned} message(s).`);
-    logger.info(`[CLEARBOT] deleted=${deleted} scanned=${scanned} channel=${channelId} author=${authorId} requestedBy=${message.author.id}`);
+    logger.info(`[CLEARBOT] deleted=${deleted} scanned=${scanned} channel=${channelId} author=${message.author.id}`);
   } catch (error) {
     logger.error(`[CLEARBOT ERROR] ${error.stack || error.message}`);
     if (!message.replied) message.reply(`❌ Cleanup failed: ${error.message}`).catch(() => {});
@@ -71,7 +72,6 @@ client.on('messageCreate', async message => {
 });
 
 client.on('debug', message => {
-  // Never log the bot token. discord.js may include it in debug output.
   if (/provided token/i.test(message)) return;
   if (!/heartbeat acknowledged|sending heartbeat/i.test(message)) logger.info(`[DISCORD DEBUG] ${message}`);
 });
@@ -85,6 +85,12 @@ client.on('shardReady', shardId => logger.info(`[DISCORD SHARD ${shardId} READY]
 client.once('clientReady', async () => {
   logger.info(`[DISCORD READY] Bot online as ${client.user.tag}`);
   logger.info('[SPARTAN] Bot is an ecosystem node: Discord <-> Spartan capture/queue/stewards/projection');
+  try {
+    const wikiSync = await syncWikiFile();
+    if (!wikiSync.ok) logger.warn(`[WIKI SYNC] skipped: ${wikiSync.error}`);
+  } catch (error) {
+    logger.error(`[WIKI SYNC ERROR] ${error.stack || error.message}`);
+  }
   spartanAI.start();
   spartanQueueProcessor.start();
   try { directMusicAdapter.initialize(client); musicPlayer.setAdapter(directMusicAdapter); logger.info('🎵 Music backend ready: Direct Discord Voice / yt-dlp / FFmpeg'); }
@@ -97,13 +103,6 @@ const universalReceiver = require('./services/universalReceiver');
 if (process.env.EMBEDDED_SPARTAN !== 'true') universalReceiver.start();
 logger.info(`🚀 Nexus clean core starting | Node ${process.version} | discord.js ${discordJsVersion}`);
 
-// Let discord.js own the Gateway reconnect lifecycle.
-// The old Promise.race() timeout could abandon a live login attempt and start
-// another client.login() while the first WebSocket was still opening. That can
-// create overlapping Gateway sessions and turn a transient network stall into
-// a persistent reconnect loop. discord.js already has Gateway handshake/hello/
-// ready timeouts and reconnect handling, so only retry a login after login()
-// itself actually rejects.
 const MAX_BACKOFF_MS = 5 * 60 * 1000;
 let backoffMs = 15 * 1000;
 let loggedIn = false;
@@ -138,6 +137,4 @@ attemptLogin().catch(() => {});
 
 client.on('shardDisconnect', () => {
   loggedIn = false;
-  // Do not call client.login() here. discord.js automatically reconnects
-  // recoverable shard disconnects and emits shardReconnecting/shardReady.
 });
