@@ -70,15 +70,62 @@ const calcCommand={name:'spartan-calc',description:'Spartan calculators',options
   {name:'their_shielding',description:"Target's Shielding (0-1, default 0)",type:10,required:false},
   {name:'stance',description:'Stance modifier (default 1.0)',type:10,required:false},
 ]},
-{name:'attack',description:'Attack calculator',type:1},
+{name:'attack',description:'Attack calculator',type:1,options:[
+  {name:'your_nw',description:'Your networth',type:10,required:true},
+  {name:'target_nw',description:"Target's networth",type:10,required:true},
+  {name:'your_acres',description:'Your acres',type:4,required:true},
+  {name:'target_acres',description:"Target's acres",type:4,required:true},
+  {name:'your_map',description:'Your MAP (Military Assistance Points), default 0',type:4,required:false},
+  {name:'war',description:'In a declared war?',type:5,required:false},
+  {name:'off_mods',description:'Additional offense modifier (integer %)',type:4,required:false},
+]},
 {name:'invest',description:'Science investment planner',type:1},
-{name:'declare',description:'Legality checker',type:1},
-{name:'spellcheck',description:'Spell checker',type:1},
-{name:'science',description:'Science calculator',type:1},
-{name:'science-summary',description:'Science summary',type:1}
+{name:'declare',description:'Legality checker',type:1,options:[
+  {name:'our_nw',description:'Our networth',type:10,required:true},
+  {name:'their_nw',description:"Their networth",type:10,required:true},
+  {name:'our_land',description:'Our land (acres)',type:4,required:true},
+  {name:'their_land',description:"Their land (acres)",type:4,required:true},
+  {name:'our_meter',description:'Our hostility meter reading',type:10,required:true},
+  {name:'their_meter',description:'Their hostility meter reading',type:10,required:true},
+  {name:'quiet_ticks',description:'Ticks since last hostile action',type:4,required:false},
+  {name:'their_name',description:'Their province name',type:3,required:false},
+]},
+{name:'spellcheck',description:'Spell checker',type:1,options:[
+  {name:'my_wizards',description:'Your available wizards',type:4,required:true},
+  {name:'my_land',description:'Your land (acres)',type:4,required:true},
+  {name:'my_race',description:'Your race',type:3,required:true,choices:RACE_CHOICES},
+  {name:'their_wizards',description:"Target's wizards",type:4,required:true},
+  {name:'their_land',description:"Target's land (acres)",type:4,required:true},
+  {name:'my_personality',description:'Your personality',type:3,required:false,choices:PERS_CHOICES},
+  {name:'their_race',description:"Target's race, default Avian",type:3,required:false,choices:RACE_CHOICES},
+  {name:'my_channeling',description:'Your Channeling science modifier (default 1.0)',type:10,required:false},
+  {name:'my_honor_mod',description:'Your Honor modifier (default 1.0)',type:10,required:false},
+  {name:'mages_fury',description:"Mage's Fury active?",type:5,required:false},
+  {name:'focused_channelling',description:'Focused Channelling active?',type:5,required:false},
+  {name:'their_magic_shield',description:'Target has Magic Shield up?',type:5,required:false},
+  {name:'my_nw',description:'Your networth',type:4,required:false},
+  {name:'their_nw',description:"Target's networth",type:4,required:false},
+  {name:'spell',description:'Spell to check',type:3,required:false},
+]},
+{name:'science',description:'Science calculator',type:1,options:[
+  {name:'type',description:'Science category',type:3,required:false},
+]},
+{name:'science-summary',description:'Science summary',type:1,options:[
+  {name:'province',description:'Province name (defaults to your own)',type:3,required:false},
+  {name:'libraries',description:'Libraries % bonus',type:10,required:false},
+]}
 ]};
 
-const warCommand={name:'spartan-war',description:'Spartan war operations',options:[{name:'analyze',description:'Analyze war',type:1},{name:'summary',description:'War summary',type:1},{name:'board',description:'War board',type:1},{name:'status',description:'War status',type:1},{name:'target',description:'Target operations',type:1},{name:'ambush',description:'Ambush planning',type:1},{name:'intel',description:'War intelligence',type:1}]};
+const warCommand={name:'spartan-war',description:'Spartan war operations',options:[{name:'analyze',description:'Analyze war',type:1},{name:'summary',description:'War summary',type:1},{name:'board',description:'War board',type:1},{name:'status',description:'War status',type:1,options:[
+  {name:'action',description:'Action to take',type:3,required:false,choices:[{name:'declare',value:'declare'},{name:'end',value:'end'},{name:'status',value:'status'}]},
+  {name:'kingdom',description:'Enemy kingdom name (for declare)',type:3,required:false},
+  {name:'coords',description:'Enemy kingdom coords (for declare)',type:3,required:false},
+  {name:'notes',description:'Notes about the war',type:3,required:false},
+]},{name:'target',description:'Target operations',type:1,options:[
+  {name:'province',description:'Province name',type:3,required:false},
+]},{name:'ambush',description:'Ambush planning',type:1,options:[
+  {name:'target',description:'Target province name',type:3,required:false},
+]},{name:'intel',description:'War intelligence',type:1}]};
 
 const adminCommand={name:'spartan-admin',description:'Spartan administration',options:[{name:'panel',description:'Admin panel',type:1},{name:'logs',description:'Access logs',type:1},{name:'admins',description:'Manage administrators',type:1},{name:'access',description:'Manage Spartan access',type:1},{name:'alerts',description:'Manage alerts',type:1},{name:'broadcast',description:'Broadcast through Spartan',type:1}]};
 
