@@ -79,7 +79,10 @@ const calcCommand={name:'spartan-calc',description:'Spartan calculators',options
   {name:'war',description:'In a declared war?',type:5,required:false},
   {name:'off_mods',description:'Additional offense modifier (integer %)',type:4,required:false},
 ]},
-{name:'invest',description:'Science investment planner',type:1},
+{name:'invest',description:'Science investment planner',type:1,options:[
+  {name:'build',description:'Build name to plan against (defaults to an active build matching your race)',type:3,required:false},
+  {name:'province',description:'Province name (defaults to your own)',type:3,required:false},
+]},
 {name:'declare',description:'Legality checker',type:1,options:[
   {name:'our_nw',description:'Our networth',type:10,required:true},
   {name:'their_nw',description:"Their networth",type:10,required:true},
