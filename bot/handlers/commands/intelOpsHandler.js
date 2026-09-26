@@ -1,52 +1,132 @@
 const supabaseService = require("../../services/supabase");
 const nexusIdentityService = require("../../services/nexusIdentityService");
 
-const PAGE_TYPES = ["throne", "som", "science", "survey", "state", "kingdom-page", "news"];
-const label = { throne: "Thr", som: "Mil", science: "Sci", survey: "Def", state: "Gld", "kingdom-page": "KD", news: "Srv" };
+const PAGE_KEYS = ["throne", "survey", "science", "magic", "som", "universal"];
+const LABEL = { throne: "Thr", survey: "Sur", science: "Sci", magic: "Mag", som: "SoM", universal: "Uni" };
 
-function age(ts) { if (!ts) return "—"; const mins=Math.max(0,Math.floor((Date.now()-new Date(ts).getTime())/60000)); if(mins<60)return `${mins}m`; const h=Math.floor(mins/60); return h<48?`${h}h`:`${Math.floor(h/24)}d`; }
-function n(v){const x=Number(String(v??"").replace(/,/g,""));return Number.isFinite(x)?x:null;}
-function fmt(v){return v==null?"?":Number(v).toLocaleString();}
-function getArmyRows(armies){return Array.isArray(armies)?armies.filter(Boolean).map(a=>({returnDays:n(a.return_days??a.returnDays??a.days_left??a.days),troops:a.troops||{},target:a.target||a.target_province||a.targetProvince||null,acres:n(a.acres??a.land??a.land_gained)})):[];}
+function age(ts) { if (!ts) return "—"; const mins = Math.max(0, Math.floor((Date.now() - new Date(ts).getTime()) / 60000)); if (mins < 60) return `${mins}m`; const h = Math.floor(mins / 60); return h < 48 ? `${h}h` : `${Math.floor(h / 24)}d`; }
+function n(v) { const x = Number(String(v ?? "").replace(/,/g, "")); return Number.isFinite(x) ? x : null; }
+function fmt(v) { return v == null ? "?" : Number(v).toLocaleString(); }
 
-async function resolveKingdom(sb, interaction, me){
-  if(me?.kd_code)return me.kd_code;
-  const {data}=await sb.from("intel_page_ingest").select("kd_code,received_at").not("kd_code","is",null).order("received_at",{ascending:false}).limit(1);
-  return data?.[0]?.kd_code||null;
+async function registryRows(sb, kd) {
+  const { data, error } = await sb.from("spartan_province_registry").select("province_id,province_name,kingdom_code,metadata,last_seen_at").eq("kingdom_code", kd);
+  if (error) throw error;
+  return data || [];
 }
-async function check(sb,kd){
-  if(!kd)return "❌ No kingdom code is available for this Intel check.";
-  const {data,error}=await sb.from("intel_page_ingest").select("province,data_type,received_at").eq("kd_code",kd).order("received_at",{ascending:false}).limit(1500);
-  if(error)throw error;
-  const map=new Map(); for(const r of data||[]){if(!r.province)continue; if(!map.has(r.province))map.set(r.province,{}); const m=map.get(r.province); if(!m[r.data_type])m[r.data_type]=r.received_at;}
-  const provinces=[...map.keys()].sort((a,b)=>a.localeCompare(b)); let covered=0;
-  const rows=provinces.slice(0,25).map(p=>{const m=map.get(p);const cells=PAGE_TYPES.map(t=>m[t]?"✓":"·").join("");if(PAGE_TYPES.every(t=>m[t]))covered++;return `• ${p.slice(0,22).padEnd(22)} ${cells} ${PAGE_TYPES.filter(t=>!m[t]).map(t=>label[t]).join(",")||"OK"}`;});
-  const header=`🧭 **Intel check — ${kd}**\n\`Thr Mil Sci Def Gld KD Srv\`\n**${provinces.length} provinces indexed · ${covered}/${Math.min(provinces.length,25)} shown complete**`;
-  return `${header}\n${rows.join("\n")||"No captured provinces."}\n\n✓ captured · · missing · latest stored page is used`;
+async function registryRow(sb, kd, province) {
+  const { data, error } = await sb.from("spartan_province_registry").select("province_id,province_name,kingdom_code,metadata,last_seen_at").eq("kingdom_code", kd).eq("province_name", province).maybeSingle();
+  if (error) throw error;
+  return data;
 }
-async function captureHealth(sb,kd,province){const {data}=await sb.from("intel_page_ingest").select("province,data_type,received_at").eq("kd_code",kd).eq("province",province).order("received_at",{ascending:false}).limit(100);const latest={};for(const r of data||[])if(!latest[r.data_type])latest[r.data_type]=r.received_at;return `🩺 **Capture health — ${province} (${kd})**\n${PAGE_TYPES.map(t=>`${label[t].padEnd(3)} ${latest[t]?`✓ ${age(latest[t])}`:"❌ missing"}`).join(" · ")}\n\nThis reports stored arrivals; it does not infer a page was collected when no record exists.`;}
-async function status(sb,p){const kd=p.kd_code;const [mQ,tQ,sQ,gQ]=await Promise.all([sb.from("intel_military").select("offense,defense,generals,troops,updated_at").eq("province",p.name).eq("kd_code",kd).order("updated_at",{ascending:false}).limit(1),sb.from("intel_throne").select("thieves,wizards,tpa,wpa,ome,dme,updated_at").eq("province",p.name).eq("kd_code",kd).order("updated_at",{ascending:false}).limit(1),sb.from("intel_state").select("money,food,runes,peasants,updated_at").eq("province",p.name).eq("kd_code",kd).order("updated_at",{ascending:false}).limit(1),sb.from("intel_game_state").select("soldier_count,updated_at").eq("province",p.name).eq("kd_code",kd).order("updated_at",{ascending:false}).limit(1)]);const m=mQ.data?.[0]||{},t=tQ.data?.[0]||{},s=sQ.data?.[0]||{},g=gQ.data?.[0]||{};return `📊 **${p.name} — Status**\n**Offense:** ${fmt(m.offense)} · **Defense:** ${fmt(m.defense)} · **Gens:** ${fmt(m.generals)}\n**rTPA:** ${t.tpa??p.r_tpa??"?"} · **rWPA:** ${t.wpa??p.r_wpa??"?"}\n**Gold:** ${fmt(s.money)} · **Food:** ${fmt(s.food)} · **Runes:** ${fmt(s.runes)}\n**Peasants:** ${fmt(s.peasants)} · **Soldiers:** ${fmt(g.soldier_count)}\n_Stored intel: military ${age(m.updated_at)} · self ${age(s.updated_at)}_`;}
-async function left(sb,kd){const {data}=await sb.from("intel_military").select("province,offense,generals,troops,updated_at").eq("kd_code",kd).order("updated_at",{ascending:false}).limit(100);const rows=[];let total=0,gens=0;for(const r of data||[]){const off=n(r.offense)||0;total+=off;gens+=n(r.generals)||0;rows.push({name:r.province,off,gens:r.generals,age:age(r.updated_at)});}rows.sort((a,b)=>b.off-a.off);return `🏠 **Leftover offense — ${kd}**\n${rows.slice(0,25).map((r,i)=>`#${i+1} ${r.name} — ${fmt(r.off)} off · ${fmt(r.gens)}g avail _(${r.age})_`).join("\n")||"No military captures."}\n\n**total at-home offense:** ${fmt(total)} · **generals:** ${fmt(gens)}\n_Only captured military values are included._`;}
-async function survey(sb,q,kd){const {data}=await sb.from("intel_buildings").select("province,buildings,updated_at").eq("kd_code",kd).ilike("province",`%${q}%`).order("updated_at",{ascending:false}).limit(1);const r=data?.[0];if(!r)return `❌ No Survey/building capture found for **${q}** in ${kd}.`;const b=r.buildings||{};return `🏗️ **${r.province} — Survey** · ${age(r.updated_at)}\n${Object.entries(b).slice(0,10).map(([k,v])=>`${k.replace(/_/g," ")} ${v?.qty??"?"} (${v?.pct??"?"}%)`).join(" · ")||"No building rows parsed."}`;}
-async function econ(sb,kd,province){const {data}=await sb.from("intel_state").select("province,daily_income,daily_wages,peasants,unemployed,unfilled_jobs,food_net_yesterday,runes_net_yesterday,updated_at").eq("kd_code",kd).eq("province",province).order("updated_at",{ascending:false}).limit(1);const r=data?.[0];if(!r)return `❌ No economy/state capture for **${province}**.`;const net=(n(r.daily_income)||0)-(n(r.daily_wages)||0);return `💰 **${province} — Economy** _${age(r.updated_at)}_\nPeasants ${fmt(r.peasants)} · idle ${fmt(r.unemployed)} · unfilled jobs ${fmt(r.unfilled_jobs)}\nIncome ${fmt(r.daily_income)}/day · wages ${fmt(r.daily_wages)}/day\n**NET ${net>=0?"+":""}${fmt(net)}/day**\nFood net yesterday ${fmt(r.food_net_yesterday)} · Runes net yesterday ${fmt(r.runes_net_yesterday)}`;}
-async function kdecon(sb,kd){const {data}=await sb.from("intel_state").select("province,daily_income,daily_wages,updated_at").eq("kd_code",kd).order("updated_at",{ascending:false}).limit(100);const latest=new Map();for(const r of data||[])if(!latest.has(r.province))latest.set(r.province,r);const rows=[...latest.values()].sort((a,b)=>(n(b.daily_income)||0)-(n(a.daily_income)||0));const ti=rows.reduce((s,r)=>s+(n(r.daily_income)||0),0),tw=rows.reduce((s,r)=>s+(n(r.daily_wages)||0),0);return `💰 **KD Economy — ${kd}**\n${rows.slice(0,25).map(r=>`${r.province} · ${fmt(r.daily_income)} income · ${fmt(r.daily_wages)} wages · ${age(r.updated_at)}`).join("\n")||"No economy captures."}\n\n**${rows.length} provinces** · income ${fmt(ti)} · wages ${fmt(tw)}\n_Forward projections use the shared Resource Forecast engine when available; this view does not fabricate a rate._`;}
-async function oprate(sb,kd){const {data}=await sb.from("intel_ops").select("province,operation,success,last_seen").eq("kd_code",kd).limit(2000);const map=new Map();for(const r of data||[]){const key=r.province||"?";if(!map.has(key))map.set(key,{off:[],thief:[],intel:[]});const x=map.get(key),op=String(r.operation||"").toLowerCase(),bucket=op.includes("spy")||op.includes("fireball")||op.includes("storm")||op.includes("spell")?"off":op.includes("thief")||op.includes("rob")||op.includes("kidnap")||op.includes("bribe")?"thief":"intel";if(typeof r.success==="boolean")x[bucket].push(r.success);}const rate=a=>a.length?(100*a.filter(Boolean).length/a.length).toFixed(0)+"%":"--";return `📈 **Op rates — ${kd}**\n${[...map.entries()].slice(0,25).map(([p,x])=>`${p} · off ${rate(x.off)} · thief ${rate(x.thief)} · intel ${rate(x.intel)}`).join("\n")||"No operation records."}\n\n_-- = no classified outcomes; unknown outcomes are not counted._`;}
-async function tppa(sb,kd){const {data}=await sb.from("provinces").select("name,slot,kd_code,acres,peons,soldiers,off_specs,def_specs,elites,thieves,wizards,prisoners").eq("kd_code",kd).limit(100);const rows=[];for(const p of data||[]){const land=n(p.acres);if(!land)continue;const pop=[p.peons,p.soldiers,p.off_specs,p.def_specs,p.elites,p.thieves,p.wizards,p.prisoners].reduce((s,v)=>s+(n(v)||0),0);rows.push({p,d:pop/land});}rows.sort((a,b)=>b.d-a.d);const totalPop=rows.reduce((s,r)=>s+r.d*(n(r.p.acres)||0),0),totalLand=rows.reduce((s,r)=>s+(n(r.p.acres)||0),0);return `👥 **TPPA — ${kd}** · ${rows.length} provinces\n${rows.map(r=>`${r.p.slot||"-"} ${r.p.name} · ${r.d.toFixed(2)} tppa · ${fmt(r.p.acres)}a`).join("\n")||"No normalized province data."}\n\n**KD:** ${totalLand?(totalPop/totalLand).toFixed(2):"?"} tppa · ${fmt(totalLand)} acres\n_Uses normalized captured population components; missing components are treated as unavailable for that province._`;}
-async function plunders(sb,kd,p){const attackerNW=n(p.nw);if(!attackerNW)return "❌ Your networth is unavailable; cannot rank plunder targets without fabricating the NW range.";const minNW=attackerNW*.85,maxNW=attackerNW*1.25;const {data}=await sb.from("provinces").select("name,slot,nw,acres,kd_code").neq("kd_code",kd).gte("nw",minNW).lte("nw",maxNW).order("nw",{ascending:false}).limit(10);return `💰 **PLUNDERS — ${p.name}** · NW ${fmt(attackerNW)}\nrange 85–125% NW → ${fmt(minNW)}–${fmt(maxNW)}\n${(data||[]).map(x=>`#${x.slot||"?"} ${x.name} · NW ${fmt(x.nw)} · ${fmt(x.acres)}a`).join("\n")||"No normalized targets in range."}\n\n_Target ranking requires current gold/SoT/protection intel; no gold value is invented here._`;}
-async function incoming(sb,kd){const {data}=await sb.from("intel_military").select("province,armies,updated_at").eq("kd_code",kd).limit(100);const hits=[];for(const r of data||[])for(const a of getArmyRows(r.armies))if(a.target)hits.push({owner:r.province,...a,age:age(r.updated_at)});return `📥 **Incoming — ${kd}**\n${hits.length?hits.slice(0,20).map(a=>`${a.target} ← ${a.owner} · ${a.returnDays==null?"?":a.returnDays+"d"} · ${a.age}`).join("\n"):"nothing incoming"}\n_Parsed from stored military army records; no incoming is inferred when the source does not identify a target._`;}
-async function eta(sb,kd,p){const {data}=await sb.from("intel_military").select("province,armies,updated_at").eq("kd_code",kd).eq("province",p.name).limit(1);const hits=[];for(const r of data||[])for(const a of getArmyRows(r.armies))hits.push({...a,age:age(r.updated_at)});hits.sort((a,b)=>(a.returnDays??9999)-(b.returnDays??9999));return `⏱ **Returning — ${p.name}**\n${hits.length?hits.slice(0,10).map(a=>`${a.returnDays==null?"?":a.returnDays+"d"} · ${a.target||"army"} · ${a.age}`).join("\n"):"nothing out"}\n_Only armies explicitly present in the latest stored military record are shown._`;}
+async function resolveKingdom(sb, me) {
+  if (me?.kd_code) return me.kd_code;
+  const { data } = await sb.from("spartan_province_registry").select("kingdom_code,last_seen_at").order("last_seen_at", { ascending: false }).limit(1);
+  return data?.[0]?.kingdom_code || null;
+}
 
-module.exports=async function intelOpsHandler(interaction){
-  const sb=supabaseService.getClient();if(!sb)return interaction.reply({content:"❌ Supabase is unavailable.",ephemeral:true});
-  const sub=interaction.options.getSubcommand();
-  // Kingdom-wide reports do not require a personal province identity. This fixes /intel check
-  // and keeps identity-required reports (status/econ/etc.) tied to the authenticated province.
-  let me=null;
-  try{me=await nexusIdentityService.resolve(interaction.user.id);}catch(e){console.error("[INTEL IDENTITY RESOLVE]",e.message);}
-  const kingdomOnly=new Set(["check","incoming","left","oprate","kdecon","tppa"]);
-  if(!me&&!kingdomOnly.has(sub))return interaction.reply({content:"❌ No Nexus province identity found. Register/link your province first.",ephemeral:true});
-  const kd=await resolveKingdom(sb,interaction,me);
-  if(!kd)return interaction.reply({content:"❌ No kingdom Intel is available yet.",ephemeral:true});
+async function check(sb, kd) {
+  const rows = await registryRows(sb, kd);
+  let covered = 0;
+  const lines = rows.slice(0, 25).map(r => {
+    const m = r.metadata || {};
+    const cells = PAGE_KEYS.map(k => m[`${k}_captured_at`] ? "✓" : "·").join("");
+    if (PAGE_KEYS.every(k => m[`${k}_captured_at`])) covered++;
+    const missing = PAGE_KEYS.filter(k => !m[`${k}_captured_at`]).map(k => LABEL[k]);
+    return `• ${r.province_name.slice(0, 22).padEnd(22)} ${cells} ${missing.join(",") || "OK"}`;
+  });
+  return `🧭 **Intel check — ${kd}**\n\`Thr Sur Sci Mag SoM Uni\`\n**${rows.length} provinces registered · ${covered}/${Math.min(rows.length, 25)} shown complete**\n${lines.join("\n") || "No registered provinces."}\n\n✓ captured · · missing · reflects the latest stored capture per page type, not a live check`;
+}
+
+async function captureHealth(sb, kd, province) {
+  const r = await registryRow(sb, kd, province);
+  if (!r) return `❌ No registry record for **${province}** in ${kd}.`;
+  const m = r.metadata || {};
+  return `🩺 **Capture health — ${province} (${kd})**\n${PAGE_KEYS.map(k => `${LABEL[k].padEnd(3)} ${m[`${k}_captured_at`] ? `✓ ${age(m[`${k}_captured_at`])}` : "❌ missing"}`).join(" · ")}\n\nThis reports stored arrivals; it does not infer a page was collected when no record exists.`;
+}
+
+async function status(sb, me) {
+  const r = await registryRow(sb, me.kd_code, me.name);
+  if (!r) return `❌ No registry record found for **${me.name}**.`;
+  const m = r.metadata || {}; const t = m.throne || {};
+  return `📊 **${me.name} — Status**\n**Offense:** ${fmt(t.off)} · **Defense:** ${fmt(t.def)}\n**oTPA:** ${t.o_tpa ?? "?"} · **oWPA:** ${t.o_wpa ?? "?"} · **BE:** ${t.be ?? "?"}%\n**Gold:** ${fmt(t.gold)} · **Food:** ${fmt(t.food)} · **Runes:** ${fmt(t.runes)}\n**Peasants:** ${fmt(t.peons)} · **Thieves:** ${fmt(t.thieves)} · **Wizards:** ${fmt(t.wizards)}\n_Stored throne intel: ${age(m.throne_captured_at)}_`;
+}
+
+async function econ(sb, kd, province) {
+  const r = await registryRow(sb, kd, province);
+  if (!r) return `❌ No registry record for **${province}**.`;
+  const m = r.metadata || {};
+  if (m.daily_income == null && m.daily_wages == null) return `❌ No economy capture for **${province}** yet (needs a State-page capture).`;
+  const net = (n(m.daily_income) || 0) - (n(m.daily_wages) || 0);
+  return `💰 **${province} — Economy**\nPeasants ${fmt(m.peasants)} · idle ${fmt(m.unemployed)} · unfilled jobs ${fmt(m.unfilled_jobs)}\nIncome ${fmt(m.daily_income)}/day · wages ${fmt(m.daily_wages)}/day\n**NET ${net >= 0 ? "+" : ""}${fmt(net)}/day**\nFood grown yesterday ${fmt(m.food_grown_yesterday)} · Runes produced yesterday ${fmt(m.runes_produced_yesterday)}`;
+}
+
+async function kdecon(sb, kd) {
+  const rows = await registryRows(sb, kd);
+  const withEcon = rows.filter(r => (r.metadata || {}).daily_income != null);
+  const sorted = withEcon.sort((a, b) => (n(b.metadata.daily_income) || 0) - (n(a.metadata.daily_income) || 0));
+  const ti = sorted.reduce((s, r) => s + (n(r.metadata.daily_income) || 0), 0), tw = sorted.reduce((s, r) => s + (n(r.metadata.daily_wages) || 0), 0);
+  return `💰 **KD Economy — ${kd}**\n${sorted.slice(0, 25).map(r => `${r.province_name} · ${fmt(r.metadata.daily_income)} income · ${fmt(r.metadata.daily_wages)} wages`).join("\n") || "No economy captures in this kingdom yet."}\n\n**${sorted.length}/${rows.length} provinces with economy data** · income ${fmt(ti)} · wages ${fmt(tw)}\n_Only counts provinces someone has actually captured a State page for._`;
+}
+
+async function survey(sb, q, kd) {
+  const rows = await registryRows(sb, kd);
+  const r = rows.find(x => x.province_name.toLowerCase().includes(String(q || "").toLowerCase()));
+  if (!r || !r.metadata?.survey?.buildings) return `❌ No Survey capture found for **${q}** in ${kd}.`;
+  const b = r.metadata.survey.buildings;
+  return `🏗️ **${r.province_name} — Survey** · ${age(r.metadata.survey_captured_at)}\n${Object.entries(b).filter(([, v]) => v?.qty).slice(0, 12).map(([k, v]) => `${k.replace(/_/g, " ")} ${v.qty} (${v.pct}%)`).join(" · ") || "No building rows parsed."}`;
+}
+
+async function tppa(sb, kd) {
+  const rows = await registryRows(sb, kd);
+  const entries = rows.filter(r => r.metadata?.throne).map(r => {
+    const t = r.metadata.throne; const land = n(t.acres);
+    const pop = [t.peons, t.soldiers, t.thieves, t.wizards, t.prisoners].reduce((s, v) => s + (n(v) || 0), 0);
+    return { name: r.province_name, acres: land, d: land ? pop / land : 0 };
+  }).filter(e => e.acres);
+  entries.sort((a, b) => b.d - a.d);
+  const totalPop = entries.reduce((s, e) => s + e.d * e.acres, 0), totalLand = entries.reduce((s, e) => s + e.acres, 0);
+  return `👥 **TPPA — ${kd}** · ${entries.length}/${rows.length} provinces with own-capture data\n${entries.map(e => `${e.name} · ${e.d.toFixed(2)} tppa · ${fmt(e.acres)}a`).join("\n") || "No captured provinces with population data."}\n\n**KD (captured subset):** ${totalLand ? (totalPop / totalLand).toFixed(2) : "?"} tppa · ${fmt(totalLand)} acres\n_Uses peons+soldiers+thieves+wizards+prisoners from each province's own Throne capture — off/def specialist breakdown isn't parsed yet, and provinces nobody has captured aren't counted._`;
+}
+
+async function plunders(sb, kd, me) {
+  const attackerNW = n(me.nw);
+  if (!attackerNW) return "❌ Your networth is unavailable; cannot rank plunder targets without fabricating the NW range.";
+  const rows = await registryRows(sb, kd);
+  const minNW = attackerNW * .85, maxNW = attackerNW * 1.25;
+  const candidates = rows.filter(r => r.metadata?.throne && r.province_name !== me.name).map(r => ({ name: r.province_name, nw: n(r.metadata.throne.nw), acres: n(r.metadata.throne.acres) })).filter(c => c.nw >= minNW && c.nw <= maxNW).sort((a, b) => b.nw - a.nw);
+  return `💰 **PLUNDERS — ${me.name}** · NW ${fmt(attackerNW)}\nrange 85–125% NW → ${fmt(minNW)}–${fmt(maxNW)}\n${candidates.slice(0, 10).map(c => `${c.name} · NW ${fmt(c.nw)} · ${fmt(c.acres)}a`).join("\n") || "No in-range targets among captured provinces."}\n\n_Only ranks provinces someone has actually captured via Throne — not the full kingdom roster, and no gold/SoT/protection intel is invented._`;
+}
+
+const UNSUPPORTED = {
+  incoming: "Army movement (who's marching where, ETA) isn't captured by any current scraper page — needs a War Room/Military page parser that records outgoing/incoming armies with return time.",
+  eta: "Same gap as incoming — no army-in-transit data exists anywhere in the current schema yet.",
+  oprate: "Per-operation success/failure (spy, thievery, spells) isn't tracked anywhere in the current schema — the old intel_ops table this used to read is gone and nothing replaced it. Needs a dedicated operations-log capture.",
+  left: "At-home offense/generals-available isn't parsed from the Military(SoM) page yet — it's captured as raw text (metadata.som.raw) but never turned into structured fields.",
+};
+
+module.exports = async function intelOpsHandler(interaction) {
+  const sb = supabaseService.getClient(); if (!sb) return interaction.reply({ content: "❌ Supabase is unavailable.", ephemeral: true });
+  const sub = interaction.options.getSubcommand();
+  if (UNSUPPORTED[sub]) return interaction.reply({ content: `🚧 **/spartan-intel ${sub}** isn't built yet. ${UNSUPPORTED[sub]}`, ephemeral: true });
+  let me = null;
+  try { me = await nexusIdentityService.resolve(interaction.user.id); } catch (e) { console.error("[INTEL IDENTITY RESOLVE]", e.message); }
+  const kingdomOnly = new Set(["check", "kdecon"]);
+  if (!me && !kingdomOnly.has(sub)) return interaction.reply({ content: "❌ No Nexus province identity found. Register/link your province first.", ephemeral: true });
+  const kd = await resolveKingdom(sb, me);
+  if (!kd) return interaction.reply({ content: "❌ No kingdom Intel is available yet.", ephemeral: true });
   let out;
-  try{switch(sub){case "check":out=await check(sb,kd);break;case "capturehealth":out=await captureHealth(sb,kd,me.name);break;case "incoming":out=await incoming(sb,kd);break;case "eta":out=await eta(sb,kd,me);break;case "status":out=await status(sb,me);break;case "left":out=await left(sb,kd);break;case "plunders":out=await plunders(sb,kd,me);break;case "survey":out=await survey(sb,interaction.options.getString("province"),kd);break;case "oprate":out=await oprate(sb,kd);break;case "kdecon":out=await kdecon(sb,kd);break;case "econ":out=await econ(sb,kd,me.name);break;case "tppa":out=await tppa(sb,kd);break;default:out="❌ Unknown Intel command.";}return interaction.reply({content:String(out||"❌ No Intel result.").slice(0,1900),ephemeral:false});}catch(e){console.error(`[INTEL] ${sub} failed`,e);return interaction.reply({content:`❌ Intel command failed: ${e.message}`,ephemeral:true});}
+  try {
+    switch (sub) {
+      case "check": out = await check(sb, kd); break;
+      case "capturehealth": out = await captureHealth(sb, kd, me.name); break;
+      case "status": out = await status(sb, me); break;
+      case "econ": out = await econ(sb, kd, me.name); break;
+      case "kdecon": out = await kdecon(sb, kd); break;
+      case "survey": out = await survey(sb, interaction.options.getString("province"), kd); break;
+      case "tppa": out = await tppa(sb, kd); break;
+      case "plunders": out = await plunders(sb, kd, me); break;
+      default: out = "❌ Unknown Intel command.";
+    }
+    return interaction.reply({ content: String(out || "❌ No Intel result.").slice(0, 1900), ephemeral: false });
+  } catch (e) { console.error(`[INTEL] ${sub} failed`, e); return interaction.reply({ content: `❌ Intel command failed: ${e.message}`, ephemeral: true }); }
 };
