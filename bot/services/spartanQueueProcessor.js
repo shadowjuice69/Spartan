@@ -82,6 +82,94 @@ async function writeProvinceHistory(sb, flow, state, canonical) {
   if (error && !String(error.message).toLowerCase().includes('duplicate')) throw new Error(`province history insert: ${error.message}`);
   return true;
 }
+async function syncBotIntelRecord(sb, flow, capture, state) {
+  if (flow.source !== 'discord-bot' || flow.page_kind !== 'bot_event') return null;
+
+  const payload = capture?.parsed_payload || {};
+  const data = payload?.data || {};
+  const discord = data?.discord || {};
+  const metadata = data?.metadata || {};
+  const channel = String(metadata.channel_name || '').toLowerCase();
+  const text = String(capture?.raw_text || data?.content || '').trim();
+  if (!text) return null;
+
+  // Only promote actual bot/game information into Intel. Normal member chatter
+  // stays in spartan_bot_events / Capture Vault and is not treated as intel.
+  const authorBot = metadata.author_bot === true || metadata.author_bot === 'true';
+  if (!authorBot) return null;
+
+  let pageKind = 'bot_event';
+  let confidence = 0.55;
+  let reason = 'Fallback bot-event classification';
+
+  if (channel.includes('selfspell') || channel.includes('offensive-spell') || /\b(spell|wizards?|mana|runes?|casting|fireball|storms?|drought|chastity|sloth|magic ward|shadow light|nature's blessing|inspire army)\b/i.test(text)) {
+    pageKind = 'magic';
+    confidence = 0.76;
+    reason = 'Channel/content identifies magic';
+    if (/\b(science|scientists?|science books?|fountain of knowledge)\b/i.test(text)) {
+      pageKind = 'science';
+      confidence = 0.76;
+      reason = 'Page content identifies science';
+    }
+  } else if (channel.includes('thieve') || /\b(thiev|thieves|thievery|rob|steal|op success|op failed|night strike|assassinate|kidnap|riots|sabotage)\b/i.test(text)) {
+    pageKind = 'thievery';
+    confidence = 0.76;
+    reason = 'Channel/content identifies thievery';
+  } else if (channel.includes('attack') || /\b(attacked|attack|invaded|march|plunder|learn|massacre|land grab|conquest|ambush)\b/i.test(text)) {
+    pageKind = 'news';
+    confidence = 0.74;
+    reason = 'Channel/content identifies attack/news';
+  } else if (channel.includes('ritual') || /\b(ritual|sacrifice|ceremony|rituals)\b/i.test(text)) {
+    pageKind = 'ritual';
+    confidence = 0.74;
+    reason = 'Channel/content identifies ritual';
+  } else if (channel.includes('aid') || /\b(aid|assistance|sent .* aid|received .* aid)\b/i.test(text)) {
+    pageKind = 'aid';
+    confidence = 0.74;
+    reason = 'Channel/content identifies aid';
+  } else if (channel.includes('dragon') || /\b(dragon|emerald|ruby|amethyst|topaz|sapphire)\b/i.test(text)) {
+    pageKind = 'dragon';
+    confidence = 0.74;
+    reason = 'Channel/content identifies dragon';
+  }
+
+  const capturedAt = capture?.captured_at || new Date().toISOString();
+  const expiresAt = new Date(new Date(capturedAt).getTime() + 48 * 60 * 60 * 1000).toISOString();
+  const parsedPayload = {
+    ...payload,
+    classification: { page_kind: pageKind, confidence, source: 'channel+content', reason }
+  };
+
+  const { error } = await sb.from('spartan_intel_records').upsert({
+    capture_id: flow.capture_id,
+    source_vault_id: capture.id,
+    user_id: capture.user_id || null,
+    province_id: flow.province_id || null,
+    kingdom_id: flow.kingdom_id || null,
+    captured_at: capturedAt,
+    source: 'discord-bot',
+    source_id: flow.source_id || discord.message_id || flow.capture_id,
+    url: capture.url || null,
+    page_kind: pageKind,
+    classification_source: 'channel+content',
+    classification_confidence: confidence,
+    classification_reason: reason,
+    age: state?.data?.age || null,
+    game_year: state?.data?.game_year || null,
+    game_tick: state?.data?.game_tick || null,
+    retention_class: 'intel_48h',
+    expires_at: expiresAt,
+    raw_text: capture.raw_text || text,
+    raw_payload: capture.raw_payload || {},
+    parsed_payload: parsedPayload,
+    content_hash: capture.content_hash || null,
+    updated_at: new Date().toISOString()
+  }, { onConflict: 'capture_id' });
+
+  if (error) throw new Error(`bot intel projection: ${error.message}`);
+  return { pageKind, confidence };
+}
+
 async function syncNewsEvents(sb, flow, state) {
   if (flow.page_kind !== 'news') return null;
   const events = Array.isArray(state?.data?.events) ? state.data.events : [];
@@ -115,7 +203,7 @@ async function processOne(sb, job) {
   if (projectionError) throw new Error(`spartan_state_projection: ${projectionError.message}`);
   await addEdge(sb, flow.flow_id, 'spartan_processing_queue', 'spartan_state_projection', 'projection', { queue_id: job.id, processor: WORKER_ID, version, capture_id: flow.capture_id });
   const canonical = await syncCanonicalProvince(sb, flow, state); const specialized = await syncSpecializedProvinceData(sb, flow, state);
-  await writeProvinceHistory(sb, flow, state, canonical || specialized); await syncNewsEvents(sb, flow, state);
+  await writeProvinceHistory(sb, flow, state, canonical || specialized); await syncNewsEvents(sb, flow, state); await syncBotIntelRecord(sb, flow, capture, state);
   const integrity = await stewardSystem.run(flow, capture, job.id, projectionKey, { afterProjection: true });
   if (integrity.results.some(item => item.steward === 'integrity' && (item.decision === 'fail' || item.decision === 'quarantine'))) throw new Error(`Integrity Steward failed: ${integrity.results.find(item => item.steward === 'integrity')?.reason || 'unknown'}`);
   const { error: flowUpdateError } = await sb.from('spartan_data_flow').update({ status: 'processed', stage: 'projection', current_stage: 'projection', processed_at: new Date().toISOString(), error: null }).eq('flow_id', flow.flow_id);
