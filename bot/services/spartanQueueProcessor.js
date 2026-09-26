@@ -197,8 +197,12 @@ async function processOne(sb, job) {
   const stewardResult = await stewardSystem.run(flow, capture, job.id, flow.province_id || flow.flow_id);
   if (stewardResult.decision === 'quarantine' || stewardResult.decision === 'fail') { await quarantine(sb, flow, job, stewardResult); return { flowId: flow.flow_id, queueId: job.id, quarantined: true, pageKind: flow.page_kind }; }
   const state = extractState(flow, capture); const projectionKey = flow.province_id || flow.flow_id;
-  const { data: existing } = await sb.from('spartan_state_projection').select('version').eq('province_id', projectionKey).maybeSingle();
+  const { data: existing } = await sb.from('spartan_state_projection').select('version,state').eq('province_id', projectionKey).maybeSingle();
   const version = Number(existing?.version || 0) + 1;
+  // Merge onto the previous projection's data instead of replacing it outright — otherwise a
+  // Throne capture (which has no mana/stealth/wages) wipes out whatever a Magic/Thievery/Military
+  // page capture last set for those fields, and vice versa for whatever Throne alone owns.
+  state.data = { ...(existing?.state?.data || {}), ...(state.data || {}) };
   const { error: projectionError } = await sb.from('spartan_state_projection').upsert({ province_id: projectionKey, kingdom_id: flow.kingdom_id || null, state, version, source_flow_id: flow.flow_id, updated_at: new Date().toISOString() }, { onConflict: 'province_id' });
   if (projectionError) throw new Error(`spartan_state_projection: ${projectionError.message}`);
   await addEdge(sb, flow.flow_id, 'spartan_processing_queue', 'spartan_state_projection', 'projection', { queue_id: job.id, processor: WORKER_ID, version, capture_id: flow.capture_id });
