@@ -102,7 +102,11 @@ async function syncBotIntelRecord(sb, flow, capture, state) {
   let confidence = 0.55;
   let reason = 'Fallback bot-event classification';
 
-  if (channel.includes('selfspell') || channel.includes('offensive-spell') || /\b(spell|wizards?|mana|runes?|casting|fireball|storms?|drought|chastity|sloth|magic ward|shadow light|nature's blessing|inspire army)\b/i.test(text)) {
+  if (channel.includes('ritual') || /\b(ritual|sacrifice|ceremony|rituals)\b/i.test(text)) {
+    pageKind = 'ritual';
+    confidence = 0.80;
+    reason = 'Channel/content identifies ritual';
+  } else   if (channel.includes('selfspell') || channel.includes('offensive-spell') || /\b(spell|wizards?|mana|runes?|casting|fireball|storms?|drought|chastity|sloth|magic ward|shadow light|nature's blessing|inspire army)\b/i.test(text)) {
     pageKind = 'magic';
     confidence = 0.76;
     reason = 'Channel/content identifies magic';
@@ -123,7 +127,7 @@ async function syncBotIntelRecord(sb, flow, capture, state) {
     pageKind = 'ritual';
     confidence = 0.74;
     reason = 'Channel/content identifies ritual';
-  } else if (channel.includes('aid') || /\b(aid|assistance|sent .* aid|received .* aid)\b/i.test(text)) {
+   } else if (channel.includes('aid') || /\b(aid|assistance|sent .* aid|received .* aid)\b/i.test(text)) {
     pageKind = 'aid';
     confidence = 0.74;
     reason = 'Channel/content identifies aid';
