@@ -97,11 +97,19 @@ async function plunders(sb, kd, me) {
   return `💰 **PLUNDERS — ${me.name}** · NW ${fmt(attackerNW)}\nrange 85–125% NW → ${fmt(minNW)}–${fmt(maxNW)}\n${candidates.slice(0, 10).map(c => `${c.name} · NW ${fmt(c.nw)} · ${fmt(c.acres)}a`).join("\n") || "No in-range targets among captured provinces."}\n\n_Only ranks provinces someone has actually captured via Throne — not the full kingdom roster, and no gold/SoT/protection intel is invented._`;
 }
 
+async function left(sb, kd) {
+  const rows = await registryRows(sb, kd);
+  const withOff = rows.filter(r => n(r.metadata?.throne?.off) != null);
+  const sorted = withOff.map(r => ({ name: r.province_name, off: n(r.metadata.throne.off), capturedAt: r.metadata.throne_captured_at }))
+    .sort((a, b) => b.off - a.off);
+  const total = sorted.reduce((s, r) => s + r.off, 0);
+  return `⚔️ **Kingdom Offense — ${kd}** · ${sorted.length}/${rows.length} provinces with captured Offense\n${sorted.slice(0, 25).map(r => `${r.name} · ${fmt(r.off)} off · ${age(r.capturedAt)}`).join("\n") || "No captured Offense in this kingdom yet."}\n\n**Total: ${fmt(total)}**\n_This is each province's last captured Offense total. Travel time is real in this game but isn't captured or displayed anywhere yet, so this can't tell you whether any of that offense is currently marching rather than sitting at home — treat it as a rough total, not a live "ready right now" figure._`;
+}
+
 const UNSUPPORTED = {
-  incoming: "Army movement (who's marching where, ETA) isn't captured by any current scraper page — needs a War Room/Military page parser that records outgoing/incoming armies with return time.",
-  eta: "Same gap as incoming — no army-in-transit data exists anywhere in the current schema yet.",
+  incoming: "Army movement (who's marching where, ETA) isn't captured by any current scraper page yet — needs a War Room/Military page parser that records outgoing/incoming armies with return time. Travel time is real in this game, the site just hasn't been built to track it yet.",
+  eta: "Same gap as incoming — no army-in-transit data is captured anywhere yet.",
   oprate: "Per-operation success/failure (spy, thievery, spells) isn't tracked anywhere in the current schema — the old intel_ops table this used to read is gone and nothing replaced it. Needs a dedicated operations-log capture.",
-  left: "At-home offense/generals-available isn't parsed from the Military(SoM) page yet — it's captured as raw text (metadata.som.raw) but never turned into structured fields.",
 };
 
 module.exports = async function intelOpsHandler(interaction) {
@@ -110,7 +118,7 @@ module.exports = async function intelOpsHandler(interaction) {
   if (UNSUPPORTED[sub]) return interaction.reply({ content: `🚧 **/spartan-intel ${sub}** isn't built yet. ${UNSUPPORTED[sub]}`, ephemeral: true });
   let me = null;
   try { me = await nexusIdentityService.resolve(interaction.user.id); } catch (e) { console.error("[INTEL IDENTITY RESOLVE]", e.message); }
-  const kingdomOnly = new Set(["check", "kdecon"]);
+  const kingdomOnly = new Set(["check", "kdecon", "left"]);
   if (!me && !kingdomOnly.has(sub)) return interaction.reply({ content: "❌ No Nexus province identity found. Register/link your province first.", ephemeral: true });
   const kd = await resolveKingdom(sb, me);
   if (!kd) return interaction.reply({ content: "❌ No kingdom Intel is available yet.", ephemeral: true });
@@ -125,6 +133,7 @@ module.exports = async function intelOpsHandler(interaction) {
       case "survey": out = await survey(sb, interaction.options.getString("province"), kd); break;
       case "tppa": out = await tppa(sb, kd); break;
       case "plunders": out = await plunders(sb, kd, me); break;
+      case "left": out = await left(sb, kd); break;
       default: out = "❌ Unknown Intel command.";
     }
     return interaction.reply({ content: String(out || "❌ No Intel result.").slice(0, 1900), ephemeral: false });
