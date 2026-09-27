@@ -126,8 +126,14 @@ const warCommand={name:'spartan-war',description:'Spartan war operations',option
   {name:'notes',description:'Notes about the war',type:3,required:false},
 ]},{name:'target',description:'Target operations',type:1,options:[
   {name:'province',description:'Province name',type:3,required:false},
-]},{name:'ambush',description:'Ambush planning',type:1,options:[
-  {name:'target',description:'Target province name',type:3,required:false},
+]},{name:'ambush',description:'Ambush raw-offense threshold (needs spied troop composition — Throne intel alone can\'t see this)',type:1,options:[
+  {name:'their_race',description:"Target's race",type:3,required:true,choices:RACE_CHOICES},
+  {name:'their_elites',description:"Target's Elites (from a successful Military spy op)",type:4,required:true},
+  {name:'their_off_specs',description:"Target's Off Specs (from a successful Military spy op)",type:4,required:true},
+  {name:'their_soldiers',description:"Target's Soldiers (from a successful Military spy op)",type:4,required:true},
+  {name:'their_anonymity',description:'Target has Anonymity spell active?',type:5,required:false},
+  {name:'their_war_spoils',description:'Target has War Spoils active?',type:5,required:false},
+  {name:'target',description:'Target province name (label only)',type:3,required:false},
 ]},{name:'intel',description:'War intelligence',type:1}]};
 
 const adminCommand={name:'spartan-admin',description:'Spartan administration',options:[{name:'panel',description:'Admin panel',type:1},{name:'logs',description:'Access logs',type:1},{name:'admins',description:'Manage administrators',type:1},{name:'access',description:'Manage Spartan access',type:1},{name:'alerts',description:'Manage alerts',type:1},{name:'broadcast',description:'Broadcast through Spartan',type:1}]};
