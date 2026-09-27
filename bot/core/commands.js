@@ -5,7 +5,8 @@ const spartanCommand={name:'spartan',description:'Spartan command and access cen
 {name:'status',description:'Show your Spartan access status',type:1},
 {name:'ask',description:'Ask Spartan AI',type:1,options:[{name:'question',description:'Your question',type:3,required:true,max_length:2000}]},
 {name:'access',description:'Admin access control',type:1,options:[{name:'action',description:'Access action',type:3,required:true,choices:[{name:'grant',value:'grant'},{name:'suspend',value:'suspend'},{name:'revoke',value:'revoke'}]},{name:'user',description:'Discord user',type:6,required:true},{name:'reason',description:'Reason',type:3,required:false,max_length:500}]},
-{name:'help',description:'Show Spartan commands',type:1}
+{name:'help',description:'Show Spartan commands',type:1},
+{name:'wiki',description:'Get the Utopia Nexus Wiki link',type:1}
 ]};
 
 const musicCommand={name:'spartan-music',description:'Spartan music',options:[{name:'join',description:'Join your voice channel',type:1},{name:'play',description:'Play or queue a track',type:1,options:[{name:'query',description:'Song or URL',type:3,required:true}]},{name:'pause',description:'Pause playback',type:1},{name:'resume',description:'Resume playback',type:1},{name:'skip',description:'Skip track',type:1},{name:'stop',description:'Stop playback',type:1},{name:'queue',description:'Show queue',type:1},{name:'nowplaying',description:'Show current track',type:1},{name:'volume',description:'Set volume',type:1,options:[{name:'level',description:'0-100',type:4,required:true,min_value:0,max_value:100}]}]};
@@ -136,7 +137,28 @@ const warCommand={name:'spartan-war',description:'Spartan war operations',option
   {name:'target',description:'Target province name (label only)',type:3,required:false},
 ]},{name:'intel',description:'War intelligence',type:1}]};
 
-const adminCommand={name:'spartan-admin',description:'Spartan administration',options:[{name:'panel',description:'Admin panel',type:1},{name:'logs',description:'Access logs',type:1},{name:'admins',description:'Manage administrators',type:1},{name:'access',description:'Manage Spartan access',type:1},{name:'alerts',description:'Manage alerts',type:1},{name:'broadcast',description:'Broadcast through Spartan',type:1}]};
+const adminCommand={name:'spartan-admin',description:'Spartan administration',options:[
+{name:'panel',description:'Admin panel',type:1},
+{name:'logs',description:'Access logs',type:1},
+{name:'admins',description:'Manage administrators',type:1,options:[
+  {name:'action',description:'list (default), add, or remove',type:3,required:false,choices:[{name:'list',value:'list'},{name:'add',value:'add'},{name:'remove',value:'remove'}]},
+  {name:'user',description:'Discord user (for add/remove)',type:6,required:false},
+]},
+{name:'access',description:'Manage Spartan access',type:1},
+{name:'alerts',description:'Manage tick alerts',type:1,options:[
+  {name:'action',description:'list (default), set, or delete',type:3,required:false,choices:[{name:'list',value:'list'},{name:'set',value:'set'},{name:'delete',value:'delete'}]},
+  {name:'label',description:'Alert label (for set/delete)',type:3,required:false},
+  {name:'ticks',description:'Comma-separated tick numbers 1-24 (for set)',type:3,required:false},
+  {name:'message',description:'Alert message (for set)',type:3,required:false},
+  {name:'channel',description:'Channel to post in (for set, defaults to this channel)',type:7,required:false},
+  {name:'role',description:'Role to ping (for set)',type:8,required:false},
+]},
+{name:'broadcast',description:'Broadcast through Spartan',type:1},
+{name:'setkingdom',description:'Set the kingdom name/code Spartan displays',type:1,options:[
+  {name:'name',description:'Kingdom name',type:3,required:true},
+  {name:'code',description:'Kingdom coordinates, e.g. 6:9',type:3,required:true},
+]},
+]};
 
 const topLevel=[];
 

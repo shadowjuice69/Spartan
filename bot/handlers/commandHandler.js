@@ -8,6 +8,7 @@ const spartanRegister=require('./commands/spartanRegisterHandler');
 const spartanStatus=require('./commands/spartanStatusHandler');
 const spartanAccessHandler=require('./commands/spartanAccessHandler');
 const helpHandler=require('./commands/helpHandler');
+const wikiHandler=require('./commands/wikiHandler');
 const musicHandler=require('./commands/musicHandler');
 const intelOpsHandler=require('./commands/intelOpsHandler');
 const thieveryHandler=require('./commands/thieveryHandler');
@@ -29,15 +30,16 @@ const adminsHandler=require('./commands/adminsHandler');
 const logsHandler=require('./commands/logsHandler');
 const alertsHandler=require('./commands/alertsHandler');
 const broadcastHandler=require('./commands/broadcastHandler');
+const setkingdomHandler=require('./commands/setkingdomHandler');
 const COMMANDS={
- spartan:{register:spartanRegister,status:spartanStatus,ask:spartanHandler,access:spartanAccessHandler,help:helpHandler},
+ spartan:{register:spartanRegister,status:spartanStatus,ask:spartanHandler,access:spartanAccessHandler,help:helpHandler,wiki:wikiHandler},
  'spartan-music':{join:musicHandler,play:musicHandler,pause:musicHandler,resume:musicHandler,skip:musicHandler,stop:musicHandler,queue:musicHandler,nowplaying:musicHandler,volume:musicHandler},
  'spartan-intel':{check:intelOpsHandler,capturehealth:intelOpsHandler,incoming:intelOpsHandler,eta:intelOpsHandler,status:intelOpsHandler,left:intelOpsHandler,plunders:intelOpsHandler,survey:intelOpsHandler,oprate:intelOpsHandler,kdecon:intelOpsHandler,econ:intelOpsHandler,tppa:intelOpsHandler},
  'spartan-calc':{thievery:thieveryHandler,attack:attackHandler,invest:investHandler,declare:declareLegalityHandler,spellcheck:spellcheckHandler,science:scienceHandler,'science-summary':scienceSummaryHandler},
  'spartan-war':{analyze:analyzeWarHandler,summary:warSummaryHandler,board:warBoardHandler,status:warHandler,target:targetHandler,ambush:ambushHandler,intel:intelHandler},
- 'spartan-admin':{panel:adminHandler,logs:logsHandler,admins:adminsHandler,access:spartanAccessHandler,alerts:alertsHandler,broadcast:broadcastHandler}
+ 'spartan-admin':{panel:adminHandler,logs:logsHandler,admins:adminsHandler,access:spartanAccessHandler,alerts:alertsHandler,broadcast:broadcastHandler,setkingdom:setkingdomHandler}
 };
-for(const [command,subs] of Object.entries(COMMANDS))for(const [sub,handler] of Object.entries(subs)){if(!commandRegistry.has(command,sub)){const access=command==='spartan'&&(sub==='register'||sub==='status')?'public':command==='spartan'&&sub==='access'?'admin':command==='spartan-admin'?'admin':'registered';commandRegistry.register(command,sub,handler,{access});}}
+for(const [command,subs] of Object.entries(COMMANDS))for(const [sub,handler] of Object.entries(subs)){if(!commandRegistry.has(command,sub)){const access=command==='spartan'&&(sub==='register'||sub==='status'||sub==='wiki')?'public':command==='spartan'&&sub==='access'?'admin':command==='spartan-admin'?'admin':'registered';commandRegistry.register(command,sub,handler,{access});}}
 async function hasSpartanAccess(userId){return spartanAccess.hasAccess(userId);}
 module.exports=async function commandHandler(interaction){
  const command=interaction.commandName;let sub='';try{sub=interaction.options.getSubcommand(false)||'';}catch(_){sub='';}
