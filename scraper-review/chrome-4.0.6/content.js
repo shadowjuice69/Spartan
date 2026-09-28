@@ -792,8 +792,11 @@ function GM_xmlhttpRequest(opts) {
     renderPanel(record, `Queued · ${kind}`, true);
     await flushQueue();
     if (manual) {
-      const grid = record.rawPayload?.grid;\n      const payloadSize = grid ? formatBytes(JSON.stringify(grid)) : formatBytes(record.rawPayload?.rawDom || '');\n      const detail = grid ? `Intel grid · ${grid.row_count}/${grid.expected_row_count ?? '?'} rows · ${grid.columns?.length || 0} columns · ${payloadSize}` : `DOM · ${payloadSize}`;\n      showToast(`Captured ${detail}`, Boolean(!grid || grid.complete_rows !== false));\n    }
-  }
+      const grid = record.rawPayload?.grid;
+      const payloadSize = grid ? formatBytes(JSON.stringify(grid)) : formatBytes(record.rawPayload?.rawDom || '');
+      const detail = grid ? `Intel grid · ${grid.row_count}/${grid.expected_row_count ?? '?'} rows · ${grid.columns?.length || 0} columns · ${payloadSize}` : `DOM · ${payloadSize}`;
+      showToast(`Captured ${detail}`, Boolean(!grid || grid.complete_rows !== false));
+    }
 
   function scheduleAutoCapture(delay = AUTO_DELAY_MS) {
     clearTimeout(autoTimer);
