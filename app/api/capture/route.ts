@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { runCaptureStewards, runSnapshotSteward } from '@/lib/spartan/stewards'
 import { resolveWikiKnowledge } from '@/lib/spartan/wiki-knowledge'
+import { enrichKingdomPayload } from '@/lib/spartan/kingdom-data'
 import type { ProvinceSnapshot, SpartanEvent } from '@/lib/spartan/history'
 
 export const dynamic = 'force-dynamic'
@@ -218,7 +219,11 @@ export async function POST(request: Request) {
 
       const rawText = capture.rawText ?? ''
       const rawPayload = capture.rawPayload ?? {}
-      const parsedPayload = capture.parsedPayload ?? {}
+      let parsedPayload = capture.parsedPayload ?? {}
+      if (String(capture.pageKind ?? '').toLowerCase() === 'kingdom') {
+        parsedPayload = enrichKingdomPayload(rawText, rawPayload, parsedPayload)
+        capture.parsedPayload = parsedPayload
+      }
       const contentHash = crypto.createHash('sha256').update(JSON.stringify([
         capture.url ?? '', capture.provinceId, capture.kingdomId, capture.pageKind ?? null, rawText, rawPayload, parsedPayload,
       ])).digest('hex')
