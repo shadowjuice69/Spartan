@@ -47,6 +47,8 @@ export default function JeevesSummary({ compact = false }: JeevesSummaryProps) {
   const members=kingdom?.latest?.members||[]
   const enemies=enemy?.provinces||[]
   const events=history?.events||[]
+  const recentEvents=events.slice(-8).reverse()
+  const trend=(kingdom?.trend||[]).slice(-12)
   const changed=useMemo(()=>["acres","networth","offense","defense","soldiers","elites","thieves","wizards"].filter(k=>{
     const a=Number(latest?.[k]),b=Number(previous?.[k]);return Number.isFinite(a)&&Number.isFinite(b)&&a!==b
   }),[latest,previous])
@@ -73,7 +75,11 @@ export default function JeevesSummary({ compact = false }: JeevesSummaryProps) {
     }
     if(enemies.length) out.push(`Enemy picture: ${enemies.length} target provinces are known. Newest evidence is ${ageLabel(enemies[0]?.latest)}.`)
     else out.push("Enemy picture: no classified enemy province profiles are available yet.")
-    if(events.length) out.push(`Activity: ${events.length} recent events are available in your command history.`)
+    if(events.length) out.push(`Activity: ${events.length} recent events are available in your command history; the newest recorded activity is ${ageLabel(events.at(-1)?.occurred_at)}.`)
+    if(trend.length>1){
+      const first=trend[0], last=trend.at(-1)
+      out.push(`Kingdom trend: ${fmt(last.totalLand)} acres and ${fmt(last.totalNw)} networth across ${last.provinceCount} provinces; change across the loaded trend is ${delta(last.totalLand,first.totalLand)} acres / ${delta(last.totalNw,first.totalNw)} networth.`)
+    }
     return out
   },[latest,previous,changed,members,enemies,events])
 
@@ -85,7 +91,7 @@ export default function JeevesSummary({ compact = false }: JeevesSummaryProps) {
       <div>
         <div style={{fontSize:9,color:"#d8ff54",letterSpacing:".2em"}}>JEEVES // COMMAND INTELLIGENCE</div>
         <h2 style={{margin:"6px 0 3px",fontSize:compact?18:23}}>What Spartan knows right now</h2>
-        <div style={{fontSize:10,color:"#748391"}}>Plain-language brief from existing captured data · refreshes every 15 seconds</div>
+        <div style={{fontSize:10,color:"#748391"}}>Complete plain-language intelligence brief from existing captured data · refreshes every 20 seconds</div>
       </div>
       <div style={{fontSize:9,color:"#67f0b0",letterSpacing:".08em"}}>● LIVE</div>
     </div>
@@ -112,6 +118,8 @@ export default function JeevesSummary({ compact = false }: JeevesSummaryProps) {
         <span style={{display:"block",fontSize:8,color:"#d8ff54",marginTop:8,letterSpacing:".08em"}}>OPEN →</span>
       </Link>)}
     </div>
+
+    {!error&&recentEvents.length>0&&<section style={{marginTop:16}}><div style={{fontSize:8,color:"#657482",letterSpacing:".18em"}}>JEEVES // LATEST UPDATES</div><div style={{display:"grid",gap:7,marginTop:8}}>{recentEvents.map((e:any)=><div key={e.id} style={{display:"grid",gridTemplateColumns:"70px 130px 1fr",gap:10,padding:"9px 11px",borderRadius:8,border:"1px solid rgba(255,255,255,.05)",background:"rgba(255,255,255,.018)",fontSize:10}}><span style={{color:"#687686"}}>{e.occurred_at?new Date(e.occurred_at).toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"}):"—"}</span><strong style={{color:"#d8ff54"}}>{e.event_type||"EVENT"}</strong><span style={{color:"#9aa9b4",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{e.raw_text||"Recorded by Spartan history core"}</span></div>)}</div></section>}
 
     {!error&&signals.length>0&&<>
       <div style={{marginTop:16,fontSize:8,color:"#657482",letterSpacing:".18em"}}>JEEVES // LIVE SIGNAL BOARD</div>
