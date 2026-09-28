@@ -52,6 +52,15 @@ export default function JeevesSummary({ compact = false }: JeevesSummaryProps) {
     const a=Number(latest?.[k]),b=Number(previous?.[k]);return Number.isFinite(a)&&Number.isFinite(b)&&a!==b
   }),[latest,previous])
 
+  const signals=useMemo(()=>{
+    const items:{label:string;value:string;detail:string;href:string}[]=[]
+    if(latest) items.push({label:"PROVINCE STATE",value:latest.province_name||history?.identity?.provinceName||"ONLINE",detail:latest.observed_at?"Observed "+ageLabel(latest.observed_at):"Waiting for observation",href:"/command/province"})
+    if(members.length) items.push({label:"ROSTER",value:fmt(members.length),detail:"Known kingdom provinces",href:"/command/kingdom"})
+    if(enemies.length) items.push({label:"TARGETS",value:fmt(enemies.length),detail:"Classified enemy provinces",href:"/command/enemy-intel"})
+    if(events.length) items.push({label:"ACTIVITY",value:fmt(events.length),detail:"Recent command events",href:"/command/war-room"})
+    return items
+  },[latest,history,members,enemies,events])
+
   const brief=useMemo(()=>{
     const out:string[]=[]
     if(latest){
@@ -104,5 +113,17 @@ export default function JeevesSummary({ compact = false }: JeevesSummaryProps) {
         <span style={{display:"block",fontSize:8,color:"#d8ff54",marginTop:8,letterSpacing:".08em"}}>OPEN →</span>
       </Link>)}
     </div>
+
+    {!error&&signals.length>0&&<>
+      <div style={{marginTop:16,fontSize:8,color:"#657482",letterSpacing:".18em"}}>JEEVES // LIVE SIGNAL BOARD</div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(4,minmax(0,1fr))",gap:9,marginTop:8}}>
+        {signals.map(s=><Link key={s.label} href={s.href} style={{textDecoration:"none",color:"inherit",padding:"11px 12px",borderRadius:9,border:"1px solid rgba(255,255,255,.06)",background:"rgba(255,255,255,.018)"}}>
+          <div style={{fontSize:8,color:"#657482",letterSpacing:".12em"}}>{s.label}</div>
+          <strong style={{display:"block",fontSize:16,marginTop:5,color:"#e7eef5"}}>{s.value}</strong>
+          <span style={{display:"block",fontSize:9,color:"#718091",marginTop:3}}>{s.detail}</span>
+          <span style={{display:"block",fontSize:8,color:"#d8ff54",marginTop:7}}>DRILL DOWN →</span>
+        </Link>)}
+      </div>
+    </>}
   </section>
 }
