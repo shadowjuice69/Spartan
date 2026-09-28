@@ -103,7 +103,7 @@ async function removePreviousIntelProjection(sb, pageKind, kingdomId, intelKey, 
   let query = sb.from('spartan_intel_records')
     .delete()
     .eq('page_kind', pageKind)
-    .eq('parsed_payload->classification->intel_key', intelKey)
+    .eq('parsed_payload->classification->>intel_key', intelKey)
     .neq('capture_id', currentCaptureId);
   if (kingdomId) query = query.eq('kingdom_id', kingdomId);
   const { data, error } = await query.select('id');
