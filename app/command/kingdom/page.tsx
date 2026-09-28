@@ -129,7 +129,7 @@ export default function KingdomPage(){
 
         <section style={{padding:18,border:"1px solid rgba(255,255,255,.08)",borderRadius:12,background:"#081119",marginBottom:18}}>
           <div style={{display:"flex",justifyContent:"space-between",gap:14,alignItems:"center",flexWrap:"wrap",marginBottom:14}}>
-            <div><div style={{fontSize:9,color:"#67f0b0",letterSpacing:".16em"}}>KINGDOM ROSTER</div><h2 style={{margin:"6px 0 2px",fontSize:20}}>Every province. Every scrape.</h2><div style={{fontSize:10,color:"#687686"}}>Click a province for its individual trend. Green/red movement is calculated against the previous Kingdom scrape.</div></div>
+            <div><div style={{fontSize:9,color:"#67f0b0",letterSpacing:".16em"}}>KINGDOM ROSTER</div><h2 style={{margin:"6px 0 2px",fontSize:20}}>Every province. Every scrape.</h2><div style={{fontSize:10,color:"#687686"}}>Click any province to open its full intelligence profile. Green/red movement is calculated against the previous Kingdom scrape.</div></div>
             <div style={{display:"flex",gap:8}}>
               <input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search province…" style={{width:180,padding:"10px 12px",borderRadius:8,border:"1px solid rgba(255,255,255,.1)",background:"#05080d",color:"#e7eef5",outline:"none"}}/>
               <select value={String(sort)} onChange={e=>setSort(e.target.value as keyof Member)} style={{padding:"10px 12px",borderRadius:8,border:"1px solid rgba(255,255,255,.1)",background:"#05080d",color:"#e7eef5"}}><option value="slot">Slot</option><option value="name">Name</option><option value="land">Land</option><option value="nw">Networth</option><option value="nwpa">NW/A</option><option value="gains">Gains</option></select>
@@ -138,7 +138,7 @@ export default function KingdomPage(){
           <div style={{overflowX:"auto"}}>
             <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
               <thead><tr>{["#","Province","Race","Land","Δ","Networth","Δ","NW/A","Nobility","Gains","Δ"].map(h=><th key={h} style={{textAlign:h==="Province"||h==="Race"||h==="Nobility"?"left":"right",padding:"9px 8px",borderBottom:"1px solid rgba(255,255,255,.08)",color:"#5f6d79",fontSize:8,letterSpacing:".12em"}}>{h}</th>)}</tr></thead>
-              <tbody>{filtered.map(p=><tr key={p.slot} onClick={()=>setSelected(p.slot)} style={{cursor:"pointer",background:selected===p.slot?"rgba(216,255,84,.06)":"transparent"}}>
+              <tbody>{filtered.map(p=><tr key={p.slot} onClick={()=>router.push(`/command/province?province=${encodeURIComponent(p.name)}`)} style={{cursor:"pointer",background:selected===p.slot?"rgba(216,255,84,.06)":"transparent"}}>
                 <td style={{padding:"11px 8px",color:"#657482"}}>{p.slot}</td>
                 <td style={{padding:"11px 8px",fontWeight:800,color:"#e7eef5"}}>{p.name}{p.name===data?.kingdom?.yourProvince&&<span style={{marginLeft:7,color:"#d8ff54",fontSize:8}}>YOU</span>}</td>
                 <td style={{padding:"11px 8px",color:"#a8b4bf"}}>{p.race}</td>
