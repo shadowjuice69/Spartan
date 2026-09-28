@@ -41,6 +41,10 @@ export function getEnemyIntel() {
   return getJson("/api/enemy-intel")
 }
 
+export function getLatestIntel() {
+  return getJson("/api/intel-data?section=intel")
+}
+
 export function getCommandIntel() {
-  return Promise.all([getHistory(120), getKingdomData(), getEnemyIntel()])
+  return Promise.all([getHistory(120), getKingdomData(), getEnemyIntel(), getLatestIntel()])
 }
