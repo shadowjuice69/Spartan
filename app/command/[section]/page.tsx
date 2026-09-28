@@ -3,8 +3,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 
-type Field = { key: string; label: string }
-type Config = { title:string; kinds:string[]; fields:Field[]; description:string }
+type Config = { title:string; kinds:string[]; fields:[string,string][]; description:string }
 
 const configs: Record<string,Config> = {
   intel:{title:"LATEST INTELLIGENCE",kinds:["intel","utopiaintel","bot_event","news","attack","aid","military","som","magic","ritual","dragon","thievery","science","buildings","survey","throne","kingdom","universal","exploration","war","council_history","council_spells","council_state","council_military","council_science","council_internal","province_state","age_stats","unknown"],fields:[],description:"Newest classified intelligence across the Spartan data core."},
