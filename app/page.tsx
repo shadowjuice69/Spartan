@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { logout } from "./login/actions";
 import JeevesSummary from "@/components/spartan/JeevesSummary";
+import { getCommandIntel } from "@/lib/spartan/client-intel-cache";
 
 type Snapshot = {
   observed_at: string;
@@ -50,17 +51,16 @@ export default function Home() {
 
   async function load() {
     try {
-      const [h, t, k, e] = await Promise.all([
-        fetch("/api/history?limit=120", { cache: "no-store" }).then(async r => { const d = await r.json(); if (!r.ok) throw new Error(d.error || "History unavailable"); return d; }),
-        fetch("/api/time", { cache: "no-store" }).then(async r => { const d = await r.json(); if (!r.ok) throw new Error(d.error || "Utopia clock unavailable"); return d; }),
-        fetch("/api/kingdom-data", { cache: "no-store" }).then(async r => { const d = await r.json(); return r.ok ? d : null; }),
-        fetch("/api/enemy-intel", { cache: "no-store" }).then(async r => { const d = await r.json(); return r.ok ? d : null; }),
+      const [intel, t] = await Promise.all([
+        getCommandIntel(),
+        fetch("/api/time", { cache: "no-store", headers: { accept: "application/json" } }).then(async r => { const d = await r.json(); if (!r.ok) throw new Error(d.error || "Utopia clock unavailable"); return d; }),
       ]);
+      const [h, k, e] = intel;
       setHistory(h); setClock(t); setKingdom(k); setEnemy(e); setError("");
     } catch (e) { setError(e instanceof Error ? e.message : "Command Center data unavailable"); }
   }
 
-  useEffect(() => { load(); const refresh = setInterval(load, 15000); const seconds = setInterval(() => setNow(Date.now()), 1000); return () => { clearInterval(refresh); clearInterval(seconds); }; }, []);
+  useEffect(() => { load(); const refresh = setInterval(load, 20000); const seconds = setInterval(() => setNow(Date.now()), 1000); return () => { clearInterval(refresh); clearInterval(seconds); }; }, []);
 
   const latest = history?.snapshots?.at(-1);
   const previous = history?.snapshots?.at(-2);

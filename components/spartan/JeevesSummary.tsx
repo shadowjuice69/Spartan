@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
+import { getCommandIntel } from "@/lib/spartan/client-intel-cache"
 
 type JeevesSummaryProps = { compact?: boolean }
 
@@ -32,15 +33,13 @@ export default function JeevesSummary({ compact = false }: JeevesSummaryProps) {
     let live=true
     const load=async()=>{
       try{
-        const [h,k,e]=await Promise.all([
-          fetch("/api/history?limit=20",{cache:"no-store"}).then(async r=>{const d=await r.json();if(!r.ok)throw new Error(d.error||"History unavailable");return d}),
-          fetch("/api/kingdom-data",{cache:"no-store"}).then(async r=>{const d=await r.json();return r.ok?d:null}),
-          fetch("/api/enemy-intel",{cache:"no-store"}).then(async r=>{const d=await r.json();return r.ok?d:null}),
+        const [intel]=await Promise.all([
+          getCommandIntel(),
         ])
-        if(live){setHistory(h);setKingdom(k);setEnemy(e);setError("")}
+        if(live){const [h,k,e]=intel;setHistory(h);setKingdom(k);setEnemy(e);setError("")}
       }catch(e){if(live)setError(e instanceof Error?e.message:"Jeeves could not assemble the summary")}
     }
-    load();const timer=setInterval(load,15000);return()=>{live=false;clearInterval(timer)}
+    load();const timer=setInterval(load,20000);return()=>{live=false;clearInterval(timer)}
   },[])
 
   const latest=history?.snapshots?.at(-1)
