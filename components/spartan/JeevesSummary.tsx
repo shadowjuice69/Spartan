@@ -27,6 +27,7 @@ export default function JeevesSummary({ compact = false }: JeevesSummaryProps) {
   const [history,setHistory]=useState<any>(null)
   const [kingdom,setKingdom]=useState<any>(null)
   const [enemy,setEnemy]=useState<any>(null)
+  const [latestIntel,setLatestIntel]=useState<any>(null)
   const [error,setError]=useState("")
 
   useEffect(()=>{
@@ -36,7 +37,7 @@ export default function JeevesSummary({ compact = false }: JeevesSummaryProps) {
         const [intel]=await Promise.all([
           getCommandIntel(),
         ])
-        if(live){const [h,k,e]=intel;setHistory(h);setKingdom(k);setEnemy(e);setError("")}
+        if(live){const [h,k,e,i]=intel;setHistory(h);setKingdom(k);setEnemy(e);setLatestIntel(i);setError("")}
       }catch(e){if(live)setError(e instanceof Error?e.message:"Jeeves could not assemble the summary")}
     }
     load();const timer=setInterval(load,20000);return()=>{live=false;clearInterval(timer)}
@@ -48,6 +49,8 @@ export default function JeevesSummary({ compact = false }: JeevesSummaryProps) {
   const enemies=enemy?.provinces||[]
   const events=history?.events||[]
   const recentEvents=events.slice(-8).reverse()
+  const intelRecords=latestIntel?.records||[]
+  const recentIntel=intelRecords.slice(0,8)
   const trend=(kingdom?.trend||[]).slice(-12)
   const changed=useMemo(()=>["acres","networth","offense","defense","soldiers","elites","thieves","wizards"].filter(k=>{
     const a=Number(latest?.[k]),b=Number(previous?.[k]);return Number.isFinite(a)&&Number.isFinite(b)&&a!==b
@@ -75,13 +78,14 @@ export default function JeevesSummary({ compact = false }: JeevesSummaryProps) {
     }
     if(enemies.length) out.push(`Enemy picture: ${enemies.length} target provinces are known. Newest evidence is ${ageLabel(enemies[0]?.latest)}.`)
     else out.push("Enemy picture: no classified enemy province profiles are available yet.")
+    if(intelRecords.length) out.push(`Intel feed: ${intelRecords.length} recent classified records are available across Spartan, with the newest capture ${ageLabel(intelRecords[0]?.captured_at || intelRecords[0]?.created_at)} ago.`)
     if(events.length) out.push(`Activity: ${events.length} recent events are available in your command history; the newest recorded activity is ${ageLabel(events.at(-1)?.occurred_at)}.`)
     if(trend.length>1){
       const first=trend[0], last=trend.at(-1)
       out.push(`Kingdom trend: ${fmt(last.totalLand)} acres and ${fmt(last.totalNw)} networth across ${last.provinceCount} provinces; change across the loaded trend is ${delta(last.totalLand,first.totalLand)} acres / ${delta(last.totalNw,first.totalNw)} networth.`)
     }
     return out
-  },[latest,previous,changed,members,enemies,events])
+  },[latest,previous,changed,members,enemies,events,intelRecords])
 
   return <section style={{
     marginTop:compact?12:18,padding:compact?15:20,border:"1px solid rgba(216,255,84,.25)",borderRadius:14,
@@ -105,7 +109,7 @@ export default function JeevesSummary({ compact = false }: JeevesSummaryProps) {
       </div>
     }
 
-    <div style={{display:"grid",gridTemplateColumns:"repeat(4,minmax(0,1fr))",gap:9,marginTop:14}}>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(5,minmax(0,1fr))",gap:9,marginTop:14}}>
       {[
         ["YOUR PROVINCE",latest?.province_name||history?.identity?.provinceName||"—",latest?.observed_at?"Updated "+ageLabel(latest.observed_at):"No capture","/command/province"],
         ["KINGDOM",kingdom?.kingdom?.code||history?.identity?.kingdomId||"—",members.length?`${members.length} provinces visible`:"No roster capture","/command/kingdom"],
@@ -120,6 +124,8 @@ export default function JeevesSummary({ compact = false }: JeevesSummaryProps) {
     </div>
 
     {!error&&recentEvents.length>0&&<section style={{marginTop:16}}><div style={{fontSize:8,color:"#657482",letterSpacing:".18em"}}>JEEVES // LATEST UPDATES</div><div style={{display:"grid",gap:7,marginTop:8}}>{recentEvents.map((e:any)=><div key={e.id} style={{display:"grid",gridTemplateColumns:"70px 130px 1fr",gap:10,padding:"9px 11px",borderRadius:8,border:"1px solid rgba(255,255,255,.05)",background:"rgba(255,255,255,.018)",fontSize:10}}><span style={{color:"#687686"}}>{e.occurred_at?new Date(e.occurred_at).toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"}):"—"}</span><strong style={{color:"#d8ff54"}}>{e.event_type||"EVENT"}</strong><span style={{color:"#9aa9b4",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{e.raw_text||"Recorded by Spartan history core"}</span></div>)}</div></section>}
+
+    {!error&&recentIntel.length>0&&<section style={{marginTop:16}}>{insert}</section>}
 
     {!error&&signals.length>0&&<>
       <div style={{marginTop:16,fontSize:8,color:"#657482",letterSpacing:".18em"}}>JEEVES // LIVE SIGNAL BOARD</div>
