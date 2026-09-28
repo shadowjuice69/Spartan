@@ -20,7 +20,7 @@ function GM_xmlhttpRequest(opts) {
 (function () {
   'use strict';
 
-  const VERSION = '4.0.5';
+  const VERSION = '4.0.6';
   const SOURCE = 'spartan_capture_engine';
   const ENDPOINT = 'https://sparta-west.onrender.com/api/capture';
   const IDENTITY_ENDPOINT = 'https://sparta-west.onrender.com/api/capture/identity';
@@ -493,40 +493,175 @@ function GM_xmlhttpRequest(opts) {
     };
   }
 
-  function extractGrid() {
+  async function extractGrid() {
     const gridEl = document.querySelector('[role="grid"],[role="treegrid"]');
-    const rowEls = [...document.querySelectorAll('[role="row"]')];
-    if (rowEls.length < 4) return null;
-    const keyOf = (el, i) => el.getAttribute('data-field') || el.getAttribute('col-id') || el.getAttribute('aria-colindex') || String(i);
+    if (!gridEl) return null;
+
+    const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+    const keyOf = (el, i) =>
+      el.getAttribute('data-field') ||
+      el.getAttribute('col-id') ||
+      el.getAttribute('aria-colindex') ||
+      String(i);
+
     const cellValue = el => {
       const value = text(el.innerText || el.textContent || '');
-      const labels = [...el.querySelectorAll('[title],[aria-label],img[alt]')].map(x => x.getAttribute('title') || x.getAttribute('aria-label') || x.getAttribute('alt') || '').filter(Boolean);
+      const labels = [...el.querySelectorAll('[title],[aria-label],img[alt]')]
+        .map(x => x.getAttribute('title') || x.getAttribute('aria-label') || x.getAttribute('alt') || '')
+        .filter(Boolean);
       return labels.length ? { text: value, labels: [...new Set(labels)] } : value;
     };
-    const columns = []; const seen = new Set();
-    document.querySelectorAll('[role="columnheader"]').forEach((h, i) => { const key = keyOf(h, i); if (seen.has(key)) return; seen.add(key); columns.push({ key, label: text(h.innerText || h.textContent || '') }); });
-    const byId = new Map(); let auto = 0;
-    rowEls.forEach(r => {
-      const cells = [...r.querySelectorAll('[role="gridcell"],[role="cell"]')];
-      if (!cells.length) return;
-      const id = r.getAttribute('data-id') || r.getAttribute('row-id') || r.getAttribute('aria-rowindex') || `row-${auto++}`;
-      const rec = byId.get(id) || { id, cells: {} };
-      cells.forEach((c, ci) => { rec.cells[keyOf(c, ci)] = cellValue(c); });
-      byId.set(id, rec);
-    });
+
+    const collectVisible = (byId, columns, seenColumns) => {
+      document.querySelectorAll('[role="columnheader"]').forEach((h, i) => {
+        const key = keyOf(h, i);
+        if (seenColumns.has(key)) return;
+        seenColumns.add(key);
+        columns.push({ key, label: text(h.innerText || h.textContent || '') });
+      });
+
+      document.querySelectorAll('[role="row"]').forEach(r => {
+        const cells = [...r.querySelectorAll('[role="gridcell"],[role="cell"]')];
+        if (!cells.length) return;
+
+        const ariaIndex = r.getAttribute('aria-rowindex');
+        let stableId = r.getAttribute('data-id') || r.getAttribute('row-id') || '';
+
+        if (!stableId) {
+          const idCell = cells.find((c, i) => keyOf(c, i) === 'id');
+          stableId = text(idCell?.innerText || idCell?.textContent || '');
+        }
+
+        const rowKey = stableId || ariaIndex || `row-${byId.size}`;
+        const rec = byId.get(rowKey) || { id: rowKey, cells: {} };
+
+        cells.forEach((c, ci) => {
+          rec.cells[keyOf(c, ci)] = cellValue(c);
+        });
+
+        byId.set(rowKey, rec);
+      });
+    };
+
+    const scroller =
+      gridEl.querySelector('.MuiDataGrid-virtualScroller') ||
+      gridEl.querySelector('[class*="virtualScroller"]') ||
+      [...gridEl.querySelectorAll('*')].find(el =>
+        el.scrollHeight > el.clientHeight + 20 &&
+        el.clientHeight > 100 &&
+        getComputedStyle(el).overflowY !== 'visible'
+      );
+
+    const columns = [];
+    const seenColumns = new Set();
+    const byId = new Map();
+
+    // First collect what is already rendered.
+    collectVisible(byId, columns, seenColumns);
+
+    if (!scroller) {
+      const rows = [...byId.values()];
+      return {
+        columns,
+        rows,
+        row_count: rows.length,
+        aria_rowcount: gridEl.getAttribute('aria-rowcount') || null,
+        aria_colcount: gridEl.getAttribute('aria-colcount') || null,
+        tabs: [...document.querySelectorAll('[role="tab"][aria-selected="true"]')]
+          .map(t => text(t.innerText || ''))
+          .filter(Boolean)
+      };
+    }
+
+    const originalTop = scroller.scrollTop;
+    const originalLeft = scroller.scrollLeft;
+    const maxTop = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+    const maxLeft = Math.max(0, scroller.scrollWidth - scroller.clientWidth);
+    const yStep = Math.max(160, Math.floor(scroller.clientHeight * 0.75));
+    const xStep = Math.max(240, Math.floor(scroller.clientWidth * 0.75));
+
+    const yPositions = [];
+    for (let y = 0; y <= maxTop; y += yStep) yPositions.push(y);
+    if (!yPositions.includes(maxTop)) yPositions.push(maxTop);
+
+    const xPositions = [];
+    for (let x = 0; x <= maxLeft; x += xStep) xPositions.push(x);
+    if (!xPositions.includes(maxLeft)) xPositions.push(maxLeft);
+
+    // MUI DataGrid virtualizes both rows and columns. Walk the whole
+    // virtual viewport so we collect all province rows AND all 39 columns,
+    // then merge pinned/main duplicates by the stable province id.
+    for (const x of xPositions) {
+      scroller.scrollLeft = x;
+      await wait(90);
+
+      for (const y of yPositions) {
+        scroller.scrollTop = y;
+        await wait(120);
+        collectVisible(byId, columns, seenColumns);
+      }
+    }
+
+    scroller.scrollTop = originalTop;
+    scroller.scrollLeft = originalLeft;
+    await wait(60);
+
     const rows = [...byId.values()];
-    if (rows.length < 3) return null;
-    return { columns, rows, row_count: rows.length, aria_rowcount: gridEl?.getAttribute('aria-rowcount') || null, aria_colcount: gridEl?.getAttribute('aria-colcount') || null, tabs: [...document.querySelectorAll('[role="tab"][aria-selected="true"]')].map(t => text(t.innerText || '')).filter(Boolean) };
+    const ariaRowcount = gridEl.getAttribute('aria-rowcount') || null;
+    const expectedRows = Number(ariaRowcount) > 0 ? Math.max(0, Number(ariaRowcount) - 1) : null;
+
+    return {
+      columns,
+      rows,
+      row_count: rows.length,
+      expected_row_count: expectedRows,
+      complete_rows: expectedRows == null ? null : rows.length >= expectedRows,
+      aria_rowcount: ariaRowcount,
+      aria_colcount: gridEl.getAttribute('aria-colcount') || null,
+      tabs: [...document.querySelectorAll('[role="tab"][aria-selected="true"]')]
+        .map(t => text(t.innerText || ''))
+        .filter(Boolean)
+    };
   }
 
-  function capture() {
-    const grid = /intel\./.test(location.hostname) ? safe(extractGrid, null) : null;
+  async function capture() {
+    const isIntel = /intel\./.test(location.hostname);
+    const grid = isIntel ? await extractGrid() : null;
     const rawDom = grid ? '' : (document.documentElement?.outerHTML || '');
     const visibleText = text(document.body?.innerText || '');
     const s = safe(structured, { fields:{}, tables:[], links:[], forms:[], field_sources:{} });
+
+    // Intel's MUI grid is the authoritative source for Kingdom rows.
+    // Do not let generic page-text regexes turn clocks/row numbers into
+    // fake acres/networth/field values.
+    if (grid) {
+      delete s.fields.field;
+      delete s.fields.acres;
+      delete s.fields.networth;
+      delete s.field_sources.field;
+      delete s.field_sources.acres;
+      delete s.field_sources.networth;
+
+      const firstRow = grid.rows?.[0];
+      const kingdomCode = text(
+        firstRow?.cells?.location?.text ??
+        firstRow?.cells?.location ??
+        getStoredIdentity()?.kingdomCode ??
+        currentIdentity()?.kingdomCode ??
+        ''
+      );
+      if (kingdomCode) {
+        s.fields.kingdom_code = kingdomCode;
+        s.field_sources.kingdom_code = 'intel-grid';
+      }
+      s.fields.kingdom_province_count = grid.rows?.length || 0;
+      s.field_sources.kingdom_province_count = 'intel-grid';
+    }
+
     const id = uuid();
     const locked = getStoredIdentity();
     const ident = locked || currentIdentity();
+
     return {
       captureId:id,
       capturedAt:new Date().toISOString(),
@@ -656,7 +791,7 @@ function GM_xmlhttpRequest(opts) {
     enqueue(record);
     renderPanel(record, `Queued · ${kind}`, true);
     await flushQueue();
-    if (manual) showToast(`Captured complete DOM · ${formatBytes(record.rawPayload.rawDom)}`, true);
+    if (manual) {\n      const grid = record.rawPayload?.grid;\n      const payloadSize = grid ? formatBytes(JSON.stringify(grid)) : formatBytes(record.rawPayload?.rawDom || '');\n      const detail = grid ? `Intel grid · ${grid.row_count}/${grid.expected_row_count ?? '?'} rows · ${grid.columns?.length || 0} columns · ${payloadSize}` : `DOM · ${payloadSize}`;\n      showToast(`Captured ${detail}`, Boolean(!grid || grid.complete_rows !== false));\n    }
   }
 
   function scheduleAutoCapture(delay = AUTO_DELAY_MS) {
@@ -756,7 +891,7 @@ function GM_xmlhttpRequest(opts) {
     header.style.cssText='display:flex;align-items:center;justify-content:space-between;margin-bottom:7px';
     const title=document.createElement('div'); title.textContent=`⚡ Spartan Universal Capture v${VERSION}`; title.style.cssText='color:#7ee787;font:bold 13px monospace';
     const minimize=makeButton('—',()=>{ minimized=true; GM_setValue('spartan_universal_minimized',true); renderPanel(record,state,success); },true); minimize.style.flex='0 0 auto'; header.append(title,minimize); panel.appendChild(header);
-    const note=document.createElement('div'); note.textContent='Full DOM archive + structured parser + Spartan authorization'; note.style.cssText='color:#8b949e;font:9px monospace;line-height:1.35;margin-bottom:7px'; panel.appendChild(note);
+    const note=document.createElement('div'); note.textContent='Full DOM + virtualized Intel grid + structured parser + Spartan authorization'; note.style.cssText='color:#8b949e;font:9px monospace;line-height:1.35;margin-bottom:7px'; panel.appendChild(note);
     const status=document.createElement('div'); status.textContent=state; status.style.cssText=`color:${success ? '#7ee787':'#ff7b72'};font:10px monospace;word-break:break-word;margin-bottom:7px`; panel.appendChild(status);
 
     const first=document.createElement('div'); first.style.cssText='display:flex;gap:6px;margin-bottom:6px'; first.append(makeButton('Capture',()=>captureNow(true,'manual')),makeButton('Copy DOM',copyDom,true)); panel.appendChild(first);
@@ -767,7 +902,7 @@ function GM_xmlhttpRequest(opts) {
     const id=getStoredIdentity();
     const identityLine=document.createElement('div'); identityLine.style.cssText='margin-top:7px;padding-top:6px;border-top:1px solid #30363d;color:#8b949e;font:9px monospace;line-height:1.4;word-break:break-word';
     identityLine.textContent=isBlocked() ? 'AUTH: DISABLED BY SPARTAN' : id?.locked ? `AUTH: linked · ${id.provinceName} · ${id.kingdomCode}` : 'AUTH: not linked · open Throne'; panel.appendChild(identityLine);
-    if (record) { const metadata=document.createElement('div'); metadata.style.cssText='margin-top:5px;color:#8b949e;font:9px monospace;line-height:1.4;word-break:break-word'; metadata.textContent=`${record.url || location.pathname} · kind:${record.pageKind || pageKind()} · ${formatBytes(record.rawPayload?.rawDom || '')} DOM · ${Object.keys(record.parsedPayload || {}).length} fields`; panel.appendChild(metadata); }
+    if (record) { const metadata=document.createElement('div'); metadata.style.cssText='margin-top:5px;color:#8b949e;font:9px monospace;line-height:1.4;word-break:break-word'; const grid=record.rawPayload?.grid;\n      const size=grid ? formatBytes(JSON.stringify(grid)) : formatBytes(record.rawPayload?.rawDom || '');\n      metadata.textContent=grid ? `${record.url || location.pathname} · kind:${record.pageKind || pageKind()} · grid:${grid.row_count}/${grid.expected_row_count ?? '?'} rows · ${grid.columns?.length || 0} cols · ${size}` : `${record.url || location.pathname} · kind:${record.pageKind || pageKind()} · ${size} DOM · ${Object.keys(record.parsedPayload || {}).length} fields`; panel.appendChild(metadata); }
   }
 
   function installPanel() {
