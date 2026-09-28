@@ -21,13 +21,13 @@ export type KingdomSnapshot = {
 }
 
 function clean(value: unknown) {
-  return String(value ?? '').replace(/\\s+/g, ' ').replace(/\\s*\\*+$/, '').trim()
+  return String(value ?? '').replace(/\s+/g, ' ').replace(/\s*\*+$/, '').trim()
 }
 
 function num(value: unknown) {
   const s = clean(value).replace(/,/g, '')
   if (!s) return null
-  const m = s.match(/^(-?\\d+(?:\\.\\d+)?)\\s*([kmb])?$/i)
+  const m = s.match(/^(-?\d+(?:\.\d+)?)\s*([kmb])?$/i)
   if (!m) {
     const n = Number(s.replace(/[^0-9.+-]/g, ''))
     return Number.isFinite(n) ? n : null
@@ -39,7 +39,7 @@ function num(value: unknown) {
 }
 
 function coordinate(value: unknown) {
-  return clean(value).match(/\\b(\\d{1,3}:\\d{1,3})\\b/)?.[1] ?? null
+  return clean(value).match(/\b(\d{1,3}:\d{1,3})\b/)?.[1] ?? null
 }
 
 function headerIndex(headers: string[], names: string[]) {
@@ -67,7 +67,6 @@ function addMappedRow(rows: KingdomProvince[], cells: unknown[], indexes: Record
 }
 
 function addFallbackRow(rows: KingdomProvince[], cells: unknown[]) {
-  // Legacy normalized table shape: slot, name, race, land, nw, nwpa, nobility, gains.
   if (!Array.isArray(cells) || cells.length < 8) return
   addMappedRow(rows, cells, { slot: 0, name: 1, race: 2, land: 3, nw: 4, nwpa: 5, nobility: 6, gains: 7 })
 }
@@ -104,23 +103,19 @@ function parseRowsFromTables(rawPayload: any) {
 
 function parseRowsFromText(text: string) {
   const rows: KingdomProvince[] = []
-  // Intel's visible table is whitespace-separated, but province names contain spaces.
-  // Use the stable sequence: slot, id, kd, Name, Ruler, Race, Personality, ...
-  // The numeric columns we need occur after the combo/identity columns.
-  const lines = text.split(/\\r?\\n/)
+  const lines = text.split(/\r?\n/)
   for (const line of lines) {
     const trimmed = line.trim()
-    const m = trimmed.match(/^(\\d{1,2})\\s+.*?\\b(Human|Undead|Elf|Orc|Halfling|Dwarf|Faery|Avian|Gnome|Dark Elf)\\b.*$/i)
+    const m = trimmed.match(/^(\d{1,2})\s+.*?\b(Human|Undead|Elf|Orc|Halfling|Dwarf|Faery|Avian|Gnome|Dark Elf)\b.*$/i)
     if (!m) continue
     const slot = Number(m[1])
     if (slot < 1 || slot > 25) continue
-    // Text fallback is intentionally conservative. Structured table extraction is preferred.
   }
   return rows
 }
 
 function parseTotal(text: string, label: string) {
-  const m = text.match(new RegExp(label + '\\s*[:=]?\\s*([0-9.,]+\\s*[KMB]?)', 'i'))
+  const m = text.match(new RegExp(label + '\s*[:=]?\s*([0-9.,]+\s*[KMB]?)', 'i'))
   return m ? num(m[1]) : null
 }
 
@@ -134,7 +129,7 @@ export function parseKingdomStructured(rawText: unknown, rawPayload: any, existi
   const provinces = [...unique.values()].sort((a, b) => a.slot - b.slot).slice(0, 25)
 
   const kdCode = coordinate(fields.kingdom_code ?? fields.kd_code ?? fields.coordinates) ?? coordinate(text)
-  const nameMatch = text.match(/(?:kingdom|kingdom of)[^\\n]{0,100}?(?:of\\s+)?(.+?)\\s*\\((\\d{1,3}:\\d{1,3})\\)/i)
+  const nameMatch = text.match(/(?:kingdom|kingdom of)[^\n]{0,100}?(?:of\s+)?(.+?)\s*\((\d{1,3}:\d{1,3})\)/i)
   const totalProvinces = Math.min(25, num(fields.total_provinces ?? fields.totalProvinces ?? fields.province_count) ?? (provinces.length || 0))
   const totalNw = num(fields.total_nw ?? fields.totalNw) ?? parseTotal(text, 'NW|Networth|Total Networth')
   const totalLand = num(fields.total_land ?? fields.totalLand) ?? parseTotal(text, 'Land|Total Land')
