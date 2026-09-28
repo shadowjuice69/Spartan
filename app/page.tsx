@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { logout } from "./login/actions";
+import JeevesSummary from "@/components/spartan/JeevesSummary";
 
 type Snapshot = {
   observed_at: string;
@@ -83,6 +84,8 @@ export default function Home() {
         <section className="timebar"><div><small>REAL TIME · CHICAGO</small><strong>{clock?.chicagoTime || "—"}</strong><span>{clock?.chicagoDate || "—"} · {clock?.sync ? "SERVER SYNC · LIVE" : "CLOCK OFFLINE"}</span></div><div><small>NEXT YEAR</small><strong>{clock?.nextYearLabel || "—"}</strong><span>{clock ? `${clock.ticksUntilNextYear} game days remaining` : "—"}</span></div><div><small>CLOCK SOURCE</small><strong>{clock?.sync ? "PERSISTENT" : "OFFLINE"}</strong><span>{clock?.anchorGameDate ? `Anchor ${clock.anchorGameDate}` : "No authoritative anchor"}</span></div></section>
 
         {error && <div className="error">DATA CORE ERROR · {error}<button onClick={load}>RETRY</button></div>}
+
+        <JeevesSummary />
 
         <section className="stats">
           {[["Acres", latest?.acres, "acres"], ["Networth", latest?.networth, "networth"], ["Peasants", latest?.population, "population"], ["Offense", latest?.offense, "offense"], ["Defense", latest?.defense, "defense"], ["Building Eff.", latest?.build_efficiency, "build_efficiency"]].map(([label, value, key]) => <article key={String(label)}><small>{label}</small><strong>{fmt(value)}</strong><span>{delta(key as keyof Snapshot)}</span></article>)}
