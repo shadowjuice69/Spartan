@@ -114,7 +114,7 @@ export default function KingdomPage(){
           </article>)}
         </section>
 
-        <section style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:18}}>
+        <section style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:14,marginBottom:18}}>
           <article style={{padding:18,border:"1px solid rgba(255,255,255,.08)",borderRadius:12,background:"#081119"}}>
             <div style={{display:"flex",justifyContent:"space-between"}}><div><div style={{fontSize:9,color:"#67f0b0",letterSpacing:".14em"}}>KINGDOM GROWTH</div><h2 style={{margin:"6px 0 2px",fontSize:18}}>Total land</h2></div><div style={{fontSize:10,color:tone(totalLandDelta)}}>{signed(totalLandDelta)} acres</div></div>
             <Sparkline values={landSeries}/>
@@ -124,7 +124,7 @@ export default function KingdomPage(){
             <div style={{display:"flex",justifyContent:"space-between"}}><div><div style={{fontSize:9,color:"#67f0b0",letterSpacing:".14em"}}>KINGDOM ECONOMY</div><h2 style={{margin:"6px 0 2px",fontSize:18}}>Total networth</h2></div><div style={{fontSize:10,color:tone(totalNwDelta)}}>{signed(totalNwDelta)} gc</div></div>
             <Sparkline values={nwSeries}/>
             <div style={{display:"flex",justifyContent:"space-between",fontSize:9,color:"#5f6d79"}}><span>{trend[0]?dateTime(trend[0].capturedAt):"—"}</span><span>{lastTrend?dateTime(lastTrend.capturedAt):"—"}</span></div>
-          </article>
+          </article>\n          <article style={{padding:18,border:"1px solid rgba(255,255,255,.08)",borderRadius:12,background:"#081119"}}>\n            <div style={{display:"flex",justifyContent:"space-between"}}><div><div style={{fontSize:9,color:"#67f0b0",letterSpacing:".14em"}}>KINGDOM EFFICIENCY</div><h2 style={{margin:"6px 0 2px",fontSize:18}}>Average NW / acre</h2></div><div style={{fontSize:10,color:"#718091"}}>{lastTrend?.avgNwpa==null?"—":fmt(lastTrend.avgNwpa)}</div></div>\n            <Sparkline values={trend.map((x:any)=>Number(x.avgNwpa)).filter(Number.isFinite)}/>\n            <div style={{display:"flex",justifyContent:"space-between",fontSize:9,color:"#5f6d79"}}><span>{trend[0]?dateTime(trend[0].capturedAt):"—"}</span><span>{lastTrend?dateTime(lastTrend.capturedAt):"—"}</span></div>\n          </article>
         </section>
 
         <section style={{padding:18,border:"1px solid rgba(255,255,255,.08)",borderRadius:12,background:"#081119",marginBottom:18}}>
