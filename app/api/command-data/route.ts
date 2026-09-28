@@ -139,7 +139,18 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Your Spartan province is not present in the canonical province registry.' }, { status: 404 })
     }
 
-    const currentProjection = projections.find((p: any) => String(p.province_id).trim().toLowerCase() === provinceName.trim().toLowerCase())
+    // Province projections use the canonical province name as province_id, while
+    // the registry uses its UUID. Match both forms before falling back to the
+    // kingdom aggregate projection; otherwise a fresh province projection can
+    // be ignored and the Command Center will display stale kingdom data.
+    const currentProjection = projections.find((p: any) => {
+      const projectionId = String(p?.province_id ?? '').trim().toLowerCase()
+      const registryId = String(currentRegistry?.province_id ?? '').trim().toLowerCase()
+      const state = unwrapState(p)
+      const stateName = String(state?.name ?? state?.province_name ?? '').trim().toLowerCase()
+      const wantedName = provinceName.trim().toLowerCase()
+      return projectionId === wantedName || projectionId === registryId || stateName === wantedName
+    })
     const currentState = currentProjection ? unwrapState(currentProjection) : provinceFromKingdomProjection(kingdomProjection, provinceName)
     const current = normalizeProvince(currentRegistry, currentState || {}, currentProjection || kingdomProjection)
     const enrichedProvinces = normalizeKingdomRows(registryRows, kingdomProjection)
