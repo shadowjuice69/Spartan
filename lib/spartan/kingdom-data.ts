@@ -77,10 +77,8 @@ export function parseKingdomStructured(rawText: unknown, rawPayload: any, existi
   const nwRankMatch = text.match(/Networth\s+Rank\s*[:\t]?\s*(\d+)\s+of\s+(\d+)/i)
   const landRankMatch = text.match(/Land\s+Rank\s*[:\t]?\s*(\d+)\s+of\s+(\d+)/i)
 
-  const totalProvinces = Math.min(
-    25,
-    num(fields.total_provinces ?? fields.totalProvinces ?? totalMatch?.[1]) ?? (provinces.length || null)
-  )
+  const parsedTotalProvinces = num(fields.total_provinces ?? fields.totalProvinces ?? totalMatch?.[1])
+  const totalProvinces = Math.min(25, parsedTotalProvinces ?? (provinces.length || 0))
 
   return {
     kdCode,
