@@ -406,7 +406,7 @@
       // can contain stale/currently-different values, so these fields MUST come
       // from the actual "The Province of ..." Throne row.
       const throneSource = visible.match(
-        /The\\s+Province\\s+of\\s+[^\\n(]+\\(\\s*\\d{1,3}:\\d{1,3}\\s*\\)[\\s\\S]*?Building\\s+Eff\\.\\s*([\\d.]+)%[\\s\\S]*?Trade\\s+Balance[\\s\\t-]+[\\d,]+[\\s\\t]+Off\\.\\s*Points[\\s\\t]+([\\d,]+)\\s*\\(([\\d,]+)\\)[\\s\\S]*?Networth\\s+[\\d,]+\\s+gold\\s+coins[\\s\\t]+Def\\.\\s*Points[\\s\\t]+([\\d,]+)\\s*\\(([\\d,]+)\\)/i
+        /The\s+Province\s+of\s+[^\n(]+\(\s*\d{1,3}:\d{1,3}\s*\)[\s\S]*?Building\s+Eff\.\s*([\d.]+)%[\s\S]*?Trade\s+Balance[\s\t-]+[\d,]+[\s\t]+Off\.\s*Points[\s\t]+([\d,]+)\s*\(([\d,]+)\)[\s\S]*?Networth\s+[\d,]+\s+gold\s+coins[\s\t]+Def\.\s*Points[\s\t]+([\d,]+)\s*\(([\d,]+)\)/i
       );
       if (throneSource) {
         fields.build_efficiency = num(throneSource[1]);
@@ -423,17 +423,17 @@
         // Fallbacks still require the exact Throne labels, never generic
         // dashboard summary labels.
         const exactThroneFields = [
-          ['gold', /\\bMoney\\s+([\\d,]+)/i],
-          ['acres', /\\bLand\\s+([\\d,]+)/i],
-          ['networth', /\\bNetworth\\s+([\\d,]+)/i],
-          ['peons', /\\bPeasants\\s+([\\d,]+)/i],
-          ['food', /\\bFood\\s+([\\d,]+)/i],
-          ['runes', /\\bRunes\\s+([\\d,]+)/i],
-          ['soldiers', /\\bSoldiers\\s+([\\d,]+)/i],
-          ['thieves', /\\bThieves\\s+([\\d,]+)/i],
-          ['wizards', /\\bWizards\\s+([\\d,]+)/i],
-          ['war_horses', /\\bWar\\s+Horses\\s+([\\d,]+)/i],
-          ['prisoners', /\\bPrisoners\\s+([\\d,]+)/i]
+          ['gold', /\bMoney\s+([\d,]+)/i],
+          ['acres', /\bLand\s+([\d,]+)/i],
+          ['networth', /\bNetworth\s+([\d,]+)/i],
+          ['peons', /\bPeasants\s+([\d,]+)/i],
+          ['food', /\bFood\s+([\d,]+)/i],
+          ['runes', /\bRunes\s+([\d,]+)/i],
+          ['soldiers', /\bSoldiers\s+([\d,]+)/i],
+          ['thieves', /\bThieves\s+([\d,]+)/i],
+          ['wizards', /\bWizards\s+([\d,]+)/i],
+          ['war_horses', /\bWar\s+Horses\s+([\d,]+)/i],
+          ['prisoners', /\bPrisoners\s+([\d,]+)/i]
         ];
         for (const [key, re] of exactThroneFields) {
           const match = visible.match(re);
@@ -442,9 +442,9 @@
             sources[key] = `throne-exact:${key}`;
           }
         }
-        const be = visible.match(/\\bBuilding\\s+Eff\\.\\s*([\\d.]+)%/i);
-        const off = visible.match(/\\bOff\\.\\s*Points\\s+([\\d,]+)\\s*\\(([\\d,]+)\\)/i);
-        const def = visible.match(/\\bDef\\.\\s*Points\\s+([\\d,]+)\\s*\\(([\\d,]+)\\)/i);
+        const be = visible.match(/\bBuilding\s+Eff\.\s*([\d.]+)%/i);
+        const off = visible.match(/\bOff\.\s*Points\s+([\d,]+)\s*\(([\d,]+)\)/i);
+        const def = visible.match(/\bDef\.\s*Points\s+([\d,]+)\s*\(([\d,]+)\)/i);
         if (be) { fields.build_efficiency = num(be[1]); sources.build_efficiency = 'throne-exact:build_efficiency'; }
         if (off) { fields.offense = num(off[1]); fields.offense_available = num(off[2]); sources.offense = 'throne-exact:offense'; sources.offense_available = 'throne-exact:offense-available'; }
         if (def) { fields.defense = num(def[1]); fields.defense_available = num(def[2]); sources.defense = 'throne-exact:defense'; sources.defense_available = 'throne-exact:defense-available'; }
