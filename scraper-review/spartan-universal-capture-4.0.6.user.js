@@ -615,6 +615,8 @@
       row_count: rows.length,
       expected_row_count: expectedRows,
       complete_rows: expectedRows == null ? null : rows.length >= expectedRows,
+      expected_column_count: Number(gridEl.getAttribute('aria-colcount')) || null,
+      complete_columns: Number(gridEl.getAttribute('aria-colcount')) > 0 ? columns.length >= Number(gridEl.getAttribute('aria-colcount')) : null,
       aria_rowcount: ariaRowcount,
       aria_colcount: gridEl.getAttribute('aria-colcount') || null,
       tabs: [...document.querySelectorAll('[role="tab"][aria-selected="true"]')]
@@ -785,6 +787,19 @@
     const record = await capture();
     record.captureReason = reason;
     record.fingerprint = fp;
+
+    const grid = record.rawPayload?.grid;
+    if (grid && (grid.complete_rows === false || grid.complete_columns === false)) {
+      const rowStatus = grid.expected_row_count != null ? `${grid.row_count}/${grid.expected_row_count} rows` : `${grid.row_count} rows`;
+      const colStatus = grid.expected_column_count != null ? `${grid.columns?.length || 0}/${grid.expected_column_count} columns` : `${grid.columns?.length || 0} columns`;
+      const message = `Intel grid incomplete — ${rowStatus}, ${colStatus}. Nothing sent.`;
+      lastCapture = record;
+      lastParsed = record.parsedPayload;
+      renderPanel(record, message, false);
+      showToast(message, false);
+      return;
+    }
+
     lastCapture = record;
     lastParsed = record.parsedPayload;
     enqueue(record);
