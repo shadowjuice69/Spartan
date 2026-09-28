@@ -9,9 +9,9 @@ const fmt=(v:any)=>v==null||v===""?"—":Number.isFinite(Number(v))?Number(v).to
 const pct=(v:any)=>v==null||v===""?"—":`${Number(v).toFixed(1)}%`
 
 function ProvinceCommand(){
-  const router=useRouter(); const searchParams=useSearchParams(); const provinceId=searchParams.get("id")
+  const router=useRouter(); const searchParams=useSearchParams(); const provinceId=searchParams.get("id"); const provinceName=searchParams.get("province")
   const [data,setData]=useState<any>(null); const [error,setError]=useState("")
-  useEffect(()=>{let alive=true; const load=async()=>{try{const query=provinceId?`?provinceId=${encodeURIComponent(provinceId)}`:""; const r=await fetch(`/api/throne${query}`,{cache:"no-store"}); const body=await r.json(); if(!r.ok) throw new Error(body.error||"Province Intel unavailable"); if(alive){setData(body);setError("")}}catch(e){if(alive)setError(e instanceof Error?e.message:"Province Intel unavailable")}}; load(); const t=setInterval(load,15000); return()=>{alive=false;clearInterval(t)}},[provinceId])
+  useEffect(()=>{let alive=true; const load=async()=>{try{const query=provinceId?`?provinceId=${encodeURIComponent(provinceId)}`:provinceName?`?province=${encodeURIComponent(provinceName)}`:""; const r=await fetch(`/api/throne${query}`,{cache:"no-store"}); const body=await r.json(); if(!r.ok) throw new Error(body.error||"Province Intel unavailable"); if(alive){setData(body);setError("")}}catch(e){if(alive)setError(e instanceof Error?e.message:"Province Intel unavailable")}}; load(); const t=setInterval(load,15000); return()=>{alive=false;clearInterval(t)}},[provinceId])
   const t=data?.throne||{}; const p=data?.province||{}; const troop=t.troops||{}; const state=p.state_data||{}
   const cards=[["ACRES",t.land??p.acres],["NETWORTH",t.networth??p.nw],["OFFENSE",t.offense??p.off],["DEFENSE",t.defense??p.def],["BUILD EFFICIENCY",t.be??p.be],["MANA",t.mana??p.mana],["STEALTH",t.stealth??p.stlth],["WAGES",t.wages??p.wages]]
   const forces=[["Soldiers",troop.soldiers??p.soldiers],["Off Specs",troop.off_specs??p.off_specs],["Def Specs",troop.def_specs??p.def_specs],["Elites",troop.elites??p.elites],["Thieves",t.thieves??p.thieves],["Wizards",t.wizards??p.wizards],["War Horses",troop.war_horses??p.war_horses],["Prisoners",troop.prisoners??p.prisoners]]
