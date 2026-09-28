@@ -783,7 +783,7 @@ function GM_xmlhttpRequest(opts) {
     }
     const fp = fingerprint();
     if (!manual && fp === GM_getValue(LAST_KEY, '')) return;
-    const record = capture();
+    const record = await capture();
     record.captureReason = reason;
     record.fingerprint = fp;
     lastCapture = record;
