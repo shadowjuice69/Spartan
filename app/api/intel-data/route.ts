@@ -12,6 +12,7 @@ function adminClient() {
 }
 
 const kinds: Record<string, string[]> = {
+  intel: ['intel', 'bot_event', 'news', 'attack', 'aid', 'military', 'magic', 'thievery', 'science', 'buildings', 'throne', 'kingdom', 'universal'],
   military: ['military', 'som', 'news', 'attack', 'throne'],
   magic: ['magic'],
   thievery: ['thievery'],
@@ -50,8 +51,8 @@ export async function GET(request: Request) {
     const { data, error } = await db
       .from('spartan_intel_records')
       .select('id,capture_id,province_id,kingdom_id,captured_at,created_at,source,url,page_kind,classification_source,classification_confidence,parsed_payload,raw_payload')
-      .eq('kingdom_id', account.province_location)
       .in('page_kind', selectedKinds)
+      .or(`kingdom_id.eq.${account.province_location},kingdom_id.is.null`)
       .order('created_at', { ascending: false })
       .limit(500)
     if (error) throw error
