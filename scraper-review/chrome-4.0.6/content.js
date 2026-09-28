@@ -1,4 +1,4 @@
-/* Spartan Universal Capture 4.0.5 — Chrome adapter generated from the same engine. */
+/* Spartan Universal Capture 4.0.6 — Chrome adapter generated from the same engine. */
 function GM_getValue(key, fallback) {
   try { const raw = localStorage.getItem('spartan_gm_' + key); if (raw === null) return fallback; try { return JSON.parse(raw); } catch (_) { return raw; } } catch (_) { return fallback; }
 }
