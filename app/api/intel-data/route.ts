@@ -12,15 +12,28 @@ function adminClient() {
 }
 
 const kinds: Record<string, string[]> = {
-  intel: ['intel', 'bot_event', 'news', 'attack', 'aid', 'military', 'magic', 'thievery', 'science', 'buildings', 'throne', 'kingdom', 'universal'],
+  // Intel is the complete classified feed. Nothing that has been classified
+  // by the live capture/bot pipeline should disappear simply because a
+  // dedicated page does not exist for that kind yet.
+  intel: [
+    'intel', 'utopiaintel', 'bot_event', 'news', 'attack', 'aid', 'military',
+    'som', 'magic', 'ritual', 'dragon', 'thievery', 'science', 'buildings',
+    'survey', 'throne', 'kingdom', 'universal', 'exploration', 'war',
+    'council_history', 'council_spells', 'council_state', 'council_military',
+    'council_science', 'council_internal', 'province_state', 'age_stats', 'unknown'
+  ],
   military: ['military', 'som', 'news', 'attack', 'throne'],
-  magic: ['magic'],
+  magic: ['magic', 'ritual', 'dragon', 'council_spells'],
   thievery: ['thievery'],
-  science: ['science'],
-  buildings: ['survey', 'buildings'],
-  throne: ['throne'],
-  kingdom: ['kingdom', 'news', 'som', 'survey', 'science', 'magic', 'thievery', 'throne', 'universal'],
-  'war-room': ['news'],
+  science: ['science', 'council_science'],
+  buildings: ['survey', 'buildings', 'council_internal'],
+  throne: ['throne', 'province_state'],
+  kingdom: [
+    'kingdom', 'news', 'som', 'survey', 'science', 'magic', 'ritual', 'dragon',
+    'thievery', 'throne', 'universal', 'council_state', 'council_military',
+    'council_science', 'council_internal'
+  ],
+  'war-room': ['news', 'attack', 'war', 'military', 'thievery', 'magic', 'ritual', 'dragon'],
 }
 
 function payload(row: any) {
