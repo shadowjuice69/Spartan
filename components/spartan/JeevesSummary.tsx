@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
+import Link from "next/link"
 
 type JeevesSummaryProps = { compact?: boolean }
 
@@ -8,121 +9,100 @@ function fmt(v: unknown) {
   const n = Number(v)
   return Number.isFinite(n) ? n.toLocaleString() : "—"
 }
-
 function ageLabel(v: string | null | undefined) {
-  if (!v) return "unknown age"
+  if (!v) return "unknown"
   const ms = Date.now() - new Date(v).getTime()
-  if (!Number.isFinite(ms)) return "unknown age"
+  if (!Number.isFinite(ms)) return "unknown"
   if (ms < 60_000) return "just now"
-  const minutes = Math.floor(ms / 60_000)
-  if (minutes < 60) return `${minutes}m ago`
-  return `${Math.floor(minutes / 60)}h ${minutes % 60}m ago`
+  const m = Math.floor(ms / 60_000)
+  return m < 60 ? `${m}m ago` : `${Math.floor(m / 60)}h ${m % 60}m ago`
+}
+function delta(a: unknown,b: unknown) {
+  const x=Number(a), y=Number(b)
+  return Number.isFinite(x)&&Number.isFinite(y) ? `${x-y>=0?"+":""}${fmt(x-y)}` : "—"
 }
 
 export default function JeevesSummary({ compact = false }: JeevesSummaryProps) {
-  const [history, setHistory] = useState<any>(null)
-  const [kingdom, setKingdom] = useState<any>(null)
-  const [enemy, setEnemy] = useState<any>(null)
-  const [error, setError] = useState("")
+  const [history,setHistory]=useState<any>(null)
+  const [kingdom,setKingdom]=useState<any>(null)
+  const [enemy,setEnemy]=useState<any>(null)
+  const [error,setError]=useState("")
 
-  useEffect(() => {
-    let live = true
-    const load = async () => {
-      try {
-        const [h, k, e] = await Promise.all([
-          fetch("/api/history?limit=20", { cache: "no-store" }).then(async r => {
-            const d = await r.json()
-            if (!r.ok) throw new Error(d.error || "History unavailable")
-            return d
-          }),
-          fetch("/api/kingdom-data", { cache: "no-store" }).then(async r => {
-            const d = await r.json()
-            return r.ok ? d : null
-          }),
-          fetch("/api/enemy-intel", { cache: "no-store" }).then(async r => {
-            const d = await r.json()
-            return r.ok ? d : null
-          }),
+  useEffect(()=>{
+    let live=true
+    const load=async()=>{
+      try{
+        const [h,k,e]=await Promise.all([
+          fetch("/api/history?limit=20",{cache:"no-store"}).then(async r=>{const d=await r.json();if(!r.ok)throw new Error(d.error||"History unavailable");return d}),
+          fetch("/api/kingdom-data",{cache:"no-store"}).then(async r=>{const d=await r.json();return r.ok?d:null}),
+          fetch("/api/enemy-intel",{cache:"no-store"}).then(async r=>{const d=await r.json();return r.ok?d:null}),
         ])
-        if (live) {
-          setHistory(h)
-          setKingdom(k)
-          setEnemy(e)
-          setError("")
-        }
-      } catch (err) {
-        if (live) setError(err instanceof Error ? err.message : "Jeeves could not assemble the summary")
-      }
+        if(live){setHistory(h);setKingdom(k);setEnemy(e);setError("")}
+      }catch(e){if(live)setError(e instanceof Error?e.message:"Jeeves could not assemble the summary")}
     }
-    load()
-    const timer = setInterval(load, 15000)
-    return () => { live = false; clearInterval(timer) }
-  }, [])
+    load();const timer=setInterval(load,15000);return()=>{live=false;clearInterval(timer)}
+  },[])
 
-  const lines = useMemo(() => {
-    const result: string[] = []
-    const snapshots = history?.snapshots || []
-    const latest = snapshots.at(-1)
-    const previous = snapshots.at(-2)
-    if (latest) {
-      const changes: string[] = []
-      for (const key of ["acres", "networth", "offense", "defense", "soldiers", "elites", "thieves", "wizards"]) {
-        const a = Number(latest?.[key])
-        const b = Number(previous?.[key])
-        if (Number.isFinite(a) && Number.isFinite(b) && a !== b) {
-          changes.push(`${key} ${a - b > 0 ? "+" : ""}${fmt(a - b)}`)
-        }
-      }
-      result.push(changes.length ? `Your province changed since the previous observation: ${changes.slice(0, 4).join(", ")}.` : "No material change is visible in the latest province observations.")
-    }
-    const members = kingdom?.latest?.members || []
-    if (members.length) {
-      const landMoves = members.filter((p: any) => Number(p.deltaLand) !== 0).length
-      const nwMoves = members.filter((p: any) => Number(p.deltaNw) !== 0).length
-      result.push(`${members.length} kingdom mates are in the latest roster; ${landMoves} show land movement and ${nwMoves} show networth movement.`)
-    }
-    const enemyProvinces = enemy?.provinces || []
-    if (enemyProvinces.length) {
-      const freshest = enemyProvinces[0]
-      result.push(`${enemyProvinces.length} enemy province intelligence profiles are currently known. Freshest enemy evidence is ${ageLabel(freshest?.latest)}.`)
-    } else {
-      result.push("No enemy province intelligence is currently available to summarize.")
-    }
-    const events = history?.events || []
-    if (events.length) result.push(`${events.length} recent events are available in the command history.`)
-    return result
-  }, [history, kingdom, enemy])
+  const latest=history?.snapshots?.at(-1)
+  const previous=history?.snapshots?.at(-2)
+  const members=kingdom?.latest?.members||[]
+  const enemies=enemy?.provinces||[]
+  const events=history?.events||[]
+  const changed=useMemo(()=>["acres","networth","offense","defense","soldiers","elites","thieves","wizards"].filter(k=>{
+    const a=Number(latest?.[k]),b=Number(previous?.[k]);return Number.isFinite(a)&&Number.isFinite(b)&&a!==b
+  }),[latest,previous])
 
-  return (
-    <section style={{
-      marginTop: compact ? 12 : 18,
-      padding: compact ? 15 : 20,
-      border: "1px solid rgba(216,255,84,.2)",
-      borderRadius: 12,
-      background: "linear-gradient(135deg,rgba(216,255,84,.06),rgba(8,17,25,.96) 42%)",
-      boxShadow: "0 14px 40px rgba(0,0,0,.22)"
-    }}>
-      <div style={{display:"flex",justifyContent:"space-between",gap:14,alignItems:"flex-start"}}>
-        <div>
-          <div style={{fontSize:9,color:"#d8ff54",letterSpacing:".2em"}}>JEEVES // INTELLIGENCE SUMMARY</div>
-          <h2 style={{margin:"6px 0 3px",fontSize:compact?18:22}}>Command Brief</h2>
-          <div style={{fontSize:10,color:"#748391"}}>Synthesized from Spartan's existing captured evidence · refreshed every 15 seconds</div>
-        </div>
-        <div style={{fontSize:9,color:"#67f0b0",letterSpacing:".08em"}}>● LIVE</div>
+  const brief=useMemo(()=>{
+    const out:string[]=[]
+    if(latest){
+      if(changed.length) out.push(`Province movement detected: ${changed.slice(0,5).map(k=>`${k.replaceAll("_"," ")} ${delta(latest[k],previous?.[k])}`).join(" · ")}.`)
+      else out.push("No movement detected between the two newest province observations.")
+    }
+    if(members.length){
+      const land=members.filter((p:any)=>Number(p.deltaLand)!==0).length
+      const nw=members.filter((p:any)=>Number(p.deltaNw)!==0).length
+      out.push(`Kingdom roster: ${members.length} provinces visible. ${land} changed land and ${nw} changed networth on the latest comparison.`)
+    }
+    if(enemies.length) out.push(`Enemy picture: ${enemies.length} target provinces are known. Newest evidence is ${ageLabel(enemies[0]?.latest)}.`)
+    else out.push("Enemy picture: no classified enemy province profiles are available yet.")
+    if(events.length) out.push(`Activity: ${events.length} recent events are available in your command history.`)
+    return out
+  },[latest,previous,changed,members,enemies,events])
+
+  return <section style={{
+    marginTop:compact?12:18,padding:compact?15:20,border:"1px solid rgba(216,255,84,.25)",borderRadius:14,
+    background:"linear-gradient(135deg,rgba(216,255,84,.075),rgba(8,17,25,.98) 48%)",boxShadow:"0 16px 50px rgba(0,0,0,.28)"
+  }}>
+    <div style={{display:"flex",justifyContent:"space-between",gap:14,alignItems:"flex-start"}}>
+      <div>
+        <div style={{fontSize:9,color:"#d8ff54",letterSpacing:".2em"}}>JEEVES // COMMAND INTELLIGENCE</div>
+        <h2 style={{margin:"6px 0 3px",fontSize:compact?18:23}}>What Spartan knows right now</h2>
+        <div style={{fontSize:10,color:"#748391"}}>Plain-language brief from existing captured data · refreshes every 15 seconds</div>
       </div>
-      {error ? (
-        <div style={{marginTop:14,color:"#ffb4a8",fontSize:11}}>Jeeves summary unavailable: {error}</div>
-      ) : (
-        <div style={{display:"grid",gap:8,marginTop:14}}>
-          {lines.map((line, i) => (
-            <div key={i} style={{display:"flex",gap:10,alignItems:"flex-start",padding:"10px 12px",borderRadius:8,background:"rgba(255,255,255,.025)",border:"1px solid rgba(255,255,255,.05)",fontSize:11,lineHeight:1.55,color:"#c6d1da"}}>
-              <span style={{color:"#d8ff54",fontWeight:900}}>{String(i + 1).padStart(2,"0")}</span>
-              <span>{line}</span>
-            </div>
-          ))}
-          {!lines.length && <div style={{color:"#748391",fontSize:11}}>Jeeves is waiting for captured intelligence.</div>}
-        </div>
-      )}
-    </section>
-  )
+      <div style={{fontSize:9,color:"#67f0b0",letterSpacing:".08em"}}>● LIVE</div>
+    </div>
+
+    {error?<div style={{marginTop:14,color:"#ffb4a8",fontSize:11}}>Jeeves summary unavailable: {error}</div>:
+      <div style={{display:"grid",gap:9,marginTop:15}}>
+        {brief.map((line,i)=><div key={i} style={{display:"flex",gap:11,alignItems:"flex-start",padding:"11px 13px",borderRadius:9,background:"rgba(255,255,255,.028)",border:"1px solid rgba(255,255,255,.055)",fontSize:11,lineHeight:1.55,color:"#cbd5dd"}}>
+          <span style={{color:"#d8ff54",fontWeight:900,minWidth:22}}>{String(i+1).padStart(2,"0")}</span><span>{line}</span>
+        </div>)}
+        {!brief.length&&<div style={{color:"#748391",fontSize:11}}>Jeeves is waiting for the first usable capture.</div>}
+      </div>
+    }
+
+    <div style={{display:"grid",gridTemplateColumns:"repeat(4,minmax(0,1fr))",gap:9,marginTop:14}}>
+      {[
+        ["YOUR PROVINCE",latest?.province_name||history?.identity?.provinceName||"—",latest?.observed_at?"Updated "+ageLabel(latest.observed_at):"No capture","/command/province"],
+        ["KINGDOM",kingdom?.kingdom?.code||history?.identity?.kingdomId||"—",members.length?`${members.length} provinces visible`:"No roster capture","/command/kingdom"],
+        ["ENEMY INTEL",fmt(enemy?.count||0),enemies.length?"profiles available":"No classified targets","/command/enemy-intel"],
+        ["EVENTS",fmt(events.length),events.length?"recent activity":"No recent events","/command/war-room"],
+      ].map(([label,value,sub,href])=><Link key={label} href={href as string} style={{textDecoration:"none",color:"inherit",padding:"13px",borderRadius:9,border:"1px solid rgba(255,255,255,.06)",background:"#081119"}}>
+        <div style={{fontSize:8,color:"#657482",letterSpacing:".14em"}}>{label}</div>
+        <strong style={{display:"block",fontSize:17,marginTop:6,color:"#e7eef5",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{value}</strong>
+        <span style={{display:"block",fontSize:9,color:"#718091",marginTop:4}}>{sub}</span>
+        <span style={{display:"block",fontSize:8,color:"#d8ff54",marginTop:8,letterSpacing:".08em"}}>OPEN →</span>
+      </Link>)}
+    </div>
+  </section>
 }
