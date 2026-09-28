@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spartan Universal Capture
 // @namespace    spartan-universal-capture
-// @version      4.0.5
+// @version      4.0.6
 // @description  Full Utopia page scraper restored from the known-good engine, with Spartan identity, authorization, CPS capture, queue/retry, and the full control panel.
 // @match        https://www.utopia-game.com/*
 // @match        https://utopia-game.com/*
@@ -782,7 +782,7 @@
     }
     const fp = fingerprint();
     if (!manual && fp === GM_getValue(LAST_KEY, '')) return;
-    const record = capture();
+    const record = await capture();
     record.captureReason = reason;
     record.fingerprint = fp;
     lastCapture = record;
