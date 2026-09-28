@@ -1,0 +1,34 @@
+{
+  "manifest_version": 3,
+  "name": "Spartan Universal Capture",
+  "version": "4.0.5",
+  "description": "Reliable Utopia page capture for Spartan.",
+  "permissions": [
+    "clipboardWrite"
+  ],
+  "host_permissions": [
+    "https://www.utopia-game.com/*",
+    "https://utopia-game.com/*",
+    "https://intel.utopia-game.com/*",
+    "https://intel.utopia.site/*",
+    "https://sparta-west.onrender.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.utopia-game.com/*",
+        "https://utopia-game.com/*",
+        "https://intel.utopia-game.com/*",
+        "https://intel.utopia.site/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_end",
+      "all_frames": false
+    }
+  ]
+}
