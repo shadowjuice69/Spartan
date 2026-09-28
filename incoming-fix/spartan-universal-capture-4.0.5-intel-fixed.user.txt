@@ -514,6 +514,56 @@
     return{columns,rows,row_count:rows.length,expected_row_count:expectedRows,complete_rows:expectedRows==null?null:rows.length>=expectedRows,expected_column_count:expectedCols,complete_columns:expectedCols==null?null:columns.length>=expectedCols,aria_rowcount:ariaRowcount,aria_colcount:ariaColcount,tabs:[...document.querySelectorAll('[role="tab"][aria-selected="true"]')].map(t=>text(t.innerText||'')).filter(Boolean)};
   }
 
+
+  async function capture() {
+    const isIntel = /intel\./.test(location.hostname);
+    const grid = isIntel ? await extractGrid() : null;
+    const rawDom = grid ? '' : (document.documentElement?.outerHTML || '');
+    const visibleText = text(document.body?.innerText || '');
+    const structuredPayload = safe(structured, { fields:{}, tables:[], links:[], forms:[], field_sources:{} });
+    const id = uuid();
+    const locked = getStoredIdentity();
+    const ident = locked || currentIdentity();
+
+    if (grid && Array.isArray(grid.rows) && grid.rows.length) {
+      const locationCell = grid.rows[0]?.cells?.location;
+      const kingdomCode = text(locationCell?.text || locationCell || '');
+      if (kingdomCode) {
+        structuredPayload.fields.kingdom_code = kingdomCode;
+        structuredPayload.field_sources.kingdom_code = 'intel.grid.location';
+      }
+      structuredPayload.fields.kingdom_province_count = grid.rows.length;
+      structuredPayload.field_sources.kingdom_province_count = 'intel.grid.rows';
+      for (const key of ['field','acres','networth']) {
+        delete structuredPayload.fields[key];
+        delete structuredPayload.field_sources[key];
+      }
+    }
+
+    return {
+      captureId:id,
+      capturedAt:new Date().toISOString(),
+      source:SOURCE,
+      sourceId:id,
+      scraperVersion:VERSION,
+      pageKind:pageKind(),
+      url:location.href,
+      provinceName:ident?.provinceName || '',
+      kingdomCode:(grid?.rows?.[0]?.cells?.location?.text || ident?.kingdomCode || ''),
+      rawText:visibleText,
+      rawPayload:{
+        capture_engine:VERSION,
+        page:{ url:location.href, origin:location.origin, hostname:location.hostname, pathname:location.pathname, search:location.search, hash:location.hash, title:document.title || '', readyState:document.readyState, language:document.documentElement?.lang || null },
+        identity:ident,
+        rawDom,
+        rawDomOmitted:Boolean(grid),
+        grid,
+        structured:structuredPayload
+      },
+      parsedPayload:structuredPayload.fields
+    };
+  }
+
   function fingerprint() {
     const panel = document.getElementById(PANEL_ID);
     const oldDisplay = panel?.style.display;
