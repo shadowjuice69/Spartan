@@ -82,6 +82,35 @@ async function writeProvinceHistory(sb, flow, state, canonical) {
   if (error && !String(error.message).toLowerCase().includes('duplicate')) throw new Error(`province history insert: ${error.message}`);
   return true;
 }
+function deriveIntelIdentity(pageKind, text, flow) {
+  const normalized = String(text || '').replace(/\\s+/g, ' ').trim();
+  const actor = normalized.match(/#(\\d+)\\s+([^—:]+?)(?:\\s+—|:)/i);
+  const target = normalized.match(/→\\s+(?:\\*\\*)?#(\\d+)\\s+([^(*—]+?)(?:\\s*\\*\\*)?\\s*\\((\\d+:\\d+)\\)/i)
+    || normalized.match(/arrive at\\s+(?:\\*\\*)?([^(*—]+?)(?:\\s*\\*\\*)?\\s*\\((\\d+:\\d+)\\)/i);
+  const targetCoord = target?.[3] || target?.[2] || null;
+  const targetName = target?.[2] || target?.[1] || null;
+  const actorName = actor?.[2]?.trim() || null;
+  const actorSlot = actor?.[1] || null;
+  const identityType = ['thievery', 'news'].includes(pageKind) && (targetCoord || targetName) ? 'target' : 'actor';
+  const identity = identityType === 'target'
+    ? [targetCoord || '', targetName || ''].join('|').toLowerCase()
+    : [flow.kingdom_id || '', actorSlot || '', actorName || ''].join('|').toLowerCase();
+  return identity.replace(/\\s+/g, ' ').trim() || null;
+}
+
+async function removePreviousIntelProjection(sb, pageKind, kingdomId, intelKey, currentCaptureId) {
+  if (!pageKind || !intelKey) return 0;
+  let query = sb.from('spartan_intel_records')
+    .delete()
+    .eq('page_kind', pageKind)
+    .eq('parsed_payload->classification->intel_key', intelKey)
+    .neq('capture_id', currentCaptureId);
+  if (kingdomId) query = query.eq('kingdom_id', kingdomId);
+  const { data, error } = await query.select('id');
+  if (error) throw new Error(`stale Intel cleanup: ${error.message}`);
+  return Array.isArray(data) ? data.length : 0;
+}
+
 async function syncBotIntelRecord(sb, flow, capture, state) {
   if (flow.source !== 'discord-bot' || flow.page_kind !== 'bot_event') return null;
 
@@ -139,10 +168,20 @@ async function syncBotIntelRecord(sb, flow, capture, state) {
 
   const capturedAt = capture?.captured_at || new Date().toISOString();
   const expiresAt = new Date(new Date(capturedAt).getTime() + 48 * 60 * 60 * 1000).toISOString();
+  const intelKey = deriveIntelIdentity(pageKind, text, flow);
   const parsedPayload = {
     ...payload,
-    classification: { page_kind: pageKind, confidence, source: 'channel+content', reason }
+    classification: {
+      page_kind: pageKind,
+      confidence,
+      source: 'channel+content',
+      reason,
+      intel_key: intelKey,
+      freshness_policy: 'replace_previous_same_target_and_type'
+    }
   };
+
+  await removePreviousIntelProjection(sb, pageKind, flow.kingdom_id || null, intelKey, flow.capture_id);
 
   const { error } = await sb.from('spartan_intel_records').upsert({
     capture_id: flow.capture_id,
