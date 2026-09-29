@@ -113,6 +113,75 @@ function Value({value, depth=0}:{value:any, depth?:number}) {
   return <div style={{display:"grid",gridTemplateColumns:depth>1?"1fr":"repeat(auto-fit,minmax(150px,1fr))",gap:7}}>{Object.entries(value).slice(0,100).map(([k,v])=><div key={k} style={{padding:"9px 10px",background:"rgba(255,255,255,.025)",borderRadius:7}}><div style={{fontSize:8,color:"#657483",textTransform:"uppercase",letterSpacing:".08em"}}>{pretty(k)}</div><div style={{fontSize:11,marginTop:4}}><Value value={v} depth={depth+1}/></div></div>)}</div>
 }
 
+
+function numValue(v:any) {
+  if (v == null || v === "") return null
+  const n = Number(String(v).replace(/,/g, ""))
+  return Number.isFinite(n) ? n : null
+}
+
+function Bar({value,max,label,negative=false,accent="#d8ff54"}:{value:number,max:number,label:string,negative?:boolean,accent?:string}) {
+  const width = max > 0 ? Math.max(2, Math.min(100, Math.round((Math.abs(value)/max)*100))) : 2
+  return <div style={{display:"grid",gridTemplateColumns:"110px 1fr 78px",gap:8,alignItems:"center",marginBottom:9}}>
+    <div style={{fontSize:9,color:"#9aa7b4",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{label}</div>
+    <div style={{height:10,background:"rgba(255,255,255,.06)",borderRadius:99,overflow:"hidden"}}><div style={{width:`${width}%`,height:"100%",background:negative?"#ff8b8b":accent,borderRadius:99}} /></div>
+    <div style={{fontSize:9,textAlign:"right",color:negative?"#ff9b9b":accent}}>{negative?"-":""}{Math.round(Math.abs(value)).toLocaleString()}</div>
+  </div>
+}
+
+function Sparkline({values,labels,accent}:{values:number[],labels:string[],accent:string}) {
+  const clean=values.filter(v=>Number.isFinite(v))
+  if(clean.length<2) return <div style={{padding:"30px 0",color:"#748190",fontSize:10}}>Not enough historical numeric data for this graphic yet.</div>
+  const min=Math.min(...clean), max=Math.max(...clean), span=max-min || 1
+  const points=clean.map((v,i)=>`${(i/(clean.length-1))*100},${92-((v-min)/span)*78}`).join(" ")
+  return <div>
+    <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{width:"100%",height:150,display:"block",overflow:"visible"}}>
+      <polyline points={points} fill="none" stroke={accent} strokeWidth="2.5" vectorEffect="non-scaling-stroke"/>
+      <polyline points={points} fill="none" stroke={accent} strokeWidth="9" opacity=".08" vectorEffect="non-scaling-stroke"/>
+    </svg>
+    <div style={{display:"flex",justifyContent:"space-between",fontSize:8,color:"#5f6c7a"}}><span>{labels[0]}</span><span>{labels[labels.length-1]}</span></div>
+  </div>
+}
+
+function graphicFor(section:string,records:any[],accent:string) {
+  const recent=[...records].slice(0,20).reverse()
+  const payload=(r:any)=>r?.payload?.data ?? r?.payload ?? {}
+  const field=(r:any,keys:string[])=>numValue(valueAt(payload(r),keys))
+  if(section==="thievery") {
+    const counts=new Map<string,number>()
+    records.forEach(r=>{const op=valueAt(payload(r),["operation","op","operationName","type"]) || "Unknown"; counts.set(String(op),(counts.get(String(op))||0)+1)})
+    const items=[...counts.entries()].sort((a,b)=>b[1]-a[1]).slice(0,8)
+    const max=Math.max(1,...items.map(x=>x[1]))
+    return <article style={{padding:18,border:"1px solid rgba(255,255,255,.08)",borderRadius:12,background:"#081119"}}><div style={{fontSize:9,color:accent,letterSpacing:".16em"}}>OPERATIONS</div><h2 style={{margin:"7px 0 15px",fontSize:20}}>Thievery activity by operation</h2>{items.length?items.map(([label,n])=><Bar key={label} value={n} max={max} label={label} accent={accent}/>):<div style={{color:"#748190"}}>No operation classifications yet.</div>}</article>
+  }
+  if(section==="science") {
+    const rows=recent.map(r=>field(r,["level","scienceLevel","value"])).filter((v):v is number=>v!==null)
+    return <article style={{padding:18,border:"1px solid rgba(255,255,255,.08)",borderRadius:12,background:"#081119"}}><div style={{fontSize:9,color:accent,letterSpacing:".16em"}}>PROGRESSION</div><h2 style={{margin:"7px 0 15px",fontSize:20}}>Science level history</h2><Sparkline values={rows} labels={recent.slice(0,rows.length).map(r=>r.captured_at?new Date(r.captured_at).toLocaleDateString():"Capture")} accent={accent}/></article>
+  }
+  if(section==="throne") {
+    const metrics=[["Acres",["acres","land"]],["Networth",["networth","nw"]],["Offense",["offense","off"]],["Defense",["defense","def"]]].map(([label,keys])=>({label:String(label),values:recent.map(r=>field(r,keys as string[])).filter((v):v is number=>v!==null)})).filter(x=>x.values.length>=2)
+    return <>{metrics.map(m=><article key={m.label} style={{padding:18,border:"1px solid rgba(255,255,255,.08)",borderRadius:12,background:"#081119"}}><div style={{fontSize:9,color:accent,letterSpacing:".16em"}}>TREND</div><h2 style={{margin:"7px 0 15px",fontSize:20}}>{m.label} movement</h2><Sparkline values={m.values} labels={recent.slice(0,m.values.length).map(r=>r.captured_at?new Date(r.captured_at).toLocaleDateString():"Capture")} accent={accent}/></article>)}</>
+  }
+  if(section==="buildings") {
+    const items=recent.map(r=>({name:String(valueAt(payload(r),["building","buildingName","name"])||"Buildings"),value:field(r,["percent","percentage","count"])})).filter(x=>x.value!==null).slice(0,8)
+    const max=Math.max(1,...items.map(x=>x.value as number))
+    return <article style={{padding:18,border:"1px solid rgba(255,255,255,.08)",borderRadius:12,background:"#081119"}}><div style={{fontSize:9,color:accent,letterSpacing:".16em"}}>LAND ALLOCATION</div><h2 style={{margin:"7px 0 15px",fontSize:20}}>Building composition</h2>{items.length?items.map((x,i)=><Bar key={i} value={x.value as number} max={max} label={x.name} accent={accent}/>):<div style={{color:"#748190"}}>No building percentages/counts captured yet.</div>}</article>
+  }
+  if(section==="magic") {
+    const counts=new Map<string,number>()
+    records.forEach(r=>{const spell=valueAt(payload(r),["spellName","spell","name","operation"])||"Unknown";counts.set(String(spell),(counts.get(String(spell))||0)+1)})
+    const items=[...counts.entries()].sort((a,b)=>b[1]-a[1]).slice(0,8), max=Math.max(1,...items.map(x=>x[1]))
+    return <article style={{padding:18,border:"1px solid rgba(255,255,255,.08)",borderRadius:12,background:"#081119"}}><div style={{fontSize:9,color:accent,letterSpacing:".16em"}}>ARCANE PROFILE</div><h2 style={{margin:"7px 0 15px",fontSize:20}}>Spell activity</h2>{items.length?items.map(([label,n])=><Bar key={label} value={n} max={max} label={label} accent={accent}/>):<div style={{color:"#748190"}}>No spell classifications yet.</div>}</article>
+  }
+  if(section==="news" || section==="war-room") {
+    const rows=recent.map(r=>({time:r.captured_at?new Date(r.captured_at).toLocaleDateString():"Event",acres:field(r,["acresCaptured","acres_captured","acres","acresGained"]),kills:field(r,["kills"]),losses:field(r,["losses","troopsLost"])}))
+    const valid=rows.filter(x=>x.acres!==null||x.kills!==null||x.losses!==null)
+    const max=Math.max(1,...valid.flatMap(x=>[x.acres||0,x.kills||0,x.losses||0]))
+    return <article style={{padding:18,border:"1px solid rgba(255,255,255,.08)",borderRadius:12,background:"#081119"}}><div style={{fontSize:9,color:accent,letterSpacing:".16em"}}>EVENT IMPACT</div><h2 style={{margin:"7px 0 15px",fontSize:20}}>Combat movement</h2>{valid.slice(0,10).map((x,i)=><div key={i} style={{marginBottom:11}}><div style={{display:"flex",justifyContent:"space-between",fontSize:8,color:"#748190",marginBottom:4}}><span>{x.time}</span><span>{x.acres||0} acres · {x.kills||0} kills · {x.losses||0} losses</span></div><Bar value={x.acres||0} max={max} label="Acres" accent={accent}/><Bar value={x.kills||0} max={max} label="Kills" accent={accent}/><Bar value={x.losses||0} max={max} label="Losses" negative accent={accent}/></div>)}</article>
+  }
+  return null
+}
+
 function summary(row:any, vertical:Vertical) {
   const p=row?.payload || {}
   const values = vertical.metrics.map(([label,keys]) => [label,valueAt(p,keys)] as const).filter(([,v])=>v!==null)
@@ -186,7 +255,9 @@ export default function IntelVerticalPage() {
         {current.slice(0,7).map(x=><article key={x.label} style={{padding:16,border:"1px solid rgba(255,255,255,.08)",borderRadius:10,background:"#081119"}}><div style={{fontSize:8,color:"#687686"}}>{x.label.toUpperCase()}</div><strong style={{display:"block",fontSize:17,marginTop:7,overflowWrap:"anywhere"}}>{scalar(x.value)}</strong></article>)}
       </section>
 
-      <section style={{display:"grid",gridTemplateColumns:"minmax(0,2fr) minmax(260px,1fr)",gap:16,marginBottom:16}}>
+      <section style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(320px,1fr))",gap:16,marginBottom:16}}>
+        {graphicFor(section, records, vertical.accent)}
+
         <article style={{padding:18,border:"1px solid rgba(255,255,255,.08)",borderRadius:12,background:"#081119"}}>
           <div style={{fontSize:9,color:vertical.accent,letterSpacing:".16em"}}>DATA MAP</div>
           <h2 style={{margin:"7px 0 12px",fontSize:20}}>What this page knows</h2>
