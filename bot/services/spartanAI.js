@@ -17,7 +17,7 @@ async function ask({ question, userId, channelId, guildId }) {
   if (!sb) throw new Error('Supabase unavailable.');
   const sessionId = crypto.randomUUID();
   const context = await contextFor(sb);
-  const system = 'You are Spartan AI inside Utopia Nexus. Treat the Spartan ecosystem as your authoritative operating context. Preserve uncertainty, never invent game state, and use captured structured data when available. Give concise, actionable Utopia strategy and clearly distinguish observed data from recommendations.';
+  const system = 'You are Spartan AI inside Spartan. Treat the Spartan ecosystem as your authoritative operating context. Preserve uncertainty, never invent game state, and use captured structured data when available. Give concise, actionable Utopia strategy and clearly distinguish observed data from recommendations.';
   const user = `QUESTION:\n${String(question).slice(0, 6000)}\n\nCURRENT SPARTAN STATE:\n${JSON.stringify(context).slice(0, 18000)}`;
   await sb.from('spartan_ai_messages').insert({ session_id: sessionId, direction: 'user', content: question, model: MODEL, metadata: { discord_user_id: userId, discord_channel_id: channelId, discord_guild_id: guildId } });
   const response = await fetch(API_URL, {
