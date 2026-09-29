@@ -27,7 +27,21 @@ module.exports = async function targetHandler(interaction) {
   await interaction.deferReply({ ephemeral: false });
 
   let me = null;
-  try {\n    const access = await spartanAccess.get(interaction.user.id);\n    const meta = access?.metadata || {};\n    const coordinates = String(meta.coordinates || access?.kingdom_code || "").trim();\n    me = access ? {\n      id: interaction.user.id,\n      name: meta.province || access.username || null,\n      province: meta.province || access.username || null,\n      kd_code: coordinates || null,\n      nw: meta.nw ?? null,\n      coordinates,\n      race: meta.race || null,\n      personality: meta.personality || null\n    } : null;\n  } catch (e) { console.error("[SPARTAN IDENTITY RESOLVE]", e.message); }
+  try {
+    const access = await spartanAccess.get(interaction.user.id);
+    const meta = access?.metadata || {};
+    const coordinates = String(meta.coordinates || access?.kingdom_code || "").trim();
+    me = access ? {
+      id: interaction.user.id,
+      name: meta.province || access.username || null,
+      province: meta.province || access.username || null,
+      kd_code: coordinates || null,
+      nw: meta.nw ?? null,
+      coordinates,
+      race: meta.race || null,
+      personality: meta.personality || null
+    } : null;
+  } catch (e) { console.error("[SPARTAN IDENTITY RESOLVE]", e.message); }
   const myNW = me?.nw ? n(me.nw) : 0;
 
   const provinceQuery = interaction.options.getString("province");
