@@ -1,0 +1,2 @@
+import IntelSectionPage from "@/app/components/IntelSectionPage"
+export default function Page(){return <IntelSectionPage section="magic" title="Magic" description="Captured spell, ritual and dragon intelligence. Values and events come directly from classified Magic records; no synthetic values are added."/>}
