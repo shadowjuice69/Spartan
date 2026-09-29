@@ -101,7 +101,7 @@ client.once('clientReady', async () => {
 const port = Number(process.env.PORT || 10000);
 const universalReceiver = require('./services/universalReceiver');
 if (process.env.EMBEDDED_SPARTAN !== 'true') universalReceiver.start();
-logger.info(`🚀 Nexus clean core starting | Node ${process.version} | discord.js ${discordJsVersion}`);
+logger.info(`🚀 Spartan core starting | Node ${process.version} | discord.js ${discordJsVersion}`);
 
 const MAX_BACKOFF_MS = 5 * 60 * 1000;
 let backoffMs = 15 * 1000;
