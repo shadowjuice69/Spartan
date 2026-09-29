@@ -14,7 +14,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
       <div className="login-overlay" />
       <section className="login-panel">
         <div className="login-brand"><div className="login-mark">S</div><div><strong>SPARTAN</strong><span>UTOPIA COMMAND</span></div></div>
-        <div className="login-heading"><span className="panel-kicker">COMMAND ACCESS</span><h1>Enter the war room.</h1><p>Create your Spartan identity using the province already registered through the bot.</p></div>
+        <div className="login-heading"><span className="panel-kicker">COMMAND ACCESS</span><h1>Enter the war room.</h1><p>Use your existing Spartan account registered through the Spartan bot.</p></div>
 
         {message && <div className="login-message error">{message === 'invalid' ? 'Invalid screen name or password.' : message === 'missing' ? 'Enter your screen name and password.' : message === 'password-mismatch' ? 'Passwords do not match.' : message === 'registration-failed' ? 'Registration could not be completed.' : message}</div>}
 
@@ -24,23 +24,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
             <LoginForm />
           </div>
 
-          <div className="form-card register-card">
-            <div className="card-title">CREATE ACCOUNT</div>
-            <p className="card-copy">Your province name and location must already be registered with the Spartan bot.</p>
-            <form className="login-form" action={createSpartanAccount}>
-              <label>SCREEN NAME<input name="screenName" autoComplete="username" placeholder="3–32 characters" required /></label>
-              <div className="two-col">
-                <label>PROVINCE NAME<input name="provinceName" placeholder="Province name" required /></label>
-                <label>LOCATION<input name="provinceLocation" type="text" inputMode="text" autoCapitalize="off" autoCorrect="off" spellCheck={false} placeholder="6:5" pattern="[0-9]+[ ]*:[ ]*[0-9]+" title="Enter your province location like 6:9" required /></label>
-              </div>
-              <label>PASSWORD<input name="password" type="password" autoComplete="new-password" placeholder="10+ characters" required /></label>
-              <label>CONFIRM PASSWORD<input name="confirmPassword" type="password" autoComplete="new-password" placeholder="Repeat password" required /></label>
-              <button className="login-secondary" type="submit">CREATE SPARTAN ACCOUNT <span>→</span></button>
-            </form>
-          </div>
         </div>
-
-        <details className="legacy"><summary>Legacy Discord authentication</summary><form action={loginWithDiscord}><button className="legacy-button" type="submit">ENTER WITH DISCORD</button></form></details>
 
         <div className="login-security"><span><i /> PROVINCE VERIFIED</span><span>IP SECURITY ACTIVE</span><span>ACCOUNT SESSION TRACKING</span></div>
         <div className="login-footer"><span><i /> SECURE AUTHENTICATION</span><span>AGE 116</span></div>
