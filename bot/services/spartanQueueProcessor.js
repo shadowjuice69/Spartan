@@ -135,7 +135,16 @@ async function syncBotIntelRecord(sb, flow, capture, state) {
     pageKind = 'ritual';
     confidence = 0.80;
     reason = 'Channel/content identifies ritual';
-  } else   if (channel.includes('selfspell') || channel.includes('offensive-spell') || /\b(spell|wizards?|mana|runes?|casting|fireball|storms?|drought|chastity|sloth|magic ward|shadow light|nature's blessing|inspire army)\b/i.test(text)) {
+  } else if (
+    channel.includes('thieve') ||
+    /\b(thiev|thieves|thievery|rob|steal|op success|op failed|night strike|assassinate|kidnap|riots|sabotage)\b/i.test(text) ||
+    /\bspy on\b/i.test(text) ||
+    /\bstealth\s+\d+%/i.test(text)
+  ) {
+    pageKind = 'thievery';
+    confidence = 0.80;
+    reason = 'Channel/content identifies thievery/spy operation';
+  } else if (channel.includes('selfspell') || channel.includes('offensive-spell') || /\b(spell|wizards?|mana|runes?|casting|fireball|storms?|drought|chastity|sloth|magic ward|shadow light|nature's blessing|inspire army)\b/i.test(text)) {
     pageKind = 'magic';
     confidence = 0.76;
     reason = 'Channel/content identifies magic';
@@ -144,10 +153,6 @@ async function syncBotIntelRecord(sb, flow, capture, state) {
       confidence = 0.76;
       reason = 'Page content identifies science';
     }
-  } else if (channel.includes('thieve') || /\b(thiev|thieves|thievery|rob|steal|op success|op failed|night strike|assassinate|kidnap|riots|sabotage)\b/i.test(text)) {
-    pageKind = 'thievery';
-    confidence = 0.76;
-    reason = 'Channel/content identifies thievery';
   } else if (channel.includes('attack') || /\b(attacked|attack|invaded|march|plunder|learn|massacre|land grab|conquest|ambush)\b/i.test(text)) {
     pageKind = 'news';
     confidence = 0.74;
