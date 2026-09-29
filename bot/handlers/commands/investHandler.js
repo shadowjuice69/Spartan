@@ -1,5 +1,5 @@
 const supabaseService = require("../../services/supabase");
-const nexusIdentityService = require("../../services/nexusIdentityService");
+const spartanAccess = require("../../services/spartanAccessService");
 
 const CATEGORY_EMOJI = { arcane: "🔮", economy: "💰", military: "⚔️" };
 
@@ -11,7 +11,21 @@ module.exports = async function investHandler(interaction) {
   const provinceQuery = interaction.options.getString("province");
 
   let me = null;
-  try { me = await nexusIdentityService.resolve(interaction.user.id); } catch (e) { console.error("[INVEST IDENTITY RESOLVE]", e.message); }
+  try {
+    const access = await spartanAccess.get(interaction.user.id);
+    const meta = access?.metadata || {};
+    const coordinates = String(meta.coordinates || access?.kingdom_code || "").trim();
+    me = access ? {
+      id: interaction.user.id,
+      name: meta.province || access.username || null,
+      province: meta.province || access.username || null,
+      kd_code: coordinates || null,
+      nw: meta.nw ?? null,
+      coordinates,
+      race: meta.race || null,
+      personality: meta.personality || null
+    } : null;
+  } catch (e) { console.error("[SPARTAN IDENTITY RESOLVE]", e.message); }
 
   const provinceName = provinceQuery || me?.name;
   const kingdomCode = me?.kd_code;
