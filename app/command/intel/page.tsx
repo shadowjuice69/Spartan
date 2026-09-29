@@ -1,0 +1,2 @@
+import IntelSectionPage from "@/app/components/IntelSectionPage"
+export default function Page(){return <IntelSectionPage section="intel" title="Intel" description="The complete classified intelligence picture. Every retained Intel record is shown as evidence, with actual fields and numeric values drawn from the canonical Intel core."/>}
