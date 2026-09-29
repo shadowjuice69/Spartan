@@ -45,8 +45,7 @@ const navCommand = [
   ["Draft Calc", "/command/draft-calc"],
   ["Wiki", "/command/wiki"],
   ["Tools", "/command/tools"],
-  ["Scraper Generator", "/command/scraper"],
-  ["Scraper Generator", "/command/scraper"],
+  ["Scraper Generator","/command/scraper"],
 ]
 
 const navIntel = [
