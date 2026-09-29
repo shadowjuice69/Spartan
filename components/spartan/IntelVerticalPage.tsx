@@ -279,6 +279,7 @@ export default function IntelVerticalPage() {
   const [error,setError]=useState("")
   const [loading,setLoading]=useState(true)
   const [expanded,setExpanded]=useState<string|null>(null)
+  const [showAll,setShowAll]=useState(false)
 
   useEffect(()=>{
     let live=true
@@ -356,12 +357,21 @@ export default function IntelVerticalPage() {
         </article>
       </section>
 
+      <section style={{padding:20,border:"1px solid "+vertical.accent+"22",borderRadius:12,background:"linear-gradient(135deg,#081119,#071018)",marginBottom:16}}>
+        <div style={{fontSize:9,color:vertical.accent,letterSpacing:".16em"}}>INTEL DATA CONTRACT</div>
+        <h2 style={{margin:"7px 0 12px",fontSize:22}}>Complete signal coverage</h2>
+        <div style={{fontSize:11,color:"#83919f",marginBottom:14}}>This vertical is fed from the shared Intel records, not a separate scraper feed. Every classified record keeps its parsed payload, identity, timestamp, classification and source evidence for drill-down.</div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:8}}>
+          {Object.entries(counts).sort((a:any,b:any)=>Number(b[1])-Number(a[1])).map(([kind,n])=><div key={kind} style={{padding:11,border:"1px solid rgba(255,255,255,.06)",borderRadius:8,background:"rgba(255,255,255,.02)"}}><div style={{fontSize:8,color:"#657483",letterSpacing:".1em"}}>{kind.toUpperCase()}</div><strong style={{display:"block",fontSize:19,color:vertical.accent,marginTop:5}}>{Number(n).toLocaleString()}</strong><div style={{fontSize:8,color:"#586675",marginTop:3}}>classified records</div></div>)}
+        </div>
+      </section>
+
       <section style={{padding:20,border:"1px solid rgba(255,255,255,.08)",borderRadius:12,background:"#081119"}}>
         <div style={{display:"flex",justifyContent:"space-between",gap:15,flexWrap:"wrap",marginBottom:10}}>
           <div><div style={{fontSize:9,color:vertical.accent,letterSpacing:".16em"}}>CAPTURED INTELLIGENCE</div><h2 style={{margin:"7px 0 4px",fontSize:22}}>Operational records</h2><div style={{fontSize:11,color:"#748190"}}>Newest first. Every record retains identity, classification and source provenance.</div></div>
           <div style={{fontSize:9,color:vertical.accent}}>AUTO-REFRESH 30s</div>
         </div>
-        {records.slice(0,40).map((row:any,i:number)=>{
+        {records.slice(0,showAll?records.length:40).map((row:any,i:number)=>{
           const id=String(row.id||row.capture_id||i)
           const open=expanded===id
           return <article key={id} style={{borderBottom:"1px solid rgba(255,255,255,.07)",padding:"14px 0"}}>
@@ -382,7 +392,7 @@ export default function IntelVerticalPage() {
           </article>
         })}
         {!records.length&&<div style={{padding:"45px 0",color:"#748190",textAlign:"center"}}>No processed intelligence is available for this vertical yet.</div>}
-        {records.length>40&&<div style={{marginTop:14,fontSize:9,color:"#718091"}}>Showing the latest 40 records. Full history remains in the intelligence core and will be surfaced through drill-down/history views.</div>}
+        {records.length>40&&<div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,marginTop:14,paddingTop:14,borderTop:"1px solid rgba(255,255,255,.06)"}}><div style={{fontSize:9,color:"#718091"}}>{showAll?"Showing all "+records.length.toLocaleString()+" records from the Intel data contract.":"Showing the latest 40 of "+records.length.toLocaleString()+" records."} Full parsed payload and source evidence remain available on every record.</div><button onClick={()=>setShowAll(v=>!v)} style={{padding:"9px 12px",borderRadius:8,border:"1px solid "+vertical.accent+"55",background:vertical.accent+"12",color:vertical.accent,fontWeight:800,fontSize:9,cursor:"pointer",whiteSpace:"nowrap"}}>{showAll?"SHOW LATEST 40":"SHOW ALL INTEL"}</button></div>}
       </section>
     </section>
   </main>
