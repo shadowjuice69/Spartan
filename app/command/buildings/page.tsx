@@ -1,0 +1,2 @@
+import IntelSectionPage from "@/app/components/IntelSectionPage"
+export default function Page(){return <IntelSectionPage section="buildings" title="Buildings" description="Captured survey and building intelligence, including the actual building fields, province context and capture timeline."/>}
