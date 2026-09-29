@@ -175,7 +175,20 @@ export default function MilitaryPage() {
 
   const records: RecordRow[] = data?.records || []
   const battles = useMemo(() => records.map(parseBattle).filter(Boolean).sort((a: any, b: any) => Date.parse(b.time) - Date.parse(a.time)) as Battle[], [records])
-  const recent = battles.slice(0, 12)
+  const recent = battles.slice(0, 16)
+
+  const militaryState = useMemo(() => {
+    const rows = records.filter(r => ['military','som','throne','council_military'].includes(String(r.page_kind)))
+    const latest = rows[0]?.payload || {}
+    const data = latest?.data || latest
+    const field = (name: string) => num(data?.[name] ?? data?.fields?.[name] ?? latest?.[name])
+    return {
+      acres: field('acres'), offense: field('offense'), defense: field('defense'),
+      soldiers: field('soldiers'), thieves: field('thieves'), wizards: field('wizards'),
+      warHorses: field('war_horses'), prisoners: field('prisoners'), networth: field('networth'),
+      capturedAt: rows[0]?.captured_at || rows[0]?.created_at || null
+    }
+  }, [records])
 
   const totals = useMemo(() => ({
     acres: battles.reduce((s, b) => s + b.acres, 0),
@@ -184,8 +197,16 @@ export default function MilitaryPage() {
     losses: battles.reduce((s, b) => s + b.losses, 0),
   }), [battles])
 
+  const attackTypes = useMemo(() => {
+    const out: Record<string, number> = {}
+    for (const b of battles) out[b.type] = (out[b.type] || 0) + 1
+    return Object.entries(out).sort((a,b) => b[1]-a[1])
+  }, [battles])
+
   const maxAcres = Math.max(1, ...recent.map(b => b.acres))
   const maxKillsLosses = Math.max(1, ...recent.map(b => Math.max(b.kills, b.losses)))
+  const latestBattle = battles[0] || null
+  const readiness = latestBattle?.returnDays == null ? null : latestBattle.returnDays <= 0 ? 'READY' : `${latestBattle.returnDays} DAYS`
 
   return <main style={{ minHeight: "100vh", background: "#05080d", color: "#e7eef5", fontFamily: "Inter,system-ui,sans-serif", display: "flex" }}>
     <aside style={{ width: 250, borderRight: "1px solid rgba(255,255,255,.08)", padding: 24, background: "#071018", position: "sticky", top: 0, height: "100vh", overflowY: "auto" }}>
@@ -217,6 +238,49 @@ export default function MilitaryPage() {
         <Stat label="ENEMY TROOPS KILLED" value={fmt(totals.kills)} detail="Reported battlefield kills" />
         <Stat label="OUR TROOP LOSSES" value={fmt(totals.losses)} detail="Parsed losses across reports" />
         <Stat label="PRISONERS" value={fmt(totals.prisoners)} detail="Additional troops imprisoned" />
+        <Stat label="LATEST READINESS" value={readiness || "—"} detail={latestBattle ? "Based on latest captured battle return" : "No battle return captured"} />
+      </section>
+
+      <section style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(210px,1fr))", gap: 10, marginBottom: 18 }}>
+        {[
+          ["LAND", militaryState.acres, "acres"],
+          ["OFFENSE", militaryState.offense, "points"],
+          ["DEFENSE", militaryState.defense, "points"],
+          ["SOLDIERS", militaryState.soldiers, "units"],
+          ["WAR HORSES", militaryState.warHorses, "units"],
+          ["PRISONERS", militaryState.prisoners, "units"],
+        ].map(([label,value,unit]) => <Stat key={label as string} label={label as string} value={value ? fmt(value as number) : "—"} detail={unit as string} />)}
+      </section>
+
+      <section style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(280px,1fr))", gap: 14, marginBottom: 18 }}>
+        <article style={{ padding: 18, border: "1px solid rgba(255,255,255,.08)", borderRadius: 12, background: "#081119" }}>
+          <div style={{ fontSize: 9, color: "#67f0b0", letterSpacing: ".16em" }}>FORCE COMPOSITION</div>
+          <h2 style={{ margin: "7px 0 15px", fontSize: 20 }}>Current military state</h2>
+          {[
+            ["Soldiers", militaryState.soldiers],
+            ["War Horses", militaryState.warHorses],
+            ["Prisoners", militaryState.prisoners],
+            ["Thieves", militaryState.thieves],
+            ["Wizards", militaryState.wizards],
+          ].map(([label,value]) => <Bar key={label as string} value={value as number} max={Math.max(1, militaryState.soldiers, militaryState.warHorses, militaryState.prisoners, militaryState.thieves, militaryState.wizards)} label={label as string} />)}
+          <div style={{ marginTop: 10, fontSize: 9, color: "#667585" }}>Latest military-state capture: {militaryState.capturedAt ? new Date(militaryState.capturedAt).toLocaleString() : "—"}</div>
+        </article>
+        <article style={{ padding: 18, border: "1px solid rgba(255,255,255,.08)", borderRadius: 12, background: "#081119" }}>
+          <div style={{ fontSize: 9, color: "#67f0b0", letterSpacing: ".16em" }}>ATTACK PROFILE</div>
+          <h2 style={{ margin: "7px 0 15px", fontSize: 20 }}>Battle mix</h2>
+          {attackTypes.length ? attackTypes.map(([type,count]) => <Bar key={type} value={count} max={attackTypes[0][1]} label={type} />) : <div style={{ color: "#748190", padding: "30px 0" }}>No classified attack mix yet.</div>}
+          {latestBattle && <div style={{ marginTop: 12, padding: 11, borderRadius: 8, background: "rgba(216,255,84,.05)", color: "#aeb9c5", fontSize: 10 }}>Latest: <strong style={{ color: "#d8ff54" }}>{latestBattle.type}</strong> · {latestBattle.attacker} → {latestBattle.target}</div>}
+        </article>
+        <article style={{ padding: 18, border: "1px solid rgba(255,255,255,.08)", borderRadius: 12, background: "#081119" }}>
+          <div style={{ fontSize: 9, color: "#67f0b0", letterSpacing: ".16em" }}>FORCE POWER</div>
+          <h2 style={{ margin: "7px 0 15px", fontSize: 20 }}>Current points</h2>
+          <Bar value={militaryState.offense} max={Math.max(1,militaryState.offense,militaryState.defense)} label="Offense" />
+          <Bar value={militaryState.defense} max={Math.max(1,militaryState.offense,militaryState.defense)} label="Defense" />
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginTop:10 }}>
+            <Stat label="NETWORTH" value={militaryState.networth ? fmt(militaryState.networth) : "—"} />
+            <Stat label="O/D RATIO" value={militaryState.defense ? (militaryState.offense/militaryState.defense).toFixed(2) : "—"} />
+          </div>
+        </article>
       </section>
 
       <section style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(330px,1fr))", gap: 14, marginBottom: 18 }}>
