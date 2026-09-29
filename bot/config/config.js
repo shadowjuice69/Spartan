@@ -1,6 +1,6 @@
 module.exports = {
   prefix: "!",
-  botName: "Utopia Nexus",
+  botName: "Spartan",
 
   opsChannelIds: process.env.OPS_CHANNEL_IDS ? process.env.OPS_CHANNEL_IDS.split(",").map(s => s.trim()).filter(Boolean) : [],
   offensiveSpellChannelIds: process.env.OFFENSIVE_SPELL_CHANNEL_IDS ? process.env.OFFENSIVE_SPELL_CHANNEL_IDS.split(",").map(s => s.trim()).filter(Boolean) : [],
@@ -11,6 +11,7 @@ module.exports = {
   aidChannelIds: process.env.AID_CHANNEL_IDS ? process.env.AID_CHANNEL_IDS.split(",").map(s => s.trim()).filter(Boolean) : [],
 
   botSpamChannelId: process.env.BOT_SPAM_CHANNEL_ID || null,
+  ageUpdateChannelId: process.env.AGE_UPDATE_CHANNEL_ID || null,
 
   xp: {
     amountPerMessage: 5,
