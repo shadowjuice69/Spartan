@@ -1,0 +1,2 @@
+import IntelSectionPage from "@/app/components/IntelSectionPage"
+export default function Page(){return <IntelSectionPage section="thievery" title="Thievery" description="Captured thievery operations and target intelligence, including the evidence fields actually present in the Spartan Intel records."/>}
