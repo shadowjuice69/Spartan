@@ -1,5 +1,5 @@
 const supabaseService = require("../../services/supabase");
-const nexusIdentityService = require("../../services/nexusIdentityService");
+const spartanAccess = require("../../services/spartanAccessService");
 
 const PAGE_KEYS = ["throne", "survey", "science", "magic", "som", "universal"];
 const LABEL = { throne: "Thr", survey: "Sur", science: "Sci", magic: "Mag", som: "SoM", universal: "Uni" };
@@ -117,9 +117,23 @@ module.exports = async function intelOpsHandler(interaction) {
   const sub = interaction.options.getSubcommand();
   if (UNSUPPORTED[sub]) return interaction.reply({ content: `🚧 **/spartan-intel ${sub}** isn't built yet. ${UNSUPPORTED[sub]}`, ephemeral: true });
   let me = null;
-  try { me = await nexusIdentityService.resolve(interaction.user.id); } catch (e) { console.error("[INTEL IDENTITY RESOLVE]", e.message); }
+  try {
+    const access = await spartanAccess.get(interaction.user.id);
+    const meta = access?.metadata || {};
+    const coordinates = String(meta.coordinates || access?.kingdom_code || "").trim();
+    me = access ? {
+      id: interaction.user.id,
+      name: meta.province || access.username || null,
+      province: meta.province || access.username || null,
+      kd_code: coordinates || null,
+      nw: meta.nw ?? null,
+      coordinates,
+      race: meta.race || null,
+      personality: meta.personality || null
+    } : null;
+  } catch (e) { console.error("[SPARTAN IDENTITY RESOLVE]", e.message); }
   const kingdomOnly = new Set(["check", "kdecon", "left"]);
-  if (!me && !kingdomOnly.has(sub)) return interaction.reply({ content: "❌ No Nexus province identity found. Register/link your province first.", ephemeral: true });
+  if (!me && !kingdomOnly.has(sub)) return interaction.reply({ content: "❌ No Spartan province identity found. Register/link your province first.", ephemeral: true });
   const kd = await resolveKingdom(sb, me);
   if (!kd) return interaction.reply({ content: "❌ No kingdom Intel is available yet.", ephemeral: true });
   let out;
