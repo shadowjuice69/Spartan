@@ -22,7 +22,7 @@ const kinds: Record<string, string[]> = {
     'council_history', 'council_spells', 'council_state', 'council_military',
     'council_science', 'council_internal', 'province_state', 'age_stats', 'unknown'
   ],
-  military: ['military', 'som', 'news', 'attack', 'throne'],
+  military: ['military', 'som', 'news', 'attack', 'throne', 'council_military', 'war', 'bot_event'],
   magic: ['magic', 'ritual', 'dragon', 'council_spells'],
   thievery: ['thievery'],
   science: ['science', 'council_science'],
