@@ -147,6 +147,13 @@ function graphicFor(section:string,records:any[],accent:string) {
   const recent=[...records].slice(0,20).reverse()
   const payload=(r:any)=>r?.payload?.data ?? r?.payload ?? {}
   const field=(r:any,keys:string[])=>numValue(valueAt(payload(r),keys))
+  if(section==="intel") {
+    const kinds=new Map<string,number>()
+    records.forEach(r=>{const kind=String(r.page_kind||"unknown"); kinds.set(kind,(kinds.get(kind)||0)+1)})
+    const items=[...kinds.entries()].sort((a,b)=>b[1]-a[1]).slice(0,10)
+    const max=Math.max(1,...items.map(x=>x[1]))
+    return <article style={{padding:18,border:"1px solid rgba(255,255,255,.08)",borderRadius:12,background:"#081119"}}><div style={{fontSize:9,color:accent,letterSpacing:".16em"}}>INTELLIGENCE DISTRIBUTION</div><h2 style={{margin:"7px 0 15px",fontSize:20}}>Captured intelligence by vertical</h2>{items.length?items.map(([label,n])=><Bar key={label} value={n} max={max} label={label} accent={accent}/>):<div style={{color:"#748190"}}>No classified records yet.</div>}</article>
+  }
   if(section==="thievery") {
     const counts=new Map<string,number>()
     records.forEach(r=>{const op=valueAt(payload(r),["operation","op","operationName","type"]) || "Unknown"; counts.set(String(op),(counts.get(String(op))||0)+1)})
@@ -155,8 +162,12 @@ function graphicFor(section:string,records:any[],accent:string) {
     return <article style={{padding:18,border:"1px solid rgba(255,255,255,.08)",borderRadius:12,background:"#081119"}}><div style={{fontSize:9,color:accent,letterSpacing:".16em"}}>OPERATIONS</div><h2 style={{margin:"7px 0 15px",fontSize:20}}>Thievery activity by operation</h2>{items.length?items.map(([label,n])=><Bar key={label} value={n} max={max} label={label} accent={accent}/>):<div style={{color:"#748190"}}>No operation classifications yet.</div>}</article>
   }
   if(section==="science") {
+    const categoryCounts=new Map<string,number>()
+    records.forEach(r=>{const category=String(valueAt(payload(r),["category","science","name"])||"Unknown");categoryCounts.set(category,(categoryCounts.get(category)||0)+1)})
+    const categoryItems=[...categoryCounts.entries()].sort((a,b)=>b[1]-a[1]).slice(0,8)
+    const categoryMax=Math.max(1,...categoryItems.map(x=>x[1]))
     const rows=recent.map(r=>field(r,["level","scienceLevel","value"])).filter((v):v is number=>v!==null)
-    return <article style={{padding:18,border:"1px solid rgba(255,255,255,.08)",borderRadius:12,background:"#081119"}}><div style={{fontSize:9,color:accent,letterSpacing:".16em"}}>PROGRESSION</div><h2 style={{margin:"7px 0 15px",fontSize:20}}>Science level history</h2><Sparkline values={rows} labels={recent.slice(0,rows.length).map(r=>r.captured_at?new Date(r.captured_at).toLocaleDateString():"Capture")} accent={accent}/></article>
+    return <article style={{padding:18,border:"1px solid rgba(255,255,255,.08)",borderRadius:12,background:"#081119"}}><div style={{fontSize:9,color:accent,letterSpacing:".16em"}}>SCIENCE PROFILE</div><h2 style={{margin:"7px 0 15px",fontSize:20}}>Research activity by category</h2>{categoryItems.length?categoryItems.map(([label,n])=><Bar key={label} value={n} max={categoryMax} label={label} accent={accent}/>):<div style={{color:"#748190"}}>No science categories captured yet.</div>}<div style={{marginTop:18,paddingTop:14,borderTop:"1px solid rgba(255,255,255,.06)"}}><div style={{fontSize:9,color:accent,letterSpacing:".14em",marginBottom:8}}>LEVEL HISTORY</div><Sparkline values={rows} labels={recent.slice(0,rows.length).map(r=>r.captured_at?new Date(r.captured_at).toLocaleDateString():"Capture")} accent={accent}/></div></article>
   }
   if(section==="throne") {
     const metrics=[["Acres",["acres","land"]],["Networth",["networth","nw"]],["Offense",["offense","off"]],["Defense",["defense","def"]]].map(([label,keys])=>({label:String(label),values:recent.map(r=>field(r,keys as string[])).filter((v):v is number=>v!==null)})).filter(x=>x.values.length>=2)
@@ -165,7 +176,8 @@ function graphicFor(section:string,records:any[],accent:string) {
   if(section==="buildings") {
     const items=recent.map(r=>({name:String(valueAt(payload(r),["building","buildingName","name"])||"Buildings"),value:field(r,["percent","percentage","count"])})).filter(x=>x.value!==null).slice(0,8)
     const max=Math.max(1,...items.map(x=>x.value as number))
-    return <article style={{padding:18,border:"1px solid rgba(255,255,255,.08)",borderRadius:12,background:"#081119"}}><div style={{fontSize:9,color:accent,letterSpacing:".16em"}}>LAND ALLOCATION</div><h2 style={{margin:"7px 0 15px",fontSize:20}}>Building composition</h2>{items.length?items.map((x,i)=><Bar key={i} value={x.value as number} max={max} label={x.name} accent={accent}/>):<div style={{color:"#748190"}}>No building percentages/counts captured yet.</div>}</article>
+    const landValues=recent.map(r=>field(r,["land","totalLand","acres"])).filter((v):v is number=>v!==null)
+    return <article style={{padding:18,border:"1px solid rgba(255,255,255,.08)",borderRadius:12,background:"#081119"}}><div style={{fontSize:9,color:accent,letterSpacing:".16em"}}>LAND ALLOCATION</div><h2 style={{margin:"7px 0 15px",fontSize:20}}>Building composition</h2>{items.length?items.map((x,i)=><Bar key={i} value={x.value as number} max={max} label={x.name} accent={accent}/>):<div style={{color:"#748190"}}>No building percentages/counts captured yet.</div>}{landValues.length>=2&&<div style={{marginTop:18,paddingTop:14,borderTop:"1px solid rgba(255,255,255,.06)"}}><div style={{fontSize:9,color:accent,letterSpacing:".14em",marginBottom:8}}>LAND TREND</div><Sparkline values={landValues} labels={recent.slice(0,landValues.length).map(r=>r.captured_at?new Date(r.captured_at).toLocaleDateString():"Capture")} accent={accent}/></div>}</article>
   }
   if(section==="magic") {
     const counts=new Map<string,number>()
@@ -203,7 +215,7 @@ export default function IntelVerticalPage() {
     let live=true
     const load=async()=>{
       try{
-        const apiSection=section==="news" ? "war-room" : section
+        const apiSection=section
         const r=await fetch("/api/intel-data?section="+encodeURIComponent(apiSection),{cache:"no-store"})
         const j=await r.json().catch(()=>({}))
         if(!r.ok) throw new Error(j.error||"Intel data unavailable")
