@@ -12,7 +12,7 @@ const UTOPIABOT_IDS = new Set((process.env.UTOPIABOT_IDS || "").split(",").map(s
 module.exports = {
   name: "messageCreate",
   async execute(message) {
-    const isAgeUpdateChannel = message.channel.id === process.env.AGE_UPDATE_CHANNEL_ID;
+    const isAgeUpdateChannel = config.ageUpdateChannelId && message.channel.id === config.ageUpdateChannelId;
 
     if (isAgeUpdateChannel) {
       let updateText = message.content || "";
