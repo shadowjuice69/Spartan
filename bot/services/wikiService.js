@@ -13,7 +13,7 @@ async function searchWiki(question) {
 
   const words = searchTerm
     .replace(/[^\w\s']/g, "")
-    .split(/\\s+/)
+    .split(/\s+/)
     .filter(w => !stopWords.includes(w));
 
   searchTerm = words.join(" ");
@@ -44,7 +44,7 @@ async function searchRules(question) {
 
   const words = q
     .replace(/[^\w\s']/g, "")
-    .split(/\\s+/)
+    .split(/\s+/)
     .filter(w => !stopWords.includes(w));
 
 

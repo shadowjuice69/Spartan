@@ -17,9 +17,11 @@ type CaptureOwner = {
   kingdomCode: string
 }
 
+// Scraper requests authenticate with a per-device capture token (256-bit, stored
+// hashed in spartan_capture_devices). No shared key is required as proof of identity;
+// the token is validated in resolveCaptureDeviceOwner below.
 function isServiceRequest(request: Request) {
-  const configured = process.env.SPARTAN_CAPTURE_KEY
-  return Boolean(configured && request.headers.get('x-spartan-capture-key') === configured)
+  return Boolean(request.headers.get('x-spartan-capture-token')?.trim())
 }
 
 function hashCaptureToken(token: string) {

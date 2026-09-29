@@ -55,7 +55,7 @@ function parseIntel(url, prov, text, source="", tab="") {
   const result = { url, prov, tab: tab || "", source: source || "", updated: new Date().toISOString() };
   console.log("[DEBUG URL CHECK]", JSON.stringify(url), url.includes("kingdom_details"), "tab=", tab, "source=", source);
   const routeTab = String(tab || "").toLowerCase();
-  const kdMatch = url.match(/kd[=\\/](\\d+:\\d+)/) || text.match(/\\((\\d+:\\d+)\\)/);
+  const kdMatch = url.match(/kd[=\/](\d+:\d+)/) || text.match(/\((\d+:\d+)\)/);
   result.kd = kdMatch ? kdMatch[1] : MY_KD;
 
   if (source === "universal-capture") {
@@ -189,12 +189,12 @@ function parseIntel(url, prov, text, source="", tab="") {
 
     text.split(/\r?\n/).forEach(l => {
       let m;
-      if ((m = l.match(/Net Offensive Points at Home[\\s\\t]+(\\d[\\d,]*)/i))) offense = parseInt(m[1].replace(/,/g,""),10);
-      if ((m = l.match(/Net Defensive Points at Home[\\s\\t]+(\\d[\\d,]*)/i))) defense = parseInt(m[1].replace(/,/g,""),10);
-      if ((m = l.match(/we have (\\d+) generals/i))) generals = parseInt(m[1],10);
+      if ((m = l.match(/Net Offensive Points at Home[\s\t]+(\d[\d,]*)/i))) offense = parseInt(m[1].replace(/,/g,""),10);
+      if ((m = l.match(/Net Defensive Points at Home[\s\t]+(\d[\d,]*)/i))) defense = parseInt(m[1].replace(/,/g,""),10);
+      if ((m = l.match(/we have (\d+) generals/i))) generals = parseInt(m[1],10);
       if (l.includes("Standing Army")) { inArmyTable = true; return; }
       if (inArmyTable) {
-        const armyMatches = [...l.matchAll(/\\(([\\d.]+) days left\\)/gi)];
+        const armyMatches = [...l.matchAll(/\(([\d.]+) days left\)/gi)];
         if (armyMatches.length > 0) {
           armyMatches.forEach(am => armies.push({ return_days: parseFloat(am[1]), troops: {} }));
           return;
@@ -204,7 +204,7 @@ function parseIntel(url, prov, text, source="", tab="") {
         if (l.includes("Military Training") || l.includes("Science Book")) { inArmyTable = false; return; }
         for (const name of TROOP_NAMES) {
           if (l.trim().startsWith(name)) {
-            const cols = l.split(/\\t+|\\s{2,}/).map(c => c.trim()).filter(Boolean);
+            const cols = l.split(/\t+|\s{2,}/).map(c => c.trim()).filter(Boolean);
             if (cols.length >= 2) {
               const key = name.toLowerCase().replace(" ","_");
               const home = parseInt((cols[1]||"0").replace(/,/g,"").replace("-","0")) || 0;
@@ -218,7 +218,7 @@ function parseIntel(url, prov, text, source="", tab="") {
           }
         }
         if (l.trim().startsWith("Generals")) {
-          const cols = l.split(/\\t+|\\s{2,}/).map(c => c.trim()).filter(Boolean);
+          const cols = l.split(/\t+|\s{2,}/).map(c => c.trim()).filter(Boolean);
           if (!generals && cols[1]) generals = parseInt(cols[1]) || null;
         }
       }

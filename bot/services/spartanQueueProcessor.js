@@ -83,10 +83,10 @@ async function writeProvinceHistory(sb, flow, state, canonical) {
   return true;
 }
 function deriveIntelIdentity(pageKind, text, flow) {
-  const normalized = String(text || '').replace(/\\s+/g, ' ').trim();
-  const actor = normalized.match(/#(\\d+)\\s+([^—:]+?)(?:\\s+—|:)/i);
-  const target = normalized.match(/→\\s+(?:\\*\\*)?#(\\d+)\\s+([^(*—]+?)(?:\\s*\\*\\*)?\\s*\\((\\d+:\\d+)\\)/i)
-    || normalized.match(/arrive at\\s+(?:\\*\\*)?([^(*—]+?)(?:\\s*\\*\\*)?\\s*\\((\\d+:\\d+)\\)/i);
+  const normalized = String(text || '').replace(/\s+/g, ' ').trim();
+  const actor = normalized.match(/#(\d+)\s+([^—:]+?)(?:\s+—|:)/i);
+  const target = normalized.match(/→\s+(?:\*\*)?#(\d+)\s+([^(*—]+?)(?:\s*\*\*)?\s*\((\d+:\d+)\)/i)
+    || normalized.match(/arrive at\s+(?:\*\*)?([^(*—]+?)(?:\s*\*\*)?\s*\((\d+:\d+)\)/i);
   const targetCoord = target?.[3] || target?.[2] || null;
   const targetName = target?.[2] || target?.[1] || null;
   const actorName = actor?.[2]?.trim() || null;
@@ -95,7 +95,7 @@ function deriveIntelIdentity(pageKind, text, flow) {
   const identity = identityType === 'target'
     ? [targetCoord || '', targetName || ''].join('|').toLowerCase()
     : [flow.kingdom_id || '', actorSlot || '', actorName || ''].join('|').toLowerCase();
-  return identity.replace(/\\s+/g, ' ').trim() || null;
+  return identity.replace(/\s+/g, ' ').trim() || null;
 }
 
 async function removePreviousIntelProjection(sb, pageKind, kingdomId, intelKey, currentCaptureId) {
