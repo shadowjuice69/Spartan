@@ -1,7 +1,6 @@
 const permissionService=require('../services/permissionService');
 const commandAccess=require('../services/commandAccessService');
 const commandRegistry=require('../services/commandRegistry');
-const nexusIdentity=require('../services/nexusIdentityService');
 const spartanAccess=require('../services/spartanAccessService');
 const spartanHandler=require('./commands/spartanHandler');
 const spartanRegister=require('./commands/spartanRegisterHandler');
@@ -48,7 +47,6 @@ module.exports=async function commandHandler(interaction){
  if(!['spartan','spartan-music','spartan-intel','spartan-calc','spartan-war','spartan-admin'].includes(command))return interaction.reply({content:'❌ This command surface has been retired. Use the new `/spartan` commands.',ephemeral:true});
  if(!commandAccess.canAccess(entry,interaction.user,permissionService))return interaction.reply({content:commandAccess.denialMessage(entry),ephemeral:true});
  if(entry.access==='registered'&&!permissionService.isOwner(interaction.user.id)&&!(await hasSpartanAccess(interaction.user.id)))return interaction.reply({content:'❌ Spartan access is required. Use `/spartan register`.',ephemeral:true});
- try{interaction.nexusIdentity=await nexusIdentity.resolve(interaction.user.id);}catch(_){interaction.nexusIdentity=null;}
  try{return await entry.handler(interaction);}catch(e){console.error(`[SPARTAN COMMAND] /${command} ${sub}`,e);if(!interaction.replied&&!interaction.deferred)return interaction.reply({content:`❌ ${e.message||'Spartan command failed.'}`,ephemeral:true});throw e;}
 };
 module.exports.commandRegistry=commandRegistry;
