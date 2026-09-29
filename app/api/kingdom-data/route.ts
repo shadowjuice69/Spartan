@@ -47,7 +47,10 @@ export async function GET() {
       return NextResponse.json({ error: 'Your Spartan account is not linked to a kingdom.' }, { status: 403 })
     }
 
-    const { data: captures, error } = await db
+    // The capture vault is evidence storage and may be compacted by retention.
+    // Kingdom intelligence is also canonicalized into spartan_intel_records, so
+    // the page must remain populated after vault cleanup.
+    const { data: captures, error: captureError } = await db
       .from('spartan_capture_vault')
       .select('capture_id,captured_at,kingdom_id,parsed_payload')
       .eq('kingdom_id', account.province_location)
@@ -55,9 +58,30 @@ export async function GET() {
       .order('captured_at', { ascending: false })
       .limit(60)
 
-    if (error) throw error
+    if (captureError) throw captureError
 
-    const snapshots = (captures || [])
+    let sourceRows: CaptureRow[] = (captures || []) as CaptureRow[]
+
+    if (!sourceRows.length) {
+      const { data: intelRows, error: intelError } = await db
+        .from('spartan_intel_records')
+        .select('id,captured_at,kingdom_id,parsed_payload')
+        .eq('kingdom_id', account.province_location)
+        .eq('page_kind', 'kingdom')
+        .order('captured_at', { ascending: false })
+        .limit(60)
+
+      if (intelError) throw intelError
+
+      sourceRows = (intelRows || []).map((row: any) => ({
+        capture_id: row.id,
+        captured_at: row.captured_at,
+        kingdom_id: row.kingdom_id,
+        parsed_payload: row.parsed_payload,
+      }))
+    }
+
+    const snapshots = sourceRows
       .map((row: any) => {
         const d = details(row as CaptureRow)
         return {
