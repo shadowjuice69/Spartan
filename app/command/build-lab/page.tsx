@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation"
 import { parseBuildText, parseMilitaryRequirementText, parseScienceText, ParsedBuild, ParsedMilitaryRequirement, ParsedScience } from "@/lib/spartan/build-parser"
 import { calculateAllocations } from "@/lib/spartan/science-calculator"
 
-const navCommand = [["Command","/"],["Province","/command/province"],["War Room","/command/war-room"],["Build Lab","/command/build-lab"],["Draft Calc","/command/draft-calc"],["Wiki","/command/wiki"],["Tools","/command/tools"]]
+const navCommand = [["Command","/"],["Province","/command/province"],["War Room","/command/war-room"],["Build Lab","/command/build-lab"],["Draft Calc","/command/draft-calc"],["Wiki","/command/wiki"],["Tools","/command/tools"],["Scraper Generator","/command/scraper"]]
 const navIntel = [["Kingdom","/command/kingdom"],["Military","/command/military"],["Magic","/command/magic"],["Thievery","/command/thievery"],["Science","/command/science"],["Buildings","/command/buildings"],["Throne","/command/throne"]]
 
 const shell: any = { minHeight:"100vh", background:"#05080d", color:"#e7eef5", fontFamily:"Inter,system-ui,sans-serif", display:"flex" }

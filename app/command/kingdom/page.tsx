@@ -9,7 +9,7 @@ type Member = {
 }
 type Trend = {capturedAt:string; totalLand:number; totalNw:number; avgNwpa:number|null; totalGains:number; provinceCount:number}
 
-const navCommand=[["Command","/"],["Province","/command/province"],["War Room","/command/war-room"],["Build Lab","/command/build-lab"],["Draft Calc","/command/draft-calc"],["Wiki","/command/wiki"],["Tools","/command/tools"]]
+const navCommand=[["Command","/"],["Province","/command/province"],["War Room","/command/war-room"],["Build Lab","/command/build-lab"],["Draft Calc","/command/draft-calc"],["Wiki","/command/wiki"],["Tools","/command/tools"],["Scraper Generator","/command/scraper"]]
 const navIntel=[["Kingdom","/command/kingdom"],["Military","/command/military"],["Magic","/command/magic"],["Thievery","/command/thievery"],["Science","/command/science"],["Buildings","/command/buildings"],["Throne","/command/throne"],["Enemy Intel","/command/enemy-intel"]]
 
 const fmt=(v:any)=>v==null?"—":Number(v).toLocaleString()

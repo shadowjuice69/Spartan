@@ -18,7 +18,7 @@ const configs: Record<string,Config> = {
   news:{title:"NEWS INTELLIGENCE",kinds:["news","attack","war"],fields:[["attacker","Attacker"],["target","Target"],["attackType","Event"],["acres","Acres"],["result","Result"],["loot","Loot"]],description:"Captured kingdom and province news events."}
 }
 
-const navCommand=[["Command","/"],["Province","/command/province"],["War Room","/command/war-room"],["Build Lab","/command/build-lab"],["Draft Calc","/command/draft-calc"],["Wiki","/command/wiki"],["Tools","/command/tools"]]
+const navCommand=[["Command","/"],["Province","/command/province"],["War Room","/command/war-room"],["Build Lab","/command/build-lab"],["Draft Calc","/command/draft-calc"],["Wiki","/command/wiki"],["Tools","/command/tools"],["Scraper Generator","/command/scraper"]]
 const navIntel=[["Intel","/command/intel"],["Kingdom","/command/kingdom"],["Military","/command/military"],["Magic","/command/magic"],["Thievery","/command/thievery"],["Science","/command/science"],["Buildings","/command/buildings"],["Throne","/command/throne"],["News","/command/news"],["Enemy Intel","/command/enemy-intel"]]
 
 function scalar(v:any){if(v==null)return "—";if(typeof v==="number")return v.toLocaleString();if(typeof v==="boolean")return v?"Yes":"No";return String(v)}

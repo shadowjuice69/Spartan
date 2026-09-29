@@ -30,7 +30,7 @@ type Clock = { chicagoTime: string; chicagoDate: string; utopia: { year: number;
 
 const navCommand = [
   ["Command", "/"], ["Province", "/command/province"], ["War Room", "/command/war-room"],
-  ["Build Lab", "/command/build-lab"], ["Draft Calc", "/command/draft-calc"], ["Wiki", "/command/wiki"], ["Tools", "/command/tools"],
+  ["Build Lab", "/command/build-lab"], ["Draft Calc", "/command/draft-calc"], ["Wiki", "/command/wiki"], ["Tools", "/command/tools"],["Scraper Generator","/command/scraper"],
 ] as const;
 const navIntel = [
   ["Intel", "/command/intel"], ["Kingdom", "/command/kingdom"], ["Military", "/command/military"], ["Magic", "/command/magic"], ["Thievery", "/command/thievery"],
