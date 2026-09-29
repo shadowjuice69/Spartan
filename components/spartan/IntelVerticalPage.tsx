@@ -143,54 +143,123 @@ function Sparkline({values,labels,accent}:{values:number[],labels:string[],accen
   </div>
 }
 
+function Panel({eyebrow,title,accent,children}:{eyebrow:string,title:string,accent:string,children:any}) {
+  return <article style={{padding:18,border:"1px solid rgba(255,255,255,.08)",borderRadius:14,background:"linear-gradient(145deg,#0a141d,#071018)",boxShadow:"0 12px 35px rgba(0,0,0,.18)"}}>
+    <div style={{fontSize:8,color:accent,letterSpacing:".2em",fontWeight:900}}>{eyebrow}</div>
+    <h2 style={{margin:"7px 0 15px",fontSize:20,letterSpacing:"-.02em"}}>{title}</h2>
+    {children}
+  </article>
+}
+
+function MiniBars({items,accent,limit=8}:{items:Array<[string,number]>,accent:string,limit?:number}) {
+  const rows=items.filter(([,v])=>Number.isFinite(v)).slice(0,limit)
+  const max=Math.max(1,...rows.map(([,v])=>Math.abs(v)))
+  return rows.length ? <div>{rows.map(([label,value])=><Bar key={label} value={value} max={max} label={label} accent={accent}/>)}</div> : <div style={{padding:"28px 0",color:"#748190",fontSize:10}}>Waiting for enough structured intelligence.</div>
+}
+
+function MetricStrip({items,accent}:{items:Array<[string,string]>,accent:string}) {
+  return <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(115px,1fr))",gap:7}}>
+    {items.map(([label,value])=><div key={label} style={{padding:"10px 11px",borderRadius:9,background:"rgba(255,255,255,.035)",border:"1px solid rgba(255,255,255,.055)"}}>
+      <div style={{fontSize:7,color:"#647382",letterSpacing:".12em"}}>{label.toUpperCase()}</div>
+      <div style={{marginTop:5,fontSize:14,fontWeight:850,color:accent,overflowWrap:"anywhere"}}>{value}</div>
+    </div>)}
+  </div>
+}
+
 function graphicFor(section:string,records:any[],accent:string) {
-  const recent=[...records].slice(0,20).reverse()
+  const recent=[...records].slice(0,24).reverse()
   const payload=(r:any)=>r?.payload?.data ?? r?.payload ?? {}
   const field=(r:any,keys:string[])=>numValue(valueAt(payload(r),keys))
+  const time=(r:any)=>r?.captured_at?new Date(r.captured_at).toLocaleDateString(undefined,{month:"short",day:"numeric"}):"—"
+
+  if(!records.length) return <Panel eyebrow="LIVE VISUALIZATION" title="Awaiting intelligence" accent={accent}><div style={{padding:"45px 0",textAlign:"center",color:"#748190",fontSize:10}}>The display is ready. Structured captures will populate the tactical graphics automatically.</div></Panel>
+
   if(section==="intel") {
-    const kinds=new Map<string,number>()
-    records.forEach(r=>{const kind=String(r.page_kind||"unknown"); kinds.set(kind,(kinds.get(kind)||0)+1)})
-    const items=[...kinds.entries()].sort((a,b)=>b[1]-a[1]).slice(0,10)
-    const max=Math.max(1,...items.map(x=>x[1]))
-    return <article style={{padding:18,border:"1px solid rgba(255,255,255,.08)",borderRadius:12,background:"#081119"}}><div style={{fontSize:9,color:accent,letterSpacing:".16em"}}>INTELLIGENCE DISTRIBUTION</div><h2 style={{margin:"7px 0 15px",fontSize:20}}>Captured intelligence by vertical</h2>{items.length?items.map(([label,n])=><Bar key={label} value={n} max={max} label={label} accent={accent}/>):<div style={{color:"#748190"}}>No classified records yet.</div>}</article>
+    const kinds=new Map<string,number>(), sources=new Map<string,number>()
+    records.forEach(r=>{const k=String(r.page_kind||"unknown");kinds.set(k,(kinds.get(k)||0)+1);const src=String(r.source||"unknown");sources.set(src,(sources.get(src)||0)+1)})
+    const items=[...kinds.entries()].sort((a,b)=>b[1]-a[1]), sourceItems=[...sources.entries()].sort((a,b)=>b[1]-a[1])
+    return <div style={{display:"grid",gap:14}}>
+      <Panel eyebrow="COMMAND PICTURE" title="Intelligence distribution" accent={accent}><MiniBars items={items} accent={accent}/></Panel>
+      <Panel eyebrow="SIGNAL DIVERSITY" title="Source network" accent={accent}>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:8}}>
+          {sourceItems.slice(0,8).map(([name,n],i)=><div key={name} style={{padding:13,borderRadius:10,background:"rgba(255,255,255,.035)",border:"1px solid rgba(255,255,255,.055)"}}>
+            <div style={{fontSize:8,color:"#647382"}}>SOURCE {String(i+1).padStart(2,"0")}</div><div style={{fontSize:11,marginTop:6,overflowWrap:"anywhere"}}>{name}</div><div style={{fontSize:19,fontWeight:900,color:accent,marginTop:5}}>{n.toLocaleString()}</div>
+          </div>)}
+        </div>
+      </Panel>
+    </div>
   }
-  if(section==="thievery") {
-    const counts=new Map<string,number>()
-    records.forEach(r=>{const op=valueAt(payload(r),["operation","op","operationName","type"]) || "Unknown"; counts.set(String(op),(counts.get(String(op))||0)+1)})
-    const items=[...counts.entries()].sort((a,b)=>b[1]-a[1]).slice(0,8)
-    const max=Math.max(1,...items.map(x=>x[1]))
-    return <article style={{padding:18,border:"1px solid rgba(255,255,255,.08)",borderRadius:12,background:"#081119"}}><div style={{fontSize:9,color:accent,letterSpacing:".16em"}}>OPERATIONS</div><h2 style={{margin:"7px 0 15px",fontSize:20}}>Thievery activity by operation</h2>{items.length?items.map(([label,n])=><Bar key={label} value={n} max={max} label={label} accent={accent}/>):<div style={{color:"#748190"}}>No operation classifications yet.</div>}</article>
-  }
-  if(section==="science") {
-    const categoryCounts=new Map<string,number>()
-    records.forEach(r=>{const category=String(valueAt(payload(r),["category","science","name"])||"Unknown");categoryCounts.set(category,(categoryCounts.get(category)||0)+1)})
-    const categoryItems=[...categoryCounts.entries()].sort((a,b)=>b[1]-a[1]).slice(0,8)
-    const categoryMax=Math.max(1,...categoryItems.map(x=>x[1]))
-    const rows=recent.map(r=>field(r,["level","scienceLevel","value"])).filter((v):v is number=>v!==null)
-    return <article style={{padding:18,border:"1px solid rgba(255,255,255,.08)",borderRadius:12,background:"#081119"}}><div style={{fontSize:9,color:accent,letterSpacing:".16em"}}>SCIENCE PROFILE</div><h2 style={{margin:"7px 0 15px",fontSize:20}}>Research activity by category</h2>{categoryItems.length?categoryItems.map(([label,n])=><Bar key={label} value={n} max={categoryMax} label={label} accent={accent}/>):<div style={{color:"#748190"}}>No science categories captured yet.</div>}<div style={{marginTop:18,paddingTop:14,borderTop:"1px solid rgba(255,255,255,.06)"}}><div style={{fontSize:9,color:accent,letterSpacing:".14em",marginBottom:8}}>LEVEL HISTORY</div><Sparkline values={rows} labels={recent.slice(0,rows.length).map(r=>r.captured_at?new Date(r.captured_at).toLocaleDateString():"Capture")} accent={accent}/></div></article>
-  }
-  if(section==="throne") {
-    const metrics=[["Acres",["acres","land"]],["Networth",["networth","nw"]],["Offense",["offense","off"]],["Defense",["defense","def"]]].map(([label,keys])=>({label:String(label),values:recent.map(r=>field(r,keys as string[])).filter((v):v is number=>v!==null)})).filter(x=>x.values.length>=2)
-    return <>{metrics.map(m=><article key={m.label} style={{padding:18,border:"1px solid rgba(255,255,255,.08)",borderRadius:12,background:"#081119"}}><div style={{fontSize:9,color:accent,letterSpacing:".16em"}}>TREND</div><h2 style={{margin:"7px 0 15px",fontSize:20}}>{m.label} movement</h2><Sparkline values={m.values} labels={recent.slice(0,m.values.length).map(r=>r.captured_at?new Date(r.captured_at).toLocaleDateString():"Capture")} accent={accent}/></article>)}</>
-  }
-  if(section==="buildings") {
-    const items=recent.map(r=>({name:String(valueAt(payload(r),["building","buildingName","name"])||"Buildings"),value:field(r,["percent","percentage","count"])})).filter(x=>x.value!==null).slice(0,8)
-    const max=Math.max(1,...items.map(x=>x.value as number))
-    const landValues=recent.map(r=>field(r,["land","totalLand","acres"])).filter((v):v is number=>v!==null)
-    return <article style={{padding:18,border:"1px solid rgba(255,255,255,.08)",borderRadius:12,background:"#081119"}}><div style={{fontSize:9,color:accent,letterSpacing:".16em"}}>LAND ALLOCATION</div><h2 style={{margin:"7px 0 15px",fontSize:20}}>Building composition</h2>{items.length?items.map((x,i)=><Bar key={i} value={x.value as number} max={max} label={x.name} accent={accent}/>):<div style={{color:"#748190"}}>No building percentages/counts captured yet.</div>}{landValues.length>=2&&<div style={{marginTop:18,paddingTop:14,borderTop:"1px solid rgba(255,255,255,.06)"}}><div style={{fontSize:9,color:accent,letterSpacing:".14em",marginBottom:8}}>LAND TREND</div><Sparkline values={landValues} labels={recent.slice(0,landValues.length).map(r=>r.captured_at?new Date(r.captured_at).toLocaleDateString():"Capture")} accent={accent}/></div>}</article>
-  }
+
   if(section==="magic") {
-    const counts=new Map<string,number>()
-    records.forEach(r=>{const spell=valueAt(payload(r),["spellName","spell","name","operation"])||"Unknown";counts.set(String(spell),(counts.get(String(spell))||0)+1)})
-    const items=[...counts.entries()].sort((a,b)=>b[1]-a[1]).slice(0,8), max=Math.max(1,...items.map(x=>x[1]))
-    return <article style={{padding:18,border:"1px solid rgba(255,255,255,.08)",borderRadius:12,background:"#081119"}}><div style={{fontSize:9,color:accent,letterSpacing:".16em"}}>ARCANE PROFILE</div><h2 style={{margin:"7px 0 15px",fontSize:20}}>Spell activity</h2>{items.length?items.map(([label,n])=><Bar key={label} value={n} max={max} label={label} accent={accent}/>):<div style={{color:"#748190"}}>No spell classifications yet.</div>}</article>
+    const spells=new Map<string,number>(), targets=new Map<string,number>()
+    records.forEach(r=>{const spell=String(valueAt(payload(r),["spellName","spell","name","operation"])||"Unknown");spells.set(spell,(spells.get(spell)||0)+1);const target=String(valueAt(payload(r),["targetProvince","target","target_name"])||"Unknown");targets.set(target,(targets.get(target)||0)+1)})
+    const effects=records.map(r=>field(r,["damage","damageDone","effectValue","runes","mana"])).filter((v):v is number=>v!==null)
+    return <div style={{display:"grid",gap:14}}>
+      <Panel eyebrow="ARCANE ACTIVITY" title="Spell activity matrix" accent={accent}><MiniBars items={[...spells.entries()].sort((a,b)=>b[1]-a[1])} accent={accent}/></Panel>
+      <Panel eyebrow="TARGET PICTURE" title="Who is being affected" accent={accent}><MiniBars items={[...targets.entries()].sort((a,b)=>b[1]-a[1])} accent={accent}/></Panel>
+      {effects.length>=2&&<Panel eyebrow="RESOURCE / EFFECT HISTORY" title="Captured effect movement" accent={accent}><Sparkline values={effects.slice(-16)} labels={recent.slice(-Math.min(16,effects.length)).map(time)} accent={accent}/></Panel>}
+    </div>
   }
+
+  if(section==="thievery") {
+    const ops=new Map<string,number>(), targets=new Map<string,number>()
+    records.forEach(r=>{const op=String(valueAt(payload(r),["operation","op","operationName","type"])||"Unknown");ops.set(op,(ops.get(op)||0)+1);const target=String(valueAt(payload(r),["targetProvince","target"])||"Unknown");targets.set(target,(targets.get(target)||0)+1)})
+    const thieves=records.map(r=>field(r,["thievesSent","thieves","thievesUsed"])).filter((v):v is number=>v!==null)
+    const lost=records.map(r=>field(r,["thievesLost","losses"])).filter((v):v is number=>v!==null)
+    return <div style={{display:"grid",gap:14}}>
+      <Panel eyebrow="COVERT OPS" title="Operations profile" accent={accent}><MiniBars items={[...ops.entries()].sort((a,b)=>b[1]-a[1])} accent={accent}/></Panel>
+      <Panel eyebrow="TARGET NETWORK" title="Target activity" accent={accent}><MiniBars items={[...targets.entries()].sort((a,b)=>b[1]-a[1])} accent={accent}/></Panel>
+      {(thieves.length>=2||lost.length>=2)&&<Panel eyebrow="ASSET EXPOSURE" title="Thief commitment & losses" accent={accent}><MetricStrip accent={accent} items={[[ "Sent", String(thieves.at(-1)??0) ],[ "Lost", String(lost.at(-1)??0) ],[ "Successes", String(records.filter(r=>String(valueAt(payload(r),["success","result","outcome"])).toLowerCase().includes("success")).length) ]]}/></Panel>}
+    </div>
+  }
+
+  if(section==="science") {
+    const categories=new Map<string,number>()
+    records.forEach(r=>{const c=String(valueAt(payload(r),["category","science","name"])||"Unknown");categories.set(c,(categories.get(c)||0)+1)})
+    const levels=recent.map(r=>field(r,["level","scienceLevel","value"])).filter((v):v is number=>v!==null)
+    return <div style={{display:"grid",gap:14}}>
+      <Panel eyebrow="RESEARCH PROGRAM" title="Science by category" accent={accent}><MiniBars items={[...categories.entries()].sort((a,b)=>b[1]-a[1])} accent={accent}/></Panel>
+      {levels.length>=2&&<Panel eyebrow="PROGRESSION" title="Research level history" accent={accent}><Sparkline values={levels} labels={recent.slice(-levels.length).map(time)} accent={accent}/></Panel>}
+      <Panel eyebrow="LAB TELEMETRY" title="Latest research signals" accent={accent}><MetricStrip accent={accent} items={recent.slice(-4).reverse().map((r,i)=>["Signal "+(i+1),String(valueAt(payload(r),["category","science","name","level"])??"Captured")])}/></Panel>
+    </div>
+  }
+
+  if(section==="buildings") {
+    const composition=new Map<string,number>()
+    records.forEach(r=>{const name=String(valueAt(payload(r),["building","buildingName","name"])||"Buildings");const value=field(r,["percent","percentage","count"]);if(value!==null)composition.set(name,(composition.get(name)||0)+value)})
+    const land=recent.map(r=>field(r,["land","totalLand","acres"])).filter((v):v is number=>v!==null)
+    return <div style={{display:"grid",gap:14}}>
+      <Panel eyebrow="PROVINCE DEVELOPMENT" title="Building composition" accent={accent}><MiniBars items={[...composition.entries()].sort((a,b)=>b[1]-a[1])} accent={accent}/></Panel>
+      {land.length>=2&&<Panel eyebrow="LAND MOVEMENT" title="Total land history" accent={accent}><Sparkline values={land} labels={recent.slice(-land.length).map(time)} accent={accent}/></Panel>}
+      <Panel eyebrow="CONSTRUCTION SIGNALS" title="Latest building telemetry" accent={accent}><MetricStrip accent={accent} items={recent.slice(-5).reverse().map((r,i)=>["Capture "+(i+1),String(valueAt(payload(r),["building","buildingName","name","percent","percentage"])??"Survey")])}/></Panel>
+    </div>
+  }
+
+  if(section==="throne") {
+    const metrics=[["Acres",["acres","land"]],["Networth",["networth","nw"]],["Offense",["offense","off"]],["Defense",["defense","def"]],["TPA",["tpa"]],["WPA",["wpa"]]].map(([label,keys])=>({label:String(label),values:recent.map(r=>field(r,keys as string[])).filter((v):v is number=>v!==null)}))
+    return <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(300px,1fr))",gap:14}}>
+      {metrics.filter(m=>m.values.length>=2).map(m=><Panel key={m.label} eyebrow="PROVINCE TELEMETRY" title={m.label+" movement"} accent={accent}><Sparkline values={m.values} labels={recent.slice(-m.values.length).map(time)} accent={accent}/><div style={{marginTop:10,fontSize:9,color:"#718091"}}>Latest: <span style={{color:accent,fontWeight:800}}>{m.values.at(-1)?.toLocaleString()}</span> · Samples: {m.values.length}</div></Panel>)}
+    </div>
+  }
+
   if(section==="news" || section==="war-room") {
-    const rows=recent.map(r=>({time:r.captured_at?new Date(r.captured_at).toLocaleDateString():"Event",acres:field(r,["acresCaptured","acres_captured","acres","acresGained"]),kills:field(r,["kills"]),losses:field(r,["losses","troopsLost"])}))
-    const valid=rows.filter(x=>x.acres!==null||x.kills!==null||x.losses!==null)
-    const max=Math.max(1,...valid.flatMap(x=>[x.acres||0,x.kills||0,x.losses||0]))
-    return <article style={{padding:18,border:"1px solid rgba(255,255,255,.08)",borderRadius:12,background:"#081119"}}><div style={{fontSize:9,color:accent,letterSpacing:".16em"}}>EVENT IMPACT</div><h2 style={{margin:"7px 0 15px",fontSize:20}}>Combat movement</h2>{valid.slice(0,10).map((x,i)=><div key={i} style={{marginBottom:11}}><div style={{display:"flex",justifyContent:"space-between",fontSize:8,color:"#748190",marginBottom:4}}><span>{x.time}</span><span>{x.acres||0} acres · {x.kills||0} kills · {x.losses||0} losses</span></div><Bar value={x.acres||0} max={max} label="Acres" accent={accent}/><Bar value={x.kills||0} max={max} label="Kills" accent={accent}/><Bar value={x.losses||0} max={max} label="Losses" negative accent={accent}/></div>)}</article>
+    const rows=recent.map(r=>({time:time(r),acres:field(r,["acresCaptured","acres_captured","acres","acresGained"])??0,kills:field(r,["kills"])??0,losses:field(r,["losses","troopsLost"])??0}))
+    const impact=rows.map(x=>x.acres+x.kills+x.losses)
+    return <div style={{display:"grid",gap:14}}>
+      <Panel eyebrow={section==="war-room"?"TACTICAL OPERATIONS":"EVENT INTELLIGENCE"} title="Operational impact timeline" accent={accent}>
+        {rows.slice(-10).reverse().map((x,i)=><div key={i} style={{padding:"11px 0",borderBottom:"1px solid rgba(255,255,255,.05)"}}>
+          <div style={{display:"flex",justifyContent:"space-between",fontSize:8,color:"#718091",marginBottom:7}}><span>{x.time}</span><span>{x.acres.toLocaleString()} acres · {x.kills.toLocaleString()} kills · {x.losses.toLocaleString()} losses</span></div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:5}}>
+            <Bar value={x.acres} max={Math.max(1,...rows.map(y=>y.acres))} label="ACRES" accent={accent}/>
+            <Bar value={x.kills} max={Math.max(1,...rows.map(y=>y.kills))} label="KILLS" accent={accent}/>
+            <Bar value={x.losses} max={Math.max(1,...rows.map(y=>y.losses))} label="LOSSES" negative accent={accent}/>
+          </div>
+        </div>)}
+      </Panel>
+      <Panel eyebrow="BATTLE RHYTHM" title="Impact over captured history" accent={accent}><Sparkline values={impact} labels={rows.map(x=>x.time)} accent={accent}/></Panel>
+    </div>
   }
+
   return null
 }
 
