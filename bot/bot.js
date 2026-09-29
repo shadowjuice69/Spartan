@@ -23,7 +23,7 @@ const client = new Client({
     readyTimeout: 30000,
   },
 });
-global.__NEXUS_DISCORD_CLIENT = client;
+global.__SPARTAN_DISCORD_CLIENT = client;
 
 client.on('raw', packet => { if (packet?.t === 'MESSAGE_CREATE') logger.info(`[DISCORD RAW MESSAGE_CREATE] channel=${packet.d?.channel_id || 'unknown'} guild=${packet.d?.guild_id || 'DM'} author=${packet.d?.author?.username || 'unknown'} id=${packet.d?.id || 'unknown'}`); });
 
