@@ -1,5 +1,5 @@
 const supabaseService = require("../../services/supabase");
-const nexusIdentityService = require("../../services/nexusIdentityService");
+const spartanAccess = require("../../services/spartanAccessService");
 
 const HIGH_GAIN_RACES = ["elf", "faery", "halfling", "dryad"];
 const LOW_GAIN_RACES = ["undead", "orc"];
@@ -27,7 +27,7 @@ module.exports = async function targetHandler(interaction) {
   await interaction.deferReply({ ephemeral: false });
 
   let me = null;
-  try { me = await nexusIdentityService.resolve(interaction.user.id); } catch (e) { console.error("[TARGET IDENTITY RESOLVE]", e.message); }
+  try {\n    const access = await spartanAccess.get(interaction.user.id);\n    const meta = access?.metadata || {};\n    const coordinates = String(meta.coordinates || access?.kingdom_code || "").trim();\n    me = access ? {\n      id: interaction.user.id,\n      name: meta.province || access.username || null,\n      province: meta.province || access.username || null,\n      kd_code: coordinates || null,\n      nw: meta.nw ?? null,\n      coordinates,\n      race: meta.race || null,\n      personality: meta.personality || null\n    } : null;\n  } catch (e) { console.error("[SPARTAN IDENTITY RESOLVE]", e.message); }
   const myNW = me?.nw ? n(me.nw) : 0;
 
   const provinceQuery = interaction.options.getString("province");
