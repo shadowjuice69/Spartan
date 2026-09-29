@@ -1,0 +1,2 @@
+import IntelSectionPage from "@/app/components/IntelSectionPage"
+export default function Page(){return <IntelSectionPage section="science" title="Science" description="Captured science intelligence and research progression. The dashboard exposes the actual classified fields rather than placeholder science totals."/>}
