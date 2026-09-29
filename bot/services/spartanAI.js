@@ -22,7 +22,7 @@ async function ask({ question, userId, channelId, guildId }) {
   await sb.from('spartan_ai_messages').insert({ session_id: sessionId, direction: 'user', content: question, model: MODEL, metadata: { discord_user_id: userId, discord_channel_id: channelId, discord_guild_id: guildId } });
   const response = await fetch(API_URL, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}`, 'HTTP-Referer': process.env.RENDER_EXTERNAL_URL || 'https://sparta-west.onrender.com', 'X-Title': 'Utopia Nexus Spartan AI' },
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}`, 'HTTP-Referer': process.env.RENDER_EXTERNAL_URL || 'https://sparta-west.onrender.com', 'X-Title': 'Spartan AI' },
     body: JSON.stringify({ model: MODEL, messages: [{ role: 'system', content: system }, { role: 'user', content: user }], max_tokens: 900 }),
     signal: AbortSignal.timeout(30000),
   });
