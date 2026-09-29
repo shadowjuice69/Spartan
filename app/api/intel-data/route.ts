@@ -63,33 +63,83 @@ export async function GET(request: Request) {
     const selectedKinds = kinds[section] || [section]
     const { data, error } = await db
       .from('spartan_intel_records')
-      .select('id,capture_id,province_id,kingdom_id,captured_at,created_at,source,url,page_kind,classification_source,classification_confidence,parsed_payload,raw_payload')
+      .select('id,capture_id,source_vault_id,user_id,province_id,kingdom_id,captured_at,created_at,updated_at,source,source_id,url,page_kind,classification_source,classification_confidence,classification_reason,age,game_year,game_tick,retention_class,expires_at,raw_text,classification_source,parsed_payload,raw_payload')
       .in('page_kind', selectedKinds)
       .or(`kingdom_id.eq.${account.province_location},kingdom_id.is.null`)
       .order('created_at', { ascending: false })
       .limit(500)
     if (error) throw error
 
-    const records = (data || []).map((row: any) => ({
-      id: row.id,
-      capture_id: row.capture_id,
-      province_id: row.province_id,
-      kingdom_id: row.kingdom_id,
-      captured_at: row.captured_at,
-      created_at: row.created_at,
-      source: row.source,
-      url: row.url,
-      page_kind: row.page_kind,
-      classification_source: row.classification_source,
-      classification_confidence: row.classification_confidence,
-      payload: payload(row),
-      raw_payload: row.raw_payload,
-    }))
+    const rows = data || []
+    const provinceIds = [...new Set(rows.map((row: any) => row.province_id).filter(Boolean))]
+    const registryById = new Map<string, { name: string | null; kingdom: string | null; slot: number | null }>()
+
+    if (provinceIds.length) {
+      const { data: registry, error: registryError } = await db
+        .from('spartan_province_registry')
+        .select('province_id,province_name,kingdom_code,slot,updated_at')
+        .in('province_id', provinceIds)
+        .order('updated_at', { ascending: false })
+      if (registryError) throw registryError
+      for (const entry of registry || []) {
+        if (!registryById.has(String(entry.province_id))) {
+          registryById.set(String(entry.province_id), {
+            name: entry.province_name || null,
+            kingdom: entry.kingdom_code || null,
+            slot: entry.slot ?? null,
+          })
+        }
+      }
+    }
+
+    const records = rows.map((row: any) => {
+      const registry = row.province_id ? registryById.get(String(row.province_id)) : null
+      const parsed = payload(row)
+      const payloadProvince = parsed?.province || parsed?.provinceName || parsed?.attackerProvince || parsed?.targetProvince || null
+      const payloadKingdom = parsed?.kingdom || parsed?.kingdomCode || parsed?.attackerKingdom || parsed?.targetKingdom || null
+      return {
+        id: row.id,
+        capture_id: row.capture_id,
+        source_vault_id: row.source_vault_id,
+        user_id: row.user_id,
+        province_id: row.province_id,
+        province_name: registry?.name || payloadProvince || null,
+        province_slot: registry?.slot ?? null,
+        kingdom_id: row.kingdom_id || registry?.kingdom || payloadKingdom || null,
+        captured_at: row.captured_at,
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+        source: row.source,
+        source_id: row.source_id,
+        url: row.url,
+        page_kind: row.page_kind,
+        classification_source: row.classification_source,
+        classification_confidence: row.classification_confidence,
+        classification_reason: row.classification_reason,
+        age: row.age,
+        game_year: row.game_year,
+        game_tick: row.game_tick,
+        retention_class: row.retention_class,
+        expires_at: row.expires_at,
+        raw_text: row.raw_text,
+        payload: parsed,
+        raw_payload: row.raw_payload,
+      }
+    })
 
     const counts: Record<string, number> = {}
     for (const row of records) counts[row.page_kind] = (counts[row.page_kind] || 0) + 1
 
-    return NextResponse.json({ ok: true, section, province: account.province_name, kingdom: account.province_location, count: records.length, counts, records, generatedAt: new Date().toISOString() })
+    return NextResponse.json({
+      ok: true,
+      section,
+      province: account.province_name,
+      kingdom: account.province_location,
+      count: records.length,
+      counts,
+      records,
+      generatedAt: new Date().toISOString()
+    })
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Intel query failed' }, { status: 500 })
   }
