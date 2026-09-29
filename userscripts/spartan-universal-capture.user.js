@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spartan Universal Capture
 // @namespace    spartan-universal-capture
-// @version      4.0.3
+// @version      4.0.6
 // @description  Full Utopia page scraper restored from the known-good engine, with Spartan identity, authorization, CPS capture, queue/retry, and the full control panel.
 // @match        https://www.utopia-game.com/*
 // @match        https://utopia-game.com/*
@@ -11,7 +11,7 @@
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        GM_setClipboard
-// @connect      spartan-dashboard.onrender.com
+// @connect      sparta-west.onrender.com
 // @run-at       document-end
 // @all-frames   false
 // ==/UserScript==
@@ -19,10 +19,10 @@
 (function () {
   'use strict';
 
-  const VERSION = '4.0.3';
+  const VERSION = '4.0.6';
   const SOURCE = 'spartan_capture_engine';
-  const ENDPOINT = 'https://spartan-dashboard.onrender.com/api/capture';
-  const IDENTITY_ENDPOINT = 'https://spartan-dashboard.onrender.com/api/capture/identity';
+  const ENDPOINT = 'https://sparta-west.onrender.com/api/capture';
+  const IDENTITY_ENDPOINT = 'https://sparta-west.onrender.com/api/capture/identity';
   const CAPTURE_KEY = 'NikkoAce';
   const PANEL_ID = 'spartan-universal-capture-panel';
   const TOKEN_KEY = 'spartan_capture_token_v4';
@@ -43,6 +43,7 @@
   let flushTimer = null;
   let captureBusy = false;
   let selectedRow = null;
+  let lastClickTarget = null;
   let lastCapture = null;
   let lastParsed = null;
   let lastCapturedFingerprint = '';
@@ -242,6 +243,7 @@
 
   function structured() {
     const fields = {}, sources = {}, tables = [];
+    const visible = text(document.body?.innerText || '');
     const add = (key, value, source) => {
       if (value === null || value === '') return;
       const normalized = text(key).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 80) || 'field';
@@ -356,7 +358,6 @@
     });
     document.querySelectorAll('dt').forEach((dt, i) => { const dd = dt.nextElementSibling; if (dd?.matches('dd')) add(dt.innerText, /^[-+]?\d[\d,.]*%?$/.test(text(dd.innerText)) ? num(dd.innerText) : text(dd.innerText), `dl:${i}`); });
     document.querySelectorAll('label').forEach((label, i) => { const input = label.htmlFor ? document.getElementById(label.htmlFor) : label.querySelector('input,select,textarea'); if (input) add(label.innerText, /^[-+]?\d[\d,.]*%?$/.test(text(input.value)) ? num(input.value) : text(input.value), `label:${i}`); });
-    const visible = text(document.body?.innerText || '');
     const patterns = {
       acres: [/\bAcres?\b[^\d]{0,20}([\d,]+)/i,/\bLand\b[^\d]{0,20}([\d,]+)/i],
       networth: [/\bNet\s*worth\b[^\d]{0,20}([\d,]+)/i,/\bNW\b[^\d]{0,20}([\d,]+)/i],
@@ -372,6 +373,9 @@
       wpa:[/\bWizards\s+[\d,]+(?:\s+\(\d+%\))?\s+([\d.]+)wpa\b/i],
       generals:[/\bGenerals\b[^\d]{0,20}([\d,]+)/i], prisoners:[/\bPrisoners\b[^\d]{0,20}([\d,]+)/i], war_horses:[/\bWar\s*Horses\b[^\d]{0,20}([\d,]+)/i],
       offense:[/\bOff\.\s*Points\b[^\d]{0,20}([\d,]+)/i,/\bOffen[cs]e(?:\s*Points?)?\b[^\d]{0,20}([\d,]+)/i],
+      off_available:[/\bOff\.\s*Points\b[^(]{0,40}\(([\d,]+)\)/i],
+      armies_days_left:[/\bArmies\s*:\s*\(([\d.]+)\s*days?\s*left\)/i],
+      armies_last_acres:[/\bArmies\s*:\s*\([\d.]+\s*days?\s*left\)\s*\(([\d,]+)\)/i],
       defense:[/\bDef\.\s*Points\b[^\d]{0,20}([\d,]+)/i,/\bDefen[cs]e(?:\s*Points?)?\b[^\d]{0,20}([\d,]+)/i],
       mana:[/\bMana\b[^\d]{0,20}([\d,]+)/i], stealth:[/\bStealth\b[^\d]{0,20}([\d,.]+)%?/i],
       build_efficiency:[/\bBuild(?:ing)?\s*Efficiency\b[^\d]{0,20}([\d,.]+)%?/i], wages:[/\bWages\b[^\d]{0,20}([\d,.]+)/i],
@@ -379,6 +383,25 @@
       r_wpa:[/\bRate\s*WPA\b[^\d]{0,20}([\d,.]+)/i], o_wpa:[/\bOff(?:ense)?\s*WPA\b[^\d]{0,20}([\d,.]+)/i], d_wpa:[/\bDef(?:ense)?\s*WPA\b[^\d]{0,20}([\d,.]+)/i]
     };
     for (const [key, list] of Object.entries(patterns)) for (const re of list) { const m = visible.match(re); if (m) { add(key, num(m[1]), `text:${key}`); break; } }
+
+    // The shared resource bar (Money/Peasants/Food/Runes/Net Worth/Land/Net Worth per Acre) is a
+    // header row followed by an aligned value row. The generic proximity patterns above can grab
+    // the wrong column -- e.g. the "Net Worth" label also appears inside "Net Worth/Acre" right
+    // before the value row starts, so the regex latches onto that occurrence and grabs the FIRST
+    // value in the row (Money) instead of the real Net Worth column; "Land" suffers the same way.
+    // Separately, "Gold" as a label doesn't even appear on this bar (it's called "Money" here), so
+    // the generic gold pattern was matching unrelated nearby text (e.g. a "Gold Status" nav link)
+    // instead. This exact structural match reads all 6 real values by position and overrides any
+    // wrong guesses above, for every page that shows this bar (not just Throne).
+    const resourceBar = visible.match(/Money\s+Peasants\s+Food\s+Runes\s+Net\s*Worth\s+Land\s+Net\s*Worth\/Acre\s*\n?\s*([\d,]+)\s+([\d,]+)\s+([\d,]+)\s+([\d,]+)\s+([\d,]+)\s+([\d,]+)\s+([\d.]+)/i);
+    if (resourceBar) {
+      fields.gold = num(resourceBar[1]); sources.gold = 'resource-bar';
+      fields.peons = num(resourceBar[2]); sources.peons = 'resource-bar';
+      fields.food = num(resourceBar[3]); sources.food = 'resource-bar';
+      fields.runes = num(resourceBar[4]); sources.runes = 'resource-bar';
+      fields.networth = num(resourceBar[5]); sources.networth = 'resource-bar';
+      fields.acres = num(resourceBar[6]); sources.acres = 'resource-bar';
+    }
     if (thronePage) {
       const throneUnitPatterns = [
         ['off_specs', /\b[A-Za-z][A-Za-z .'-]*\s+([\d,]+)\s+[\d.]+ospa\b/i],
@@ -446,8 +469,19 @@
         sources.province_name = 'throne-heading';
         sources.kingdom_code = 'throne-heading';
       }
-    } else if (id.kingdomCode) {
-      add('kingdom_code', id.kingdomCode, 'identity');
+    } else {
+      // On non-Throne pages, prefer the locked/stored identity (set once from a real
+      // Throne visit) over a fresh live-page guess. The live fallback regex just matches
+      // ANY \d{1,3}:\d{1,3} pattern anywhere on the page, which can just as easily hit a
+      // clock/countdown display in shared page chrome as a real kingdom coordinate -- and
+      // since that chrome is identical for every player, a bad match there silently tags
+      // captures with the same wrong "kingdom" for everyone. Only fall back to the live
+      // guess if we have no locked identity yet to trust.
+      const stored = getStoredIdentity();
+      const trustedKingdomCode = (stored?.locked && stored?.kingdomCode) ? stored.kingdomCode : id.kingdomCode;
+      if (trustedKingdomCode) {
+        add('kingdom_code', trustedKingdomCode, (stored?.locked && stored?.kingdomCode) ? 'stored-identity' : 'identity');
+      }
     }
     return {
       fields,
@@ -458,13 +492,181 @@
     };
   }
 
-  function capture() {
-    const rawDom = document.documentElement?.outerHTML || '';
+  async function extractGrid() {
+    const gridEl = document.querySelector('[role="grid"],[role="treegrid"]');
+    if (!gridEl) return null;
+
+    const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+    const keyOf = (el, i) =>
+      el.getAttribute('data-field') ||
+      el.getAttribute('col-id') ||
+      el.getAttribute('aria-colindex') ||
+      String(i);
+
+    const cellValue = el => {
+      const value = text(el.innerText || el.textContent || '');
+      const labels = [...el.querySelectorAll('[title],[aria-label],img[alt]')]
+        .map(x => x.getAttribute('title') || x.getAttribute('aria-label') || x.getAttribute('alt') || '')
+        .filter(Boolean);
+      return labels.length ? { text: value, labels: [...new Set(labels)] } : value;
+    };
+
+    const collectVisible = (byId, columns, seenColumns) => {
+      document.querySelectorAll('[role="columnheader"]').forEach((h, i) => {
+        const key = keyOf(h, i);
+        if (seenColumns.has(key)) return;
+        seenColumns.add(key);
+        columns.push({ key, label: text(h.innerText || h.textContent || '') });
+      });
+
+      document.querySelectorAll('[role="row"]').forEach(r => {
+        const cells = [...r.querySelectorAll('[role="gridcell"],[role="cell"]')];
+        if (!cells.length) return;
+
+        const ariaIndex = r.getAttribute('aria-rowindex');
+        let stableId = r.getAttribute('data-id') || r.getAttribute('row-id') || '';
+
+        if (!stableId) {
+          const idCell = cells.find((c, i) => keyOf(c, i) === 'id');
+          stableId = text(idCell?.innerText || idCell?.textContent || '');
+        }
+
+        const rowKey = stableId || ariaIndex || `row-${byId.size}`;
+        const rec = byId.get(rowKey) || { id: rowKey, cells: {} };
+
+        cells.forEach((c, ci) => {
+          rec.cells[keyOf(c, ci)] = cellValue(c);
+        });
+
+        byId.set(rowKey, rec);
+      });
+    };
+
+    const scroller =
+      gridEl.querySelector('.MuiDataGrid-virtualScroller') ||
+      gridEl.querySelector('[class*="virtualScroller"]') ||
+      [...gridEl.querySelectorAll('*')].find(el =>
+        el.scrollHeight > el.clientHeight + 20 &&
+        el.clientHeight > 100 &&
+        getComputedStyle(el).overflowY !== 'visible'
+      );
+
+    const columns = [];
+    const seenColumns = new Set();
+    const byId = new Map();
+
+    // First collect what is already rendered.
+    collectVisible(byId, columns, seenColumns);
+
+    if (!scroller) {
+      const rows = [...byId.values()];
+      return {
+        columns,
+        rows,
+        row_count: rows.length,
+        expected_row_count: Number(gridEl.getAttribute('aria-rowcount')) > 0 ? Math.max(0, Number(gridEl.getAttribute('aria-rowcount')) - 1) : null,
+        complete_rows: Number(gridEl.getAttribute('aria-rowcount')) > 0 ? rows.length >= Math.max(0, Number(gridEl.getAttribute('aria-rowcount')) - 1) : null,
+        expected_column_count: Number(gridEl.getAttribute('aria-colcount')) || null,
+        complete_columns: Number(gridEl.getAttribute('aria-colcount')) > 0 ? columns.length >= Number(gridEl.getAttribute('aria-colcount')) : null,
+        aria_rowcount: gridEl.getAttribute('aria-rowcount') || null,
+        aria_colcount: gridEl.getAttribute('aria-colcount') || null,
+        tabs: [...document.querySelectorAll('[role="tab"][aria-selected="true"]')]
+          .map(t => text(t.innerText || ''))
+          .filter(Boolean)
+      };
+    }
+
+    const originalTop = scroller.scrollTop;
+    const originalLeft = scroller.scrollLeft;
+    const maxTop = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+    const maxLeft = Math.max(0, scroller.scrollWidth - scroller.clientWidth);
+    const yStep = Math.max(160, Math.floor(scroller.clientHeight * 0.75));
+    const xStep = Math.max(240, Math.floor(scroller.clientWidth * 0.75));
+
+    const yPositions = [];
+    for (let y = 0; y <= maxTop; y += yStep) yPositions.push(y);
+    if (!yPositions.includes(maxTop)) yPositions.push(maxTop);
+
+    const xPositions = [];
+    for (let x = 0; x <= maxLeft; x += xStep) xPositions.push(x);
+    if (!xPositions.includes(maxLeft)) xPositions.push(maxLeft);
+
+    // MUI DataGrid virtualizes both rows and columns. Walk the whole
+    // virtual viewport so we collect all province rows AND all 39 columns,
+    // then merge pinned/main duplicates by the stable province id.
+    for (const x of xPositions) {
+      scroller.scrollLeft = x;
+      await wait(90);
+
+      for (const y of yPositions) {
+        scroller.scrollTop = y;
+        await wait(120);
+        collectVisible(byId, columns, seenColumns);
+      }
+    }
+
+    scroller.scrollTop = originalTop;
+    scroller.scrollLeft = originalLeft;
+    await wait(60);
+
+    const rows = [...byId.values()];
+    const ariaRowcount = gridEl.getAttribute('aria-rowcount') || null;
+    const expectedRows = Number(ariaRowcount) > 0 ? Math.max(0, Number(ariaRowcount) - 1) : null;
+
+    return {
+      columns,
+      rows,
+      row_count: rows.length,
+      expected_row_count: expectedRows,
+      complete_rows: expectedRows == null ? null : rows.length >= expectedRows,
+      expected_column_count: Number(gridEl.getAttribute('aria-colcount')) || null,
+      complete_columns: Number(gridEl.getAttribute('aria-colcount')) > 0 ? columns.length >= Number(gridEl.getAttribute('aria-colcount')) : null,
+      aria_rowcount: ariaRowcount,
+      aria_colcount: gridEl.getAttribute('aria-colcount') || null,
+      tabs: [...document.querySelectorAll('[role="tab"][aria-selected="true"]')]
+        .map(t => text(t.innerText || ''))
+        .filter(Boolean)
+    };
+  }
+
+  async function capture() {
+    const isIntel = /intel\./.test(location.hostname);
+    const grid = isIntel ? await extractGrid() : null;
+    const rawDom = grid ? '' : (document.documentElement?.outerHTML || '');
     const visibleText = text(document.body?.innerText || '');
     const s = safe(structured, { fields:{}, tables:[], links:[], forms:[], field_sources:{} });
+
+    // Intel's MUI grid is the authoritative source for Kingdom rows.
+    // Do not let generic page-text regexes turn clocks/row numbers into
+    // fake acres/networth/field values.
+    if (grid) {
+      delete s.fields.field;
+      delete s.fields.acres;
+      delete s.fields.networth;
+      delete s.field_sources.field;
+      delete s.field_sources.acres;
+      delete s.field_sources.networth;
+
+      const firstRow = grid.rows?.[0];
+      const kingdomCode = text(
+        firstRow?.cells?.location?.text ??
+        firstRow?.cells?.location ??
+        getStoredIdentity()?.kingdomCode ??
+        currentIdentity()?.kingdomCode ??
+        ''
+      );
+      if (kingdomCode) {
+        s.fields.kingdom_code = kingdomCode;
+        s.field_sources.kingdom_code = 'intel-grid';
+      }
+      s.fields.kingdom_province_count = grid.rows?.length || 0;
+      s.field_sources.kingdom_province_count = 'intel-grid';
+    }
+
     const id = uuid();
     const locked = getStoredIdentity();
     const ident = locked || currentIdentity();
+
     return {
       captureId:id,
       capturedAt:new Date().toISOString(),
@@ -481,6 +683,8 @@
         page:{ url:location.href, origin:location.origin, hostname:location.hostname, pathname:location.pathname, search:location.search, hash:location.hash, title:document.title || '', readyState:document.readyState, language:document.documentElement?.lang || null },
         identity:ident,
         rawDom,
+        rawDomOmitted:Boolean(grid),
+        grid,
         structured:s
       },
       parsedPayload:s.fields
@@ -584,16 +788,33 @@
     }
     const fp = fingerprint();
     if (!manual && fp === GM_getValue(LAST_KEY, '')) return;
-    const record = capture();
+    const record = await capture();
     record.captureReason = reason;
     record.fingerprint = fp;
+
+    const grid = record.rawPayload?.grid;
+    if (grid && ((grid.complete_rows === false) || (grid.complete_columns === false) || (grid.expected_row_count != null && grid.row_count < grid.expected_row_count) || (grid.expected_column_count != null && (grid.columns?.length || 0) < grid.expected_column_count))) {
+      const rowStatus = grid.expected_row_count != null ? `${grid.row_count}/${grid.expected_row_count} rows` : `${grid.row_count} rows`;
+      const colStatus = grid.expected_column_count != null ? `${grid.columns?.length || 0}/${grid.expected_column_count} columns` : `${grid.columns?.length || 0} columns`;
+      const message = `Intel grid incomplete — ${rowStatus}, ${colStatus}. Nothing sent.`;
+      lastCapture = record;
+      lastParsed = record.parsedPayload;
+      renderPanel(record, message, false);
+      showToast(message, false);
+      return;
+    }
+
     lastCapture = record;
     lastParsed = record.parsedPayload;
     enqueue(record);
     renderPanel(record, `Queued · ${kind}`, true);
     await flushQueue();
-    if (manual) showToast(`Captured complete DOM · ${formatBytes(record.rawPayload.rawDom)}`, true);
-  }
+    if (manual) {
+      const grid = record.rawPayload?.grid;
+      const payloadSize = grid ? formatBytes(JSON.stringify(grid)) : formatBytes(record.rawPayload?.rawDom || '');
+      const detail = grid ? `Intel grid · ${grid.row_count}/${grid.expected_row_count ?? '?'} rows · ${grid.columns?.length || 0} columns · ${payloadSize}` : `DOM · ${payloadSize}`;
+      showToast(`Captured ${detail}`, Boolean(!grid || grid.complete_rows !== false));
+    }
 
   function scheduleAutoCapture(delay = AUTO_DELAY_MS) {
     clearTimeout(autoTimer);
@@ -641,8 +862,32 @@
   function copyText(value, message) { GM_setClipboard(String(value || ''), 'text'); showToast(message, true); }
   function copyDom() { const html = document.documentElement?.outerHTML || ''; if (!html) return showToast('No DOM available', false); copyText(html, `Copied complete DOM (${formatBytes(html)})`); }
   function copyVisibleText() { const value = text(document.body?.innerText || ''); if (!value) return showToast('No visible text found', false); copyText(value, `Copied visible text (${formatBytes(value)})`); }
-  function copyParsedFields() { if (!lastParsed) return showToast('Capture a page first', false); copyText(JSON.stringify(lastParsed,null,2), 'Copied parsed fields JSON'); }
-  function copySelectedRow() { const row = selectedRow || document.querySelector('tr'); if (!row) return showToast('No table row found', false); copyText(row.outerHTML, 'Copied row HTML'); }
+  function copyParsedFields() { if (!lastParsed) return showToast('Capture a page first', false); const grid=lastCapture?.rawPayload?.grid; copyText(JSON.stringify(grid ? { parsed:lastParsed, grid } : lastParsed,null,2), grid ? 'Copied parsed fields + grid JSON' : 'Copied parsed fields JSON'); }
+  function recordContainerFor(target) {
+    if (!target || !target.closest) return null;
+    const aria = target.closest('[role="row"]'); if (aria) return { el: aria, why: 'aria row', candidates: [] };
+    const tr = target.closest('tr'); if (tr) return { el: tr, why: 'table row', candidates: [] };
+    const sig = n => `${n.tagName}|${n.getAttribute('role') || ''}|${typeof n.className === 'string' ? n.className : ''}`;
+    const candidates = []; let node = target;
+    while (node && node !== document.body && node !== document.documentElement) {
+      const parent = node.parentElement;
+      if (parent) {
+        const same = [...parent.children].filter(c => sig(c) === sig(node)).length;
+        if (same >= 5) candidates.push({ el: node, same, len: (node.innerText || '').length });
+      }
+      node = parent;
+    }
+    if (!candidates.length) return null;
+    const rows = candidates.filter(c => c.len > 0 && c.len < 3000);
+    const chosen = (rows.length ? rows : candidates).slice(-1)[0];
+    return { el: chosen.el, why: `repeated container (${chosen.same} siblings)`, candidates: candidates.map(c => `${c.el.tagName.toLowerCase()} x${c.same} text:${c.len}`) };
+  }
+  function copySelectedRow() {
+    const found = selectedRow ? { el: selectedRow, why: 'selected row', candidates: [] } : recordContainerFor(lastClickTarget);
+    if (found?.el) { const head = `<!-- ${found.why}${found.candidates.length ? ' | candidates: ' + found.candidates.join('; ') : ''} -->\n`; return copyText(head + found.el.outerHTML, 'Copied row HTML'); }
+    const first = document.querySelector('tr,[role="row"]'); if (first) return copyText(first.outerHTML, 'Copied row HTML');
+    showToast('Tap a province row first, then press Copy Row', false);
+  }
   function clearQueue() { saveQueue([]); renderPanel(lastCapture, 'Queue cleared', true); showToast('Spartan capture queue cleared', true); }
   function relink() { setBlocked(false); if (pageKind() === 'throne') bootstrapIdentity(true).then(result => renderPanel(lastCapture, result.ok ? 'Identity linked ✓' : (result.error || result.body?.error || `HTTP ${result.status}`), result.ok)); else renderPanel(lastCapture, 'Open Throne to relink identity', false); }
 
@@ -668,7 +913,7 @@
     header.style.cssText='display:flex;align-items:center;justify-content:space-between;margin-bottom:7px';
     const title=document.createElement('div'); title.textContent=`⚡ Spartan Universal Capture v${VERSION}`; title.style.cssText='color:#7ee787;font:bold 13px monospace';
     const minimize=makeButton('—',()=>{ minimized=true; GM_setValue('spartan_universal_minimized',true); renderPanel(record,state,success); },true); minimize.style.flex='0 0 auto'; header.append(title,minimize); panel.appendChild(header);
-    const note=document.createElement('div'); note.textContent='Full DOM archive + structured parser + Spartan authorization'; note.style.cssText='color:#8b949e;font:9px monospace;line-height:1.35;margin-bottom:7px'; panel.appendChild(note);
+    const note=document.createElement('div'); note.textContent='Full DOM + virtualized Intel grid + structured parser + Spartan authorization'; note.style.cssText='color:#8b949e;font:9px monospace;line-height:1.35;margin-bottom:7px'; panel.appendChild(note);
     const status=document.createElement('div'); status.textContent=state; status.style.cssText=`color:${success ? '#7ee787':'#ff7b72'};font:10px monospace;word-break:break-word;margin-bottom:7px`; panel.appendChild(status);
 
     const first=document.createElement('div'); first.style.cssText='display:flex;gap:6px;margin-bottom:6px'; first.append(makeButton('Capture',()=>captureNow(true,'manual')),makeButton('Copy DOM',copyDom,true)); panel.appendChild(first);
@@ -679,14 +924,14 @@
     const id=getStoredIdentity();
     const identityLine=document.createElement('div'); identityLine.style.cssText='margin-top:7px;padding-top:6px;border-top:1px solid #30363d;color:#8b949e;font:9px monospace;line-height:1.4;word-break:break-word';
     identityLine.textContent=isBlocked() ? 'AUTH: DISABLED BY SPARTAN' : id?.locked ? `AUTH: linked · ${id.provinceName} · ${id.kingdomCode}` : 'AUTH: not linked · open Throne'; panel.appendChild(identityLine);
-    if (record) { const metadata=document.createElement('div'); metadata.style.cssText='margin-top:5px;color:#8b949e;font:9px monospace;line-height:1.4;word-break:break-word'; metadata.textContent=`${record.url || location.pathname} · kind:${record.pageKind || pageKind()} · ${formatBytes(record.rawPayload?.rawDom || '')} DOM · ${Object.keys(record.parsedPayload || {}).length} fields`; panel.appendChild(metadata); }
+    if (record) { const metadata=document.createElement('div'); metadata.style.cssText='margin-top:5px;color:#8b949e;font:9px monospace;line-height:1.4;word-break:break-word'; const grid=record.rawPayload?.grid;\n      const size=grid ? formatBytes(JSON.stringify(grid)) : formatBytes(record.rawPayload?.rawDom || '');\n      metadata.textContent=grid ? `${record.url || location.pathname} · kind:${record.pageKind || pageKind()} · grid:${grid.row_count}/${grid.expected_row_count ?? '?'} rows · ${grid.columns?.length || 0} cols · ${size}` : `${record.url || location.pathname} · kind:${record.pageKind || pageKind()} · ${size} DOM · ${Object.keys(record.parsedPayload || {}).length} fields`; panel.appendChild(metadata); }
   }
 
   function installPanel() {
     if (document.getElementById(PANEL_ID)) return;
     const panel=document.createElement('div'); panel.id=PANEL_ID; panel.style.cssText='position:fixed;right:14px;bottom:14px;width:300px;padding:11px;z-index:2147483646;background:#0d1117;border:1px solid #30363d;border-radius:9px;box-shadow:0 8px 28px rgba(0,0,0,.45)'; document.documentElement.appendChild(panel);
     renderPanel(null,isBlocked() ? 'Disabled by Spartan' : 'Ready',!isBlocked());
-    document.addEventListener('click',event=>{ const row=event.target?.closest?.('tr'); if(row && !event.target.closest('button,input,select,textarea,a')) selectedRow=row; },true);
+    document.addEventListener('click',event=>{ if(event.target?.closest?.('#'+PANEL_ID)) return; lastClickTarget=event.target; const row=event.target?.closest?.('tr,[role="row"]'); selectedRow=(row && !event.target.closest('button,input,select,textarea,a')) ? row : null; },true);
   }
 
   function boot() {
