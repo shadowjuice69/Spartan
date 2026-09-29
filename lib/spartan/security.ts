@@ -24,7 +24,7 @@ function normalizeIp(value: string | null | undefined): string | null {
 
 export function requestIp(request: Request): string | null {
   const headers = request.headers
-  return normalizeIp(headers.get('x-forwarded-for')?.split(',')[0]?.trim()) || normalizeIp(headers.get('x-real-ip')?.trim()) || normalizeIp(headers.get('x-vercel-forwarded-for')?.split(',')[0]?.trim())
+  return normalizeIp(headers.get('x-forwarded-for')?.split(',')[0]?.trim()) || normalizeIp(headers.get('x-real-ip')?.trim())
 }
 
 function adminClient() {
