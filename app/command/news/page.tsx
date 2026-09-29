@@ -1,0 +1,2 @@
+import IntelSectionPage from "@/app/components/IntelSectionPage"
+export default function Page(){return <IntelSectionPage section="war-room" title="News" description="Captured event and combat intelligence from the shared news stream, displayed as actual classified evidence."/>}
