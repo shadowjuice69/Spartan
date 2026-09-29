@@ -63,7 +63,7 @@ export async function GET(request: Request) {
     const selectedKinds = kinds[section] || [section]
     const { data, error } = await db
       .from('spartan_intel_records')
-      .select('id,capture_id,source_vault_id,user_id,province_id,kingdom_id,captured_at,created_at,updated_at,source,source_id,url,page_kind,classification_source,classification_confidence,classification_reason,age,game_year,game_tick,retention_class,expires_at,raw_text,classification_source,parsed_payload,raw_payload')
+      .select('id,capture_id,source_vault_id,user_id,province_id,kingdom_id,captured_at,created_at,updated_at,source,source_id,url,page_kind,classification_confidence,classification_reason,age,game_year,game_tick,retention_class,expires_at,raw_text,classification_source,parsed_payload,raw_payload')
       .in('page_kind', selectedKinds)
       .or(`kingdom_id.eq.${account.province_location},kingdom_id.is.null`)
       .order('created_at', { ascending: false })
