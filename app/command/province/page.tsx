@@ -1,5 +1,7 @@
 "use client"
 
+import JeevesSummary from "@/components/spartan/JeevesSummary"
+
 import { Suspense, useEffect, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 
