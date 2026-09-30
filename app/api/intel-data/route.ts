@@ -22,19 +22,16 @@ const kinds: Record<string, string[]> = {
     'council_history', 'council_spells', 'council_state', 'council_military',
     'council_science', 'council_internal', 'province_state', 'age_stats', 'unknown'
   ],
-  military: ['military', 'som', 'news', 'attack', 'throne', 'council_military', 'war', 'bot_event'],
+  military: ['military', 'som', 'attack', 'council_military', 'war'],
   magic: ['magic', 'ritual', 'dragon', 'council_spells'],
   thievery: ['thievery'],
   science: ['science', 'council_science'],
   buildings: ['survey', 'buildings', 'council_internal'],
-  throne: ['throne', 'province_state'],
-  kingdom: [
-    'kingdom', 'news', 'som', 'survey', 'science', 'magic', 'ritual', 'dragon',
-    'thievery', 'throne', 'universal', 'council_state', 'council_military',
-    'council_science', 'council_internal'
-  ],
-  'war-room': ['news', 'attack', 'war', 'military', 'thievery', 'magic', 'ritual', 'dragon', 'aid'],
+  throne: ['throne', 'province_state', 'province_logs'],
+  kingdom: ['kingdom', 'council_state'],
+  'war-room': ['attack', 'war', 'military', 'thievery', 'magic', 'ritual', 'dragon', 'aid', 'exploration'],
   aid: ['aid'],
+  news: ['news', 'council_history', 'province_logs'],
   exploration: ['exploration'],
   operations: ['attack', 'thievery', 'magic', 'ritual', 'aid', 'exploration'],
 }
