@@ -3,7 +3,7 @@
 import { headers } from 'next/headers'
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
-import { resolveSpartanLoginEmail } from '@/lib/spartan/accounts'
+import { registerSpartanAccount, resolveSpartanLoginEmail } from '@/lib/spartan/accounts'
 import { recordLoginCheckpoint } from '@/lib/spartan/security'
 
 export async function login(formData: FormData) {
@@ -36,6 +36,37 @@ export async function login(formData: FormData) {
 
   revalidatePath('/', 'layout')
   return { ok: true as const }
+}
+
+export async function createSpartanAccount(formData: FormData) {
+  const screenName = String(formData.get('screenName') ?? '').trim()
+  const password = String(formData.get('password') ?? '')
+  const confirmPassword = String(formData.get('confirmPassword') ?? '')
+  const provinceName = String(formData.get('provinceName') ?? '').trim()
+  const provinceLocation = String(formData.get('provinceLocation') ?? '').trim()
+
+  if (!screenName || !password || !confirmPassword || !provinceName || !provinceLocation) {
+    return { ok: false as const, error: 'Complete every account field.' }
+  }
+  if (password !== confirmPassword) {
+    return { ok: false as const, error: 'Passwords do not match.' }
+  }
+
+  try {
+    const account = await registerSpartanAccount({
+      screenName,
+      password,
+      provinceName,
+      provinceLocation,
+    })
+    revalidatePath('/login')
+    return { ok: true as const, screenName: account.screenName }
+  } catch (error) {
+    return {
+      ok: false as const,
+      error: error instanceof Error ? error.message : 'Spartan account creation failed.',
+    }
+  }
 }
 
 export async function logout() {
