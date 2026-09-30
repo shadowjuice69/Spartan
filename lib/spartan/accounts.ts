@@ -1,10 +1,11 @@
+import crypto from 'node:crypto'
 import { createClient as createSupabaseAdmin } from '@supabase/supabase-js'
 import { headers } from 'next/headers'
 import { requestIp } from './security'
 
 function adminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
+  const key = process.env.SUPABASE_SECRET_KEY
   if (!url || !key) throw new Error('Spartan account service is not configured.')
   return createSupabaseAdmin(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
 }
