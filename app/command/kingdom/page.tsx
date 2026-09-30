@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
+import CanonicalIntelStrip from "@/app/components/CanonicalIntelStrip"
 
 type Member = {
   slot:number; name:string; race:string; land:number; nw:number; nwpa:number; nobility:string; gains:number
@@ -126,6 +127,8 @@ export default function KingdomPage(){
             <div style={{display:"flex",justifyContent:"space-between",fontSize:9,color:"#5f6d79"}}><span>{trend[0]?dateTime(trend[0].capturedAt):"—"}</span><span>{lastTrend?dateTime(lastTrend.capturedAt):"—"}</span></div>
           </article>\n          <article style={{padding:18,border:"1px solid rgba(255,255,255,.08)",borderRadius:12,background:"#081119"}}>\n            <div style={{display:"flex",justifyContent:"space-between"}}><div><div style={{fontSize:9,color:"#67f0b0",letterSpacing:".14em"}}>KINGDOM EFFICIENCY</div><h2 style={{margin:"6px 0 2px",fontSize:18}}>Average NW / acre</h2></div><div style={{fontSize:10,color:"#718091"}}>{lastTrend?.avgNwpa==null?"—":fmt(lastTrend.avgNwpa)}</div></div>\n            <Sparkline values={trend.map((x:any)=>Number(x.avgNwpa)).filter(Number.isFinite)}/>\n            <div style={{display:"flex",justifyContent:"space-between",fontSize:9,color:"#5f6d79"}}><span>{trend[0]?dateTime(trend[0].capturedAt):"—"}</span><span>{lastTrend?dateTime(lastTrend.capturedAt):"—"}</span></div>\n          </article>
         </section>
+
+        <CanonicalIntelStrip section="kingdom"/>
 
         <section style={{padding:18,border:"1px solid rgba(255,255,255,.08)",borderRadius:12,background:"#081119",marginBottom:18}}>
           <div style={{display:"flex",justifyContent:"space-between",gap:14,alignItems:"center",flexWrap:"wrap",marginBottom:14}}>
