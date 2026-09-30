@@ -41,7 +41,6 @@ export async function GET(request: Request) {
   let query = auth.db
     .from('spartan_builds')
     .select('id,name,race,personality,author,updated_at')
-    .eq('active', true)
     .order('updated_at', { ascending: false })
   if (search) query = query.ilike('name', `%${search}%`)
 
