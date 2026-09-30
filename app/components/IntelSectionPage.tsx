@@ -39,7 +39,7 @@ function flatten(obj:any,prefix="",out:Array<[string,any]>=[]):Array<[string,any
 function textOf(r:Row){const p=r.payload?.data?.content||r.payload?.content||r.raw_text||"";return String(p)}
 function num(t:string,re:RegExp){const m=t.match(re);return m?Number(String(m[1]).replace(/,/g,"")):null}
 function metricRows(rows:Row[]){
-  const defs=[
+  const defs: [string, RegExp][]=[
     ["Acres",/([\d,]+) acres/i],["Offense",/([\d,]+) off(?:ense)?/i],["Defense",/([\d,]+) def(?:ense)?/i],
     ["Kills",/killed (?:about )?([\d,]+) enemy troops/i],["Losses",/lost ([\d,]+) /i],["Prisoners",/imprisoned ([\d,]+)/i],
     ["Runes",/gather ([\d,]+) runes/i],["Mana",/mana (\d+)%/i],["Thieves",/([\d,]+) thieves/i],
