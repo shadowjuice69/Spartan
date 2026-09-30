@@ -279,8 +279,19 @@ function BuildLab() {
   const [showForm, setShowForm] = useState(false)
   const [error, setError] = useState("")
 
-  function loadBuilds() {
-    fetch("/api/builds").then((r) => r.json()).then((j) => j.builds ? setBuilds(j.builds) : setError(j.error || "Failed to load builds"))
+  async function loadBuilds() {
+    setError("")
+    try {
+      const res = await fetch("/api/builds", { cache: "no-store" })
+      const contentType = res.headers.get("content-type") || ""
+      const body = contentType.includes("application/json") ? await res.json() : null
+      if (!res.ok) throw new Error(body?.error || "Build Library request failed (" + res.status + ")")
+      if (!Array.isArray(body?.builds)) throw new Error("Build Library returned an invalid response.")
+      setBuilds(body.builds)
+    } catch (e) {
+      setBuilds([])
+      setError(e instanceof Error ? e.message : "Failed to load builds")
+    }
   }
   useEffect(() => {
     fetch("/api/rules").then((r) => r.json()).then((j) => { setRaces(j.races || []); setPersonalities(j.personalities || []) })
