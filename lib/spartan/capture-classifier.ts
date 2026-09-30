@@ -14,6 +14,13 @@ export function classifyCapture(urlValue: unknown, rawTextValue: unknown, scrape
   const scraper = lower(scraperKindValue)
   const rules: Array<[RegExp, string, number, string]> = [
     [/\/throne(?:$|[?#/])/, 'throne', 1, 'Utopia throne URL'],
+    [/\/shared\//, 'shared_redirect', 0.95, 'Utopia session redirect stub'],
+    [/\/(?:cast|status)_ritual(?:$|[?#/])/, 'ritual', 0.98, 'Utopia ritual URL'],
+    [/\/train_army(?:$|[?#/])/, 'military', 0.95, 'Utopia train military URL'],
+    [/\/send_armies(?:$|[?#/])/, 'attack', 0.95, 'Utopia send armies URL'],
+    [/\/(?:wizards|sorcery|enchantment)(?:$|[?#/])/, 'magic', 0.95, 'Utopia magic action URL'],
+    [/\/build(?:$|[?#/])/, 'buildings', 0.95, 'Utopia construction URL'],
+    [/\/province_logs(?:$|[?#/])/, 'province_logs', 0.9, 'Utopia province logs URL'],
     [/\/military(?:$|[?#/])/, 'military', 1, 'Utopia military URL'],
     [/\/buildings?(?:$|[?#/])/, 'buildings', 1, 'Utopia buildings URL'],
     [/\/science(?:$|[?#/])/, 'science', 1, 'Utopia science URL'],
