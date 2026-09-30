@@ -52,6 +52,12 @@ export async function proxy(request: NextRequest) {
 
   if (!authUserId) return login(request)
 
+  // Build Library APIs authenticate against the Spartan account themselves.
+  // Do not run the browser IP/reputation gate a second time on these API
+  // requests: a denied API request can otherwise become an HTML redirect and
+  // make a valid Build Library look empty to fetch().
+  if (path.startsWith('/api/builds')) return response
+
   // The Supabase auth user is the durable session identity. Discord metadata is
   // useful for authorization, but provider/session refreshes can legitimately
   // omit it. Resolve the stored Spartan account by auth_user_id first, then use
