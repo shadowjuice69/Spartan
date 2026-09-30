@@ -91,6 +91,7 @@ export default function KingdomPage(){
         </div>
         <button onClick={()=>router.push("/")} style={{padding:"11px 16px",borderRadius:9,border:"1px solid #d8ff54",background:"#101c23",color:"#d8ff54",fontWeight:900,fontSize:10,letterSpacing:".08em",cursor:"pointer"}}>← RETURN TO COMMAND CENTER</button>
       </header>
+      <JeevesSummary compact />
 
       {error&&<div style={{padding:14,marginBottom:18,border:"1px solid rgba(255,100,100,.3)",background:"rgba(255,60,60,.06)",borderRadius:10,color:"#ff9b9b"}}>{error}</div>}
       {loading&&!data&&<div style={{padding:20,border:"1px solid rgba(103,240,176,.18)",background:"#081119",borderRadius:12,color:"#67f0b0"}}>CONNECTING TO KINGDOM DATA CORE…</div>}
