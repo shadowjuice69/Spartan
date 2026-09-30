@@ -277,12 +277,16 @@ function BuildLab() {
   const [races, setRaces] = useState<RaceRule[]>([])
   const [personalities, setPersonalities] = useState<PersonalityRule[]>([])
   const [showForm, setShowForm] = useState(false)
+  const [showVault, setShowVault] = useState(false)
+  const [vaultBuilds, setVaultBuilds] = useState<any[]>([])
+  const [selectedVaultBuilds, setSelectedVaultBuilds] = useState<string[]>([])
+  const [restoring, setRestoring] = useState(false)
   const [error, setError] = useState("")
 
   async function loadBuilds() {
     setError("")
     try {
-      const res = await fetch("/api/builds", { cache: "no-store" })
+      const res = await fetch("/api/builds?view=library", { cache: "no-store" })
       const contentType = res.headers.get("content-type") || ""
       const body = contentType.includes("application/json") ? await res.json() : null
       if (!res.ok) throw new Error(body?.error || "Build Library request failed (" + res.status + ")")
@@ -293,6 +297,43 @@ function BuildLab() {
       setError(e instanceof Error ? e.message : "Failed to load builds")
     }
   }
+  async function loadVault() {
+    setError("")
+    try {
+      const res = await fetch("/api/builds?view=vault", { cache: "no-store" })
+      const contentType = res.headers.get("content-type") || ""
+      const body = contentType.includes("application/json") ? await res.json() : null
+      if (!res.ok) throw new Error(body?.error || "Stored Build Vault request failed (" + res.status + ")")
+      if (!Array.isArray(body?.builds)) throw new Error("Stored Build Vault returned an invalid response.")
+      setVaultBuilds(body.builds)
+      setSelectedVaultBuilds([])
+      setShowVault(true)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to load stored builds")
+    }
+  }
+
+  async function restoreSelectedBuilds() {
+    if (!selectedVaultBuilds.length) return
+    setRestoring(true)
+    setError("")
+    try {
+      const res = await fetch("/api/builds", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "restore", buildIds: selectedVaultBuilds }),
+      })
+      const body = await res.json()
+      if (!res.ok) throw new Error(body?.error || "Restore failed.")
+      await loadBuilds()
+      await loadVault()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to restore stored builds")
+    } finally {
+      setRestoring(false)
+    }
+  }
+
   useEffect(() => {
     fetch("/api/rules").then((r) => r.json()).then((j) => { setRaces(j.races || []); setPersonalities(j.personalities || []) })
   }, [])
@@ -307,10 +348,66 @@ function BuildLab() {
             <div style={{ fontSize:9, color:"#67f0b0", letterSpacing:".2em" }}>SPARTAN // BUILD LAB</div>
             <h1 style={{ fontSize:34, margin:"7px 0 0" }}>Build Library</h1>
           </div>
-          {!id && <button style={btnPrimary} onClick={() => setShowForm((s) => !s)}>{showForm ? "Close" : "+ Add Build"}</button>}
+          {!id && (
+            <div style={{ display:"flex", gap:8 }}>
+              <button style={btnGhost} onClick={loadVault}>▣ Stored Builds</button>
+              <button style={btnPrimary} onClick={() => setShowForm((s) => !s)}>{showForm ? "Close" : "+ Add Build"}</button>
+            </div>
+          )}
         </header>
 
         {error && <div style={{ ...card, borderColor:"rgba(255,100,100,.3)", color:"#ff9b9b", marginBottom:16 }}>{error}</div>}
+
+        {!id && showVault && (
+          <div style={{ ...card, marginBottom:20, borderColor:"rgba(216,255,84,.2)", background:"linear-gradient(135deg, rgba(216,255,84,.045), rgba(8,17,25,.96))" }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:16, marginBottom:14 }}>
+              <div>
+                <div style={{ fontSize:9, color:"#d8ff54", letterSpacing:".18em" }}>BUILD VAULT // STORED DATA</div>
+                <h2 style={{ margin:"6px 0 4px" }}>Recover Stored Builds</h2>
+                <p style={{ margin:0, fontSize:11, color:"#8993a1" }}>These are existing Spartan build records. Restoring them makes them visible in your Library — it does not create duplicates.</p>
+              </div>
+              <button style={btnGhost} onClick={() => setShowVault(false)}>Close</button>
+            </div>
+            {vaultBuilds.length === 0 ? (
+              <p style={{ color:"#687686", fontSize:11 }}>No stored build records were returned.</p>
+            ) : (
+              <>
+                <div style={{ display:"grid", gap:6, maxHeight:360, overflowY:"auto", paddingRight:4 }}>
+                  {vaultBuilds.map((b) => {
+                    const selected = selectedVaultBuilds.includes(b.id)
+                    return (
+                      <label key={b.id} style={{
+                        display:"flex", alignItems:"center", gap:10, padding:"11px 12px",
+                        border:"1px solid " + (selected ? "rgba(216,255,84,.35)" : "rgba(255,255,255,.07)"),
+                        borderRadius:8, background:selected ? "rgba(216,255,84,.06)" : "rgba(255,255,255,.02)", cursor:"pointer"
+                      }}>
+                        <input type="checkbox" checked={selected} onChange={(e) => setSelectedVaultBuilds((current) =>
+                          e.target.checked ? [...current, b.id] : current.filter((id) => id !== b.id)
+                        )} />
+                        <span style={{ flex:1 }}>
+                          <b style={{ fontSize:12 }}>{b.name}</b>
+                          <span style={{ display:"block", fontSize:10, color:"#8993a1", marginTop:3 }}>
+                            {[b.race, b.personality].filter(Boolean).join(" / ") || "No race/personality set"}{b.author ? " · set by " + b.author : ""}
+                          </span>
+                        </span>
+                        <span style={{ fontSize:9, color:b.active ? "#67f0b0" : "#ffcf70", letterSpacing:".08em" }}>
+                          {b.active ? "IN LIBRARY" : "STORED"}
+                        </span>
+                      </label>
+                    )
+                  })}
+                </div>
+                <div style={{ display:"flex", alignItems:"center", gap:10, marginTop:14 }}>
+                  <button style={btnPrimary} disabled={!selectedVaultBuilds.length || restoring} onClick={restoreSelectedBuilds}>
+                    {restoring ? "Restoring…" : "Add Selected to Library (" + selectedVaultBuilds.length + ")"}
+                  </button>
+                  <button style={btnGhost} onClick={() => setSelectedVaultBuilds(vaultBuilds.map((b) => b.id))}>Select All</button>
+                  <button style={btnGhost} onClick={() => setSelectedVaultBuilds([])}>Clear</button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
 
         {id ? (
           <BuildDetail id={id} races={races} personalities={personalities} onBack={() => router.push("/command/build-lab")} onDeleted={() => router.push("/command/build-lab")} />
