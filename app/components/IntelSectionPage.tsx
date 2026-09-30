@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
+import JeevesSummary from "@/components/spartan/JeevesSummary"
 
 type Row = {
   id?: string; capture_id?: string; page_kind?: string; source?: string
@@ -38,17 +39,66 @@ function flatten(obj:any,prefix="",out:Array<[string,any]>=[]):Array<[string,any
 }
 function textOf(r:Row){const p=r.payload?.data?.content||r.payload?.content||r.raw_text||"";return String(p)}
 function num(t:string,re:RegExp){const m=t.match(re);return m?Number(String(m[1]).replace(/,/g,"")):null}
-function metricRows(rows:Row[]){
-  const defs: [string, RegExp][]=[
-    ["Acres",/([\d,]+) acres/i],["Offense",/([\d,]+) off(?:ense)?/i],["Defense",/([\d,]+) def(?:ense)?/i],
-    ["Kills",/killed (?:about )?([\d,]+) enemy troops/i],["Losses",/lost ([\d,]+) /i],["Prisoners",/imprisoned ([\d,]+)/i],
-    ["Runes",/gather ([\d,]+) runes/i],["Mana",/mana (\d+)%/i],["Thieves",/([\d,]+) thieves/i],
-    ["Wizards",/([\d,]+) wizards/i],["Books",/([\d,]+) books/i],["Networth",/NW[ :]+([\d,]+)/i]
+function metricRows(rows:Row[], section:string){
+  const sets:Record<string,string[]>={
+    military:["Acres","Offense","Defense","Kills","Losses","Prisoners","Soldiers","War Horses"],
+    magic:["Runes","Mana","Wizards","Acres","Networth"], thievery:["Thieves","Stealth","Networth","Acres"],
+    science:["Books","Runes","Mana","Acres","Networth"], buildings:["Acres","Build Efficiency","Networth"],
+    kingdom:["Acres","Networth","Offense","Defense","WPA","TPA","Build Efficiency"],
+    throne:["Acres","Networth","Offense","Defense","WPA","TPA","Build Efficiency","Wages","Mana","Stealth"],
+    aid:["Soldiers","Gold","Food","Acres"], exploration:["Acres","Networth","Peasants"],
+    news:["Acres","Kills","Losses","Prisoners","Books","Gold","Food"],
+    "war-room":["Acres","Kills","Losses","Offense","Defense","Soldiers","War Horses"],
+    intel:["Acres","Networth","Offense","Defense","WPA","TPA","Thieves","Wizards","Mana","Stealth","Runes","Gold","Food"]
+  }
+  const defs:[string,RegExp][]=[
+    ["Acres",/([\\d,.]+) acres/i],["Offense",/(?:offense|off)\\s*[:=]?\\s*([\\d,.]+)/i],
+    ["Defense",/(?:defense|def)\\s*[:=]?\\s*([\\d,.]+)/i],["WPA",/wpa\\s*[:=]?\\s*([\\d.]+)/i],
+    ["TPA",/tpa\\s*[:=]?\\s*([\\d.]+)/i],["Build Efficiency",/(?:build efficiency|\\bBE\\b)\\s*[:=]?\\s*([\\d.]+)\\s*%?/i],
+    ["Wages",/wages?\\s*[:=]?\\s*([\\d.]+)\\s*%?/i],["Mana",/mana\\s*[:=]?\\s*([\\d.]+)\\s*%?/i],
+    ["Stealth",/stealth\\s*[:=]?\\s*([\\d.]+)\\s*%?/i],["Kills",/killed\\s+(?:about\\s+)?([\\d,.]+)\\s+enemy troops/i],
+    ["Losses",/lost\\s+([\\d,.]+)\\s+/i],["Prisoners",/imprisoned\\s+([\\d,.]+)/i],
+    ["Runes",/(?:gather|have|with)\\s+([\\d,.]+)\\s+runes?/i],["Thieves",/([\\d,.]+)\\s+thieves?/i],
+    ["Wizards",/([\\d,.]+)\\s+wizards?/i],["Soldiers",/([\\d,.]+)\\s+soldiers?/i],
+    ["War Horses",/([\\d,.]+)\\s+(?:war\\s+)?horses?/i],["Gold",/([\\d,.]+)\\s+gold(?:\\s+coins?)?/i],
+    ["Food",/([\\d,.]+)\\s+(?:bushels|food)/i],["Books",/([\\d,.]+)\\s+books?/i],
+    ["Networth",/(?:NW|networth|net worth)\\s*[:=]?\\s*([\\d,.]+)/i]
   ]
-  const out:{label:string,value:number}[]=[]
-  for(const [label,re] of defs){let total=0,seen=0;for(const r of rows){const n=num(textOf(r),re);if(n!=null){total+=n;seen++}}if(seen)out.push({label,value:total})}
+  const wanted=new Set(sets[section]||sets.intel),out:{label:string,value:number}[]=[]
+  for(const [label,re] of defs){
+    if(!wanted.has(label)) continue
+    let total=0,seen=0
+    for(const r of rows){
+      const source=JSON.stringify(r.metrics||{})+" "+JSON.stringify(r.payload?.data||r.payload||{})+" "+textOf(r)
+      const m=source.match(re)
+      if(m){const n=Number(String(m[1]).replace(/,/g,""));if(Number.isFinite(n)){total+=n;seen++}}
+    }
+    if(seen) out.push({label,value:total})
+  }
   return out.sort((a,b)=>b.value-a.value).slice(0,8)
 }
+function summaryFor(r:Row,section:string){
+  const defs:Record<string,Array<[string,RegExp]>>={
+    military:[["ACRES",/([\\d,.]+) acres/i],["OFF",/(?:offense|off)\\s*[:=]?\\s*([\\d,.]+)/i],["DEF",/(?:defense|def)\\s*[:=]?\\s*([\\d,.]+)/i],["KILLS",/killed\\s+(?:about\\s+)?([\\d,.]+)/i],["LOSSES",/lost\\s+([\\d,.]+)/i]],
+    magic:[["RUNES",/(?:gather|have|with)\\s+([\\d,.]+) runes?/i],["MANA",/mana\\s*([\\d.]+)%/i]],
+    thievery:[["ACRES",/([\\d,.]+) ac/i],["NW",/(?:NW|networth)\\s*[:=]?\\s*([\\d,.]+)/i],["THIEVES",/([\\d,.]+) thieves?/i],["STEALTH",/stealth\\s*([\\d.]+)%/i]],
+    science:[["RUNES",/(?:gather|have|with)\\s+([\\d,.]+) runes?/i],["BOOKS",/([\\d,.]+) books?/i],["MANA",/mana\\s*([\\d.]+)%/i]],
+    buildings:[["ACRES",/([\\d,.]+) acres?/i],["BE",/(?:build efficiency|\\bBE\\b)\\s*[:=]?\\s*([\\d.]+)%?/i]],
+    kingdom:[["ACRES",/([\\d,.]+) acres?/i],["NW",/(?:NW|networth)\\s*[:=]?\\s*([\\d,.]+)/i]],
+    throne:[["ACRES",/([\\d,.]+) acres?/i],["NW",/(?:NW|networth)\\s*[:=]?\\s*([\\d,.]+)/i],["OFF",/(?:offense|off)\\s*[:=]?\\s*([\\d,.]+)/i],["DEF",/(?:defense|def)\\s*[:=]?\\s*([\\d,.]+)/i]],
+    news:[["ACRES",/([\\d,.]+) acres?/i],["KILLS",/killed\\s+(?:about\\s+)?([\\d,.]+)/i],["LOSSES",/lost\\s+([\\d,.]+)/i]],
+    "war-room":[["ACRES",/([\\d,.]+) acres?/i],["KILLS",/killed\\s+(?:about\\s+)?([\\d,.]+)/i],["LOSSES",/lost\\s+([\\d,.]+)/i]],
+    aid:[["SOLDIERS",/([\\d,.]+) soldiers?/i],["GOLD",/([\\d,.]+) gold/i]],
+    exploration:[["ACRES",/([\\d,.]+) acres?/i],["NW",/(?:NW|networth)\\s*[:=]?\\s*([\\d,.]+)/i]],
+    intel:[["ACRES",/([\\d,.]+) acres?/i],["NW",/(?:NW|networth)\\s*[:=]?\\s*([\\d,.]+)/i],["OFF",/(?:offense|off)\\s*[:=]?\\s*([\\d,.]+)/i],["DEF",/(?:defense|def)\\s*[:=]?\\s*([\\d,.]+)/i]]
+  }
+  const source=JSON.stringify(r.metrics||{})+" "+JSON.stringify(r.payload?.data||r.payload||{})+" "+textOf(r)
+  const parts=(defs[section]||defs.intel).map(([label,re])=>{const m=source.match(re);return m?label+" "+Number(String(m[1]).replace(/,/g,"")).toLocaleString():null}).filter(Boolean)
+  const name=r.province_name||r.payload?.data?.owner?.province_name||r.payload?.data?.province||r.target_province_id||"Unidentified"
+  const target=r.target_province_id?" → "+r.target_province_id:""
+  return name+target+(parts.length?" · ":"")+ (parts.join(" · ")||"classified capture")
+}
+
 function Sparkline({rows}:{rows:Row[]}){
   const points=rows.slice(0,18).reverse().map((r,i)=>{const t=textOf(r);const n=num(t,/([\d,]+) acres/i)??num(t,/([\d,]+) runes/i)??num(t,/([\d,]+) def/i)??i;return n})
   if(points.length<2)return <div style={{height:100,display:"grid",placeItems:"center",color:"#657483",fontSize:10}}>Waiting for enough numeric history for a trend.</div>
@@ -57,7 +107,7 @@ function Sparkline({rows}:{rows:Row[]}){
   return <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{width:"100%",height:110,display:"block"}}><polyline points={pts} fill="none" stroke="#d8ff54" strokeWidth="1.8" vectorEffect="non-scaling-stroke"/><polyline points={`4,94 ${pts} 96,94`} fill="rgba(216,255,84,.06)" stroke="none"/></svg>
 }
 function MetricBars({rows}:{rows:Row[]}){
-  const metrics=metricRows(rows), max=Math.max(1,...metrics.map(x=>x.value))
+  const metrics=metricRows(rows, section), max=Math.max(1,...metrics.map(x=>x.value))
   if(!metrics.length)return <div style={{padding:"25px 0",color:"#657483",fontSize:10}}>No numeric fields have been captured for this section yet.</div>
   return <div style={{display:"grid",gap:10}}>{metrics.map(m=><div key={m.label} style={{display:"grid",gridTemplateColumns:"90px 1fr 82px",gap:9,alignItems:"center"}}><span style={{fontSize:9,color:"#93a1ae"}}>{m.label}</span><div style={{height:9,background:"rgba(255,255,255,.055)",borderRadius:99,overflow:"hidden"}}><div style={{width:`${Math.max(3,m.value/max*100)}%`,height:"100%",background:"linear-gradient(90deg,#67f0b0,#d8ff54)",borderRadius:99}}/></div><strong style={{fontSize:9,textAlign:"right",color:"#d8ff54"}}>{scalar(m.value)}</strong></div>)}</div>
 }
@@ -66,7 +116,7 @@ export default function IntelSectionPage({section,title,description}:{section:st
   const router=useRouter();const [data,setData]=useState<any>(null);const [error,setError]=useState("");const [query,setQuery]=useState("");const [kind,setKind]=useState("all");const [loading,setLoading]=useState(true)
   useEffect(()=>{let live=true;const load=async()=>{try{const r=await fetch("/api/intel-data?section="+encodeURIComponent(section),{cache:"no-store"});const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||title+" unavailable");if(live){setData(j);setError("")}}catch(e){if(live)setError(e instanceof Error?e.message:title+" unavailable")}finally{if(live)setLoading(false)}};load();const t=setInterval(load,15000);return()=>{live=false;clearInterval(t)}},[section,title])
   const all:Row[]=data?.records||[]
-  const filtered=useMemo(()=>{const q=query.trim().toLowerCase();return all.filter(r=>(kind==="all"||r.page_kind===kind)&&(!q||JSON.stringify(r).toLowerCase().includes(q)))},[all,kind,query])
+  const filtered=useMemo(()=>{const q=query.trim().toLowerCase();return all.filter(r=>(kind==="all"||r.page_kind===kind)&&(!q||summaryFor(r,section).toLowerCase().includes(q)||textOf(r).toLowerCase().includes(q)))},[all,kind,query,section])
   const counts=useMemo(()=>{const m=new Map<string,number>();for(const r of all)m.set(r.page_kind||"intel",(m.get(r.page_kind||"intel")||0)+1);return [...m.entries()].sort((a,b)=>b[1]-a[1])},[all])
   const own=filtered.filter(r=>r.visibility!=="enemy").length, enemy=filtered.filter(r=>r.visibility==="enemy").length
   const provinces=new Set(filtered.map(r=>r.target_province_id||r.province_id).filter(Boolean)).size
@@ -86,6 +136,7 @@ export default function IntelSectionPage({section,title,description}:{section:st
         <div><div style={{fontSize:8,color:"#67f0b0",letterSpacing:".22em"}}>SPARTAN // CLASSIFIED DATA LAYER</div><h1 style={{fontSize:40,margin:"7px 0 4px",letterSpacing:"-.045em"}}>{title}</h1><div style={{fontSize:12,color:"#82909e",maxWidth:900}}>{description}</div></div>
         <button onClick={()=>router.push("/")} style={{padding:"10px 15px",borderRadius:9,border:"1px solid #d8ff54",background:"#101c23",color:"#d8ff54",fontWeight:900,fontSize:9,cursor:"pointer"}}>← COMMAND CENTER</button>
       </header>
+      <JeevesSummary compact />
       {error&&<div style={{padding:14,marginBottom:15,border:"1px solid rgba(255,100,100,.3)",background:"rgba(255,60,60,.06)",borderRadius:10,color:"#ff9b9b"}}>{error}</div>}
       <section style={{display:"grid",gridTemplateColumns:"repeat(6,minmax(120px,1fr))",gap:9,marginBottom:14}}>
         {[[title.toUpperCase(),filtered.length],["PROVINCES",provinces],["KINGDOMS",kingdoms],["OWN",own],["ENEMY",enemy],["KINDS",counts.length]].map(([l,v])=><article key={String(l)} style={{padding:14,border:"1px solid rgba(255,255,255,.075)",borderRadius:10,background:"linear-gradient(145deg,#0a141d,#071018)"}}><div style={{fontSize:7,color:"#687686",letterSpacing:".14em"}}>{l}</div><strong style={{display:"block",fontSize:22,marginTop:6,color:l==="ENEMY"?"#ffbd66":"#d8ff54"}}>{Number(v).toLocaleString()}</strong></article>)}
@@ -105,7 +156,7 @@ export default function IntelSectionPage({section,title,description}:{section:st
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}><div><div style={{fontSize:8,color:"#67f0b0",letterSpacing:".17em"}}>EVENT STREAM</div><h2 style={{margin:"6px 0 2px",fontSize:21}}>Latest classified intelligence</h2></div><span style={{fontSize:8,color:"#67f0b0"}}>{loading?"SYNCING…":"LIVE · 15s"}</span></div>
         {filtered.slice(0,30).map((r,i)=><article key={String(r.id||r.capture_id||i)} style={{padding:"13px 0",borderTop:"1px solid rgba(255,255,255,.06)",display:"grid",gridTemplateColumns:"120px 1fr 90px",gap:14}}>
           <div><strong style={{fontSize:9,color:"#d8ff54"}}>{keyName(r.page_kind||"intel")}</strong><div style={{fontSize:7,color:r.visibility==="enemy"?"#ffbd66":"#67f0b0",marginTop:4}}>{r.visibility==="enemy"?"ENEMY":"OWN"} · {r.target_kingdom_id||r.kingdom_id||"—"}</div></div>
-          <div><div style={{fontSize:10,color:"#d7e0e7",lineHeight:1.5,overflowWrap:"anywhere"}}>{textOf(r)||flatten(r.payload||{}).slice(0,7).map(([k,v])=>keyName(k)+": "+scalar(v)).join(" · ")||"Classified record"}</div><div style={{fontSize:7,color:"#5f6c7a",marginTop:5}}>Target: {r.target_province_id||"—"} · Source: {r.source||"—"}</div></div>
+          <div><div style={{fontSize:10,color:"#d7e0e7",lineHeight:1.5,overflowWrap:"anywhere"}}>{summaryFor(r,section)}</div><div style={{fontSize:7,color:"#5f6c7a",marginTop:5}}>Target: {r.target_province_id||"—"} · Source: {r.source||"—"}</div></div>
           <time style={{fontSize:7,color:"#718091",textAlign:"right"}}>{r.captured_at?new Date(r.captured_at).toLocaleString([], {month:"short",day:"numeric",hour:"numeric",minute:"2-digit"}):"—"}</time>
         </article>)}
         {!filtered.length&&<div style={{padding:"45px 0",textAlign:"center",color:"#657483",fontSize:11}}>No classified records yet. The page is ready for the next capture.</div>}
