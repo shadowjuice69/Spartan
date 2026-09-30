@@ -7,3 +7,4 @@ tsconfig.tsbuildinfo
 tsconfig.tsbuildinfo
 
 .vercel/
+.env.spartan
