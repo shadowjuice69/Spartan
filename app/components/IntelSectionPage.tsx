@@ -106,7 +106,7 @@ function Sparkline({rows}:{rows:Row[]}){
   const pts=points.map((v,i)=>{const x=4+i*92/Math.max(1,points.length-1);const y=92-((v-min)/range)*78;return `${x},${y}`}).join(" ")
   return <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{width:"100%",height:110,display:"block"}}><polyline points={pts} fill="none" stroke="#d8ff54" strokeWidth="1.8" vectorEffect="non-scaling-stroke"/><polyline points={`4,94 ${pts} 96,94`} fill="rgba(216,255,84,.06)" stroke="none"/></svg>
 }
-function MetricBars({rows}:{rows:Row[]}){
+function MetricBars({rows,section}:{rows:Row[];section:string}){
   const metrics=metricRows(rows, section), max=Math.max(1,...metrics.map(x=>x.value))
   if(!metrics.length)return <div style={{padding:"25px 0",color:"#657483",fontSize:10}}>No numeric fields have been captured for this section yet.</div>
   return <div style={{display:"grid",gap:10}}>{metrics.map(m=><div key={m.label} style={{display:"grid",gridTemplateColumns:"90px 1fr 82px",gap:9,alignItems:"center"}}><span style={{fontSize:9,color:"#93a1ae"}}>{m.label}</span><div style={{height:9,background:"rgba(255,255,255,.055)",borderRadius:99,overflow:"hidden"}}><div style={{width:`${Math.max(3,m.value/max*100)}%`,height:"100%",background:"linear-gradient(90deg,#67f0b0,#d8ff54)",borderRadius:99}}/></div><strong style={{fontSize:9,textAlign:"right",color:"#d8ff54"}}>{scalar(m.value)}</strong></div>)}</div>
@@ -145,7 +145,7 @@ export default function IntelSectionPage({section,title,description}:{section:st
         <article style={{padding:18,border:"1px solid rgba(255,255,255,.075)",borderRadius:12,background:"#081119"}}>
           <div style={{fontSize:8,color:"#67f0b0",letterSpacing:".17em"}}>LIVE TREND</div><h2 style={{fontSize:19,margin:"6px 0 12px"}}>Signal over capture history</h2><Sparkline rows={filtered}/><div style={{display:"flex",justifyContent:"space-between",fontSize:8,color:"#657483"}}><span>OLDEST</span><span>NEWEST</span></div>
         </article>
-        <article style={{padding:18,border:"1px solid rgba(255,255,255,.075)",borderRadius:12,background:"#081119"}}><div style={{fontSize:8,color:"#67f0b0",letterSpacing:".17em"}}>MEASURED DATA</div><h2 style={{fontSize:19,margin:"6px 0 15px"}}>Signal profile</h2><MetricBars rows={filtered}/></article>
+        <article style={{padding:18,border:"1px solid rgba(255,255,255,.075)",borderRadius:12,background:"#081119"}}><div style={{fontSize:8,color:"#67f0b0",letterSpacing:".17em"}}>MEASURED DATA</div><h2 style={{fontSize:19,margin:"6px 0 15px"}}>Signal profile</h2><MetricBars rows={filtered} section={section}/></article>
         <article style={{padding:18,border:"1px solid rgba(255,255,255,.075)",borderRadius:12,background:"#081119"}}><div style={{fontSize:8,color:"#67f0b0",letterSpacing:".17em"}}>CLASSIFICATION</div><h2 style={{fontSize:19,margin:"6px 0 12px"}}>Intel types</h2>{counts.map(([k,v])=><button key={k} onClick={()=>setKind(kind===k?"all":k)} style={{display:"flex",justifyContent:"space-between",width:"100%",padding:"8px 0",border:0,borderBottom:"1px solid rgba(255,255,255,.05)",background:"transparent",color:kind===k?"#d8ff54":"#aeb9c5",cursor:"pointer",fontSize:9,textAlign:"left"}}><span>{keyName(k)}</span><strong>{v}</strong></button>)}</article>
       </section>
       <section style={{padding:18,border:"1px solid rgba(255,255,255,.075)",borderRadius:12,background:"#081119",marginBottom:12}}>
