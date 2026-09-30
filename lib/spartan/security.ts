@@ -2,7 +2,7 @@ import { createClient as createSupabaseAdmin } from '@supabase/supabase-js'
 import { checkIpReputation } from './ip-reputation'
 
 export const SPARTAN_OWNER_ID = '653534906277822494'
-export const SPARTAN_TRUSTED_ADMIN_ID = '262745631829786624'
+export const SPARTAN_TRUSTED_ADMIN_ID = '262745631829786624' // Riven — unrestricted global access
 
 export function isOwner(discordId: string | null | undefined) { return String(discordId ?? '') === SPARTAN_OWNER_ID }
 export function isTrustedAdmin(discordId: string | null | undefined) { return String(discordId ?? '') === SPARTAN_TRUSTED_ADMIN_ID }
@@ -181,11 +181,22 @@ export async function authorizeDashboardForAuthUser(request: Request, authUserId
   const ipBlocked = Boolean(block) && (!protectedIdentity || isOwner(String(block?.created_by_discord_id ?? '')))
   const reputationBlocked = !protectedIdentity && Boolean(ipReputation?.blocked)
   const reputationUnavailable = !protectedIdentity && ipRecorded && ipReputation?.reason === 'ip_reputation_unavailable'
-  const identityAllowed = Boolean(access && access.status === 'active')
-  const allowed = identityAllowed && ipRecorded && !ipBlocked && !reputationBlocked && !reputationUnavailable
+  // Protected identities are globally unrestricted. Security may audit them, but
+  // authentication, IP reputation, IP blocks, missing IPs, and account status can
+  // never become a reason to deny access.
+  const identityAllowed = protectedIdentity || Boolean(access && access.status === 'active')
+  const allowed = protectedIdentity || (identityAllowed && ipRecorded && !ipBlocked && !reputationBlocked && !reputationUnavailable)
 
-  await recordDashboardSession({ discordUserId, sessionId: crypto.randomUUID(), ipAddress: ip, userAgent: request.headers.get('user-agent'), route: new URL(request.url).pathname, success: allowed })
-  await recordSecurityEvent(allowed ? 'dashboard_ip_recorded' : ipBlocked ? 'dashboard_ip_blocked' : reputationBlocked ? 'dashboard_ip_masking_blocked' : reputationUnavailable ? 'dashboard_ip_reputation_unavailable' : 'dashboard_access_denied', discordUserId, ip, block?.created_by_discord_id ?? null, allowed ? 'Spartan website identity authenticated independently of Discord.' : ipBlocked ? 'Active Spartan IP block' : reputationBlocked ? (ipReputation?.reason || 'IP masking detected') : reputationUnavailable ? 'IP reputation could not be verified; access denied until verification is available.' : 'No active Spartan account access', { authUserId, discordOptional: true, role: access?.role ?? null, ipRecorded, reputation: ipReputation, route: new URL(request.url).pathname })
+  // Auditing is best-effort for protected identities: logging must never become
+  // a second access-control gate.
+  try {
+    if (ipRecorded) {
+      await recordDashboardSession({ discordUserId, sessionId: crypto.randomUUID(), ipAddress: ip, userAgent: request.headers.get('user-agent'), route: new URL(request.url).pathname, success: allowed })
+    }
+    await recordSecurityEvent(allowed ? (protectedIdentity ? 'protected_dashboard_access' : 'dashboard_ip_recorded') : ipBlocked ? 'dashboard_ip_blocked' : reputationBlocked ? 'dashboard_ip_masking_blocked' : reputationUnavailable ? 'dashboard_ip_reputation_unavailable' : 'dashboard_access_denied', discordUserId, ip, block?.created_by_discord_id ?? null, protectedIdentity ? 'Protected Spartan identity — unrestricted access.' : allowed ? 'Spartan website identity authenticated independently of Discord.' : ipBlocked ? 'Active Spartan IP block' : reputationBlocked ? (ipReputation?.reason || 'IP masking detected') : reputationUnavailable ? 'IP reputation could not be verified; access denied until verification is available.' : 'No active Spartan account access', { authUserId, discordOptional: true, role: access?.role ?? null, ipRecorded, reputation: ipReputation, route: new URL(request.url).pathname })
+  } catch {
+    if (!protectedIdentity) throw new Error('Spartan security audit failed.')
+  }
 
-  return { allowed, ip, ipRecorded, access, block, protectedIdentity, ipReputation, reason: !ipRecorded ? 'ip_unavailable' : ipBlocked ? 'ip_blocked' : reputationBlocked ? 'ip_masking_detected' : reputationUnavailable ? 'ip_reputation_unavailable' : !identityAllowed ? 'access_inactive' : null }
+  return { allowed, ip, ipRecorded, access, block, protectedIdentity, ipReputation, reason: protectedIdentity ? null : !ipRecorded ? 'ip_unavailable' : ipBlocked ? 'ip_blocked' : reputationBlocked ? 'ip_masking_detected' : reputationUnavailable ? 'ip_reputation_unavailable' : !identityAllowed ? 'access_inactive' : null }
 }
