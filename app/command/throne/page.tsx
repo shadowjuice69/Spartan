@@ -1,2 +1,2 @@
 import IntelSectionPage from "@/app/components/IntelSectionPage"
-export default function Page(){return <IntelSectionPage section="throne" title="Throne" description="Captured province-state intelligence from Throne and province-state records, with current fields and evidence history."/>
+export default function Page(){return <IntelSectionPage section="throne" title="Throne" description="Captured province-state intelligence from Throne and province-state records, with current fields and evidence history."/>}
