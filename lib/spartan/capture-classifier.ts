@@ -16,6 +16,8 @@ export function classifyCapture(urlValue: unknown, rawTextValue: unknown, scrape
     [/\/throne(?:$|[?#/])/, 'throne', 1, 'Utopia throne URL'],
     [/\/shared\//, 'shared_redirect', 0.95, 'Utopia session redirect stub'],
     [/\/(?:cast|status)_ritual(?:$|[?#/])/, 'ritual', 0.98, 'Utopia ritual URL'],
+    [/\/aid(?:$|[?#/])/, 'aid', 0.95, 'Utopia aid URL'],
+    [/\/province_target_finder(?:$|[?#/])/, 'target_finder', 0.9, 'Utopia target finder URL'],
     [/\/train_army(?:$|[?#/])/, 'military', 0.95, 'Utopia train military URL'],
     [/\/send_armies(?:$|[?#/])/, 'attack', 0.95, 'Utopia send armies URL'],
     [/\/(?:wizards|sorcery|enchantment)(?:$|[?#/])/, 'magic', 0.95, 'Utopia magic action URL'],
@@ -54,7 +56,7 @@ export function classifyCapture(urlValue: unknown, rawTextValue: unknown, scrape
     [/\bbuildings?\b.*\bpercent|\bconstruction\b/, 'buildings', 0.76, 'Page content identifies buildings'],
     [/\bscience\b.*\bpoints?\b|\bscience\b.*\bbooks?\b/, 'science', 0.76, 'Page content identifies science'],
     [/\bmagic\b.*\bspell|\brunes\b.*\bspell/, 'magic', 0.76, 'Page content identifies magic'],
-    [/\bthievery\b|\bthieves?\b.*\bstealth\b/, 'thievery', 0.76, 'Page content identifies thievery'],
+    [/\bthieves?\b.*\bstealth\b/, 'thievery', 0.76, 'Page content identifies thievery'],
     [/\bexploration\b.*\bland|\bexplore\b.*\bacres?\b/, 'exploration', 0.76, 'Page content identifies exploration'],
     [/\bkingdom\b.*\bprovinces?\b/, 'kingdom', 0.74, 'Page content identifies kingdom information'],
   ]
