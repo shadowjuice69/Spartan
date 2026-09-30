@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic'
 
 function adminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
+  const key = process.env.SUPABASE_SECRET_KEY
   if (!url || !key) throw new Error('Spartan Intel service is not configured.')
   return createSupabaseAdmin(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
 }
@@ -33,7 +33,10 @@ const kinds: Record<string, string[]> = {
     'thievery', 'throne', 'universal', 'council_state', 'council_military',
     'council_science', 'council_internal'
   ],
-  'war-room': ['news', 'attack', 'war', 'military', 'thievery', 'magic', 'ritual', 'dragon'],
+  'war-room': ['news', 'attack', 'war', 'military', 'thievery', 'magic', 'ritual', 'dragon', 'aid'],
+  aid: ['aid'],
+  exploration: ['exploration'],
+  operations: ['attack', 'thievery', 'magic', 'ritual', 'aid', 'exploration'],
 }
 
 function payload(row: any) {
@@ -63,7 +66,7 @@ export async function GET(request: Request) {
     const selectedKinds = kinds[section] || [section]
     const { data, error } = await db
       .from('spartan_intel_records')
-      .select('id,capture_id,source_vault_id,user_id,province_id,kingdom_id,captured_at,created_at,updated_at,source,source_id,url,page_kind,classification_confidence,classification_reason,age,game_year,game_tick,retention_class,expires_at,raw_text,classification_source,parsed_payload,raw_payload')
+      .select('id,capture_id,source_vault_id,user_id,province_id,kingdom_id,captured_at,created_at,updated_at,source,source_id,url,page_kind,classification_confidence,classification_reason,age,game_year,game_tick,retention_class,expires_at,raw_text,classification_source,parsed_payload,raw_payload,target_province_id,target_kingdom_id,intel_type,visibility,metrics')
       .in('page_kind', selectedKinds)
       .or(`kingdom_id.eq.${account.province_location},kingdom_id.is.null`)
       .order('created_at', { ascending: false })
@@ -106,6 +109,11 @@ export async function GET(request: Request) {
         province_name: registry?.name || payloadProvince || null,
         province_slot: registry?.slot ?? null,
         kingdom_id: row.kingdom_id || registry?.kingdom || payloadKingdom || null,
+        target_province_id: row.target_province_id,
+        target_kingdom_id: row.target_kingdom_id,
+        intel_type: row.intel_type,
+        visibility: row.visibility,
+        metrics: row.metrics || {},
         captured_at: row.captured_at,
         created_at: row.created_at,
         updated_at: row.updated_at,
