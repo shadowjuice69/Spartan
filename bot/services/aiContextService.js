@@ -1,4 +1,5 @@
 const supabaseService = require("./supabase");
+const canonicalIntel = require("./canonicalIntelService");
 
 function compact(value, max = 6000) {
   if (value == null) return "";
@@ -30,7 +31,7 @@ async function getKingdomContext({ kd: requestedKd = "", province = "", question
   const botKd = settings.find(s => s.key === "kingdom_code")?.value || process.env.MY_KD || "";
   const kd = String(requestedKd || botKd || "").trim();
 
-  const [provinces, enemyProvinces, throne, enemyThrone, science, buildings, military, kdStats, ops, events, attacks, hostileOps, spells, news, kingdoms, wars, aiBuilds, raceRules, personalityRules, scienceRules, buildingRules, spellRules, gameRules, relationRules, rawPages] = await Promise.all([
+  const [provinces, enemyProvinces, throne, enemyThrone, science, buildings, military, kdStats, ops, events, attacks, hostileOps, spells, news, kingdoms, wars, aiBuilds, raceRules, personalityRules, scienceRules, buildingRules, spellRules, gameRules, relationRules, rawPages, canonicalIntelRows] = await Promise.all([
     query(sb, "provinces", "*", { eq: kd ? { kd_code: kd } : {}, order: ["updated_at", false], limit: 50 }),
     query(sb, "provinces", "*", { neq: kd ? { kd_code: kd } : {}, order: ["updated_at", false], limit: 100 }),
     query(sb, "intel_throne", "*", { eq: kd ? { kd_code: kd } : {}, order: ["updated_at", false], limit: 50 }),
@@ -56,6 +57,7 @@ async function getKingdomContext({ kd: requestedKd = "", province = "", question
     query(sb, "game_rules", "*", { limit: 200 }),
     query(sb, "relation_rules", "*", { limit: 100 }),
     query(sb, "intel_page_ingest", "*", { eq: kd ? { kd_code: kd } : {}, order: ["received_at", false], limit: 40 }),
+    canonicalIntel.getIntel({ kd, section: "all", limit: 250 }),
   ]);
 
   const relevantProvince = province ? provinces.find(p => String(p.name).toLowerCase() === String(province).toLowerCase()) : null;
@@ -91,6 +93,7 @@ async function getKingdomContext({ kd: requestedKd = "", province = "", question
     `WARS (${wars.length})\n${compact(wars, 8000)}`,
     `ACTIVE REFERENCE BUILDS (${aiBuilds.length})\n${compact(aiBuilds, 12000)}`,
     `RECENT RAW PAGE INGEST (${rawPages.length})\n${compact(rawPages.map(r => ({received_at:r.received_at,kd_code:r.kd_code,province:r.province,source:r.source,tab:r.tab,data_type:r.data_type,parsed:r.parsed,raw_text:r.raw_text ? r.raw_text.slice(0,1200) : null})), 18000)}`,
+    `SPARTAN CANONICAL INTEL (${canonicalIntelRows.length})\n${compact(canonicalIntelRows, 24000)}`,
   ];
 
   if (needsRules) {
