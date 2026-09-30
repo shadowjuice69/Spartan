@@ -28,7 +28,7 @@ export async function updateSession(request: NextRequest) {
   const path = request.nextUrl.pathname
   const publicShell = path === '/' || path === '/access-denied'
 
-  if (!user && !publicShell && path !== '/login' && !path.startsWith('/auth')) {
+  if (!user && !publicShell && path !== '/login' && !path.startsWith('/auth') && !path.startsWith('/api/')) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     return NextResponse.redirect(url)
