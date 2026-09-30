@@ -24,10 +24,31 @@ async function findProvince(sb, flow, state) {
   const data = state?.data || {};
   const kdCode = String(flow.kingdom_id || data.coordinates || '').trim();
   const provinceName = String(flow.province_id || data.name || '').trim();
-  if (!kdCode || !provinceName || provinceName.startsWith('Slot #')) return null;
-  const { data: province, error } = await sb.from('provinces').select('id,state_data,kingdom_id').eq('kd_code', kdCode).eq('name', provinceName).limit(1).maybeSingle();
+  if (!provinceName || provinceName.startsWith('Slot #')) return null;
+
+  // Spartan no longer depends on the legacy `provinces` table. The canonical
+  // identity source is spartan_province_registry.
+  let query = sb.from('spartan_province_registry')
+    .select('province_id,province_name,kingdom_code,metadata')
+    .limit(1);
+
+  if (kdCode) {
+    query = query.eq('kingdom_code', kdCode).eq('province_name', provinceName);
+  } else {
+    query = query.eq('province_id', provinceName);
+  }
+
+  const { data: province, error } = await query.maybeSingle();
   if (error) throw new Error(`canonical province lookup: ${error.message}`);
-  return province || null;
+  if (!province) return null;
+
+  return {
+    id: province.province_id,
+    province_id: province.province_id,
+    name: province.province_name,
+    kingdom_id: province.kingdom_code,
+    metadata: province.metadata || {},
+  };
 }
 async function syncCanonicalProvince(sb, flow, state) {
   if (flow.page_kind !== 'throne') return null;
@@ -37,38 +58,64 @@ async function syncCanonicalProvince(sb, flow, state) {
     logger.warn(`[SPARTAN PROCESSOR] canonical province not found kd=${flow.kingdom_id} province=${flow.province_id}`);
     return null;
   }
-  const patch = compact({
-    ruler: data.ruler, race: data.race, acres: data.acres, nw: data.nw, off: data.off, def: data.def,
-    peons: data.peons, soldiers: data.soldiers, thieves: data.thieves, wizards: data.wizards,
-    war_horses: data.war_horses, prisoners: data.prisoners, o_tpa: data.o_tpa, d_tpa: data.d_tpa,
-    o_wpa: data.o_wpa, d_wpa: data.d_wpa, be: data.be, good_spells: data.good_spells,
-    coordinates: data.coordinates, game_type: data.game_type, updated_at: new Date().toISOString(),
-    state_data: { ...(province.state_data || {}), throne: data, throne_captured_at: state.captured_at || state.processed_at || new Date().toISOString() }
-  });
-  const { error } = await sb.from('provinces').update(patch).eq('id', province.id);
+  const capturedAt = state.captured_at || state.processed_at || new Date().toISOString();
+  const metadata = {
+    ...(province.metadata || {}),
+    ruler: data.ruler ?? province.metadata?.ruler ?? null,
+    race: data.race ?? province.metadata?.race ?? null,
+    personality: data.personality ?? province.metadata?.personality ?? null,
+    acres: data.acres ?? province.metadata?.acres ?? null,
+    nw: data.nw ?? province.metadata?.nw ?? null,
+    off: data.off ?? province.metadata?.off ?? null,
+    def: data.def ?? province.metadata?.def ?? null,
+    peons: data.peons ?? province.metadata?.peons ?? null,
+    soldiers: data.soldiers ?? province.metadata?.soldiers ?? null,
+    thieves: data.thieves ?? province.metadata?.thieves ?? null,
+    wizards: data.wizards ?? province.metadata?.wizards ?? null,
+    war_horses: data.war_horses ?? province.metadata?.war_horses ?? null,
+    prisoners: data.prisoners ?? province.metadata?.prisoners ?? null,
+    o_tpa: data.o_tpa ?? province.metadata?.o_tpa ?? null,
+    d_tpa: data.d_tpa ?? province.metadata?.d_tpa ?? null,
+    o_wpa: data.o_wpa ?? province.metadata?.o_wpa ?? null,
+    d_wpa: data.d_wpa ?? province.metadata?.d_wpa ?? null,
+    be: data.be ?? province.metadata?.be ?? null,
+    good_spells: data.good_spells ?? province.metadata?.good_spells ?? null,
+    coordinates: data.coordinates ?? province.kingdom_id ?? null,
+    game_type: data.game_type ?? province.metadata?.game_type ?? null,
+    throne: data,
+    throne_captured_at: capturedAt,
+  };
+  const { error } = await sb.from('spartan_province_registry')
+    .update({ metadata, last_seen_at: capturedAt, updated_at: new Date().toISOString() })
+    .eq('province_id', province.id);
   if (error) throw new Error(`canonical province update: ${error.message}`);
-  return { provinceId: province.id, fields: Object.keys(patch) };
+  return { provinceId: province.id, kingdomId: province.kingdom_id, fields: Object.keys(metadata) };
 }
 async function syncSpecializedProvinceData(sb, flow, state) {
   if (!['survey', 'science', 'som', 'magic', 'thievery', 'universal'].includes(flow.page_kind)) return null;
   const province = await findProvince(sb, flow, state);
   if (!province) return null;
   const data = state?.data || {};
-  const patch = { updated_at: new Date().toISOString(), state_data: { ...(province.state_data || {}), [flow.page_kind]: data, [`${flow.page_kind}_captured_at`]: state.captured_at || state.processed_at || new Date().toISOString() } };
-  if (flow.page_kind === 'survey' && data.buildings && typeof data.buildings === 'object') patch.buildings = data.buildings;
-  if (flow.page_kind === 'science' && data.science && typeof data.science === 'object') patch.science = data.science;
-  const { error } = await sb.from('provinces').update(patch).eq('id', province.id);
+  const capturedAt = state.captured_at || state.processed_at || new Date().toISOString();
+  const metadata = {
+    ...(province.metadata || {}),
+    [flow.page_kind]: data,
+    [`${flow.page_kind}_captured_at`]: capturedAt,
+  };
+  if (flow.page_kind === 'survey' && data.buildings && typeof data.buildings === 'object') metadata.buildings = data.buildings;
+  if (flow.page_kind === 'science' && data.science && typeof data.science === 'object') metadata.science = data.science;
+  const { error } = await sb.from('spartan_province_registry')
+    .update({ metadata, last_seen_at: capturedAt, updated_at: new Date().toISOString() })
+    .eq('province_id', province.id);
   if (error) throw new Error(`specialized province sync: ${error.message}`);
-  return { provinceId: province.id, fields: Object.keys(patch) };
+  return { provinceId: province.id, kingdomId: province.kingdom_id, fields: Object.keys(metadata) };
 }
 async function writeProvinceHistory(sb, flow, state, canonical) {
   if (!canonical?.provinceId || !['throne', 'survey', 'science', 'som', 'magic', 'thievery', 'universal'].includes(flow.page_kind)) return null;
   const data = state?.data || {};
   const numeric = (value) => { const n = Number(value); return Number.isFinite(n) ? n : null; };
-  const { data: province, error: lookupError } = await sb.from('provinces').select('kingdom_id').eq('id', canonical.provinceId).maybeSingle();
-  if (lookupError) throw new Error(`history province lookup: ${lookupError.message}`);
   const row = compact({
-    province_id: canonical.provinceId, kingdom_id: province?.kingdom_id || null,
+    province_id: canonical.provinceId, kingdom_id: canonical.kingdomId || null,
     observed_at: state.captured_at || state.processed_at || new Date().toISOString(),
     source: flow.source || 'spartan_processor', source_id: flow.source_id || flow.capture_id,
     acres: numeric(data.acres), networth: numeric(data.nw), population: numeric(data.peons), peons: numeric(data.peons),
