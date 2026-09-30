@@ -54,10 +54,15 @@ export async function GET(request: Request) {
   const auth = await requireAccount()
   if (!auth.ok) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+  // Library/Vault reads intentionally use the authenticated public client.
+  // spartan_builds has an explicit read-all policy, so this avoids making
+  // visibility depend on a server secret key being configured correctly.
+  const readClient = await createClient()
+
   const params = new URL(request.url).searchParams
   const search = params.get('search') || ''
   const view = params.get('view') || 'library'
-  let query = auth.db
+  let query = readClient
     .from('spartan_builds')
     .select('id,name,race,personality,author,updated_at,active,created_by_discord_id')
     .order('updated_at', { ascending: false })
