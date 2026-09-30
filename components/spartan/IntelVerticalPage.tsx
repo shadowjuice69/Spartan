@@ -104,9 +104,11 @@ function valueAt(payload:any, keys:string[]) {
   return null
 }
 
-function Value({value, depth=0}:{value:any, depth?:number}) {
+function entityHref(key:string, value:any) { const k=key.toLowerCase(); const type=k.includes("race")?"race":k.includes("personality")?"personality":k.includes("kingdom")?"kingdom":k.includes("attack")?"attack":k.includes("province")?"province":null; if(!type || typeof value!=="string" || !value.trim()) return null; return "/command/entity/"+type+"/"+encodeURIComponent(value.trim().toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"")); }
+
+function Value({value, depth=0, keyName}:{value:any, depth?:number, keyName?:string}) {
   if (value == null) return <span style={{color:"#718091"}}>—</span>
-  if (typeof value !== "object") return <span style={{overflowWrap:"anywhere"}}>{scalar(value)}</span>
+  if (typeof value !== "object") { const href=entityHref(String(keyName||""),value); return href ? <a href={href} style={{color:"#d8ff54",textDecoration:"none",borderBottom:"1px dashed #d8ff5455"}}>{scalar(value)}</a> : <span style={{overflowWrap:"anywhere"}}>{scalar(value)}</span> }
   if (Array.isArray(value)) {
     return <div style={{display:"grid",gap:7}}>{value.slice(0,60).map((v,i)=><div key={i} style={{padding:"8px 10px",background:"rgba(255,255,255,.025)",borderRadius:7}}><span style={{fontSize:8,color:"#657483"}}>ITEM {i+1}</span><Value value={v} depth={depth+1}/></div>)}</div>
   }
