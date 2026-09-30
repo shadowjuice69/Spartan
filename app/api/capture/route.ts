@@ -181,12 +181,13 @@ function buildSnapshotRow(snapshot: ProvinceSnapshot, authUserId: string, canoni
 export async function POST(request: Request) {
   try {
     const serviceRequest = isServiceRequest(request)
-    const supabase = serviceRequest ? createServiceClient() : await createClient()
+    const sessionClient = await createClient()
+    const supabase = createServiceClient()
     let authUserId: string | null = null
     let captureOwner: CaptureOwner | null = null
 
     if (!serviceRequest) {
-      const auth = await supabase.auth.getUser()
+      const auth = await sessionClient.auth.getUser()
       authUserId = auth.data.user?.id ?? null
       if (!authUserId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
       const account = await supabase.from('spartan_accounts').select('id,auth_user_id,province_name,province_location,account_status').eq('auth_user_id', authUserId).maybeSingle()
@@ -294,6 +295,60 @@ export async function POST(request: Request) {
 
     const { error: snapshotError } = await supabase.from('spartan_province_history').insert(buildSnapshotRow(snapshotForPersistence, captureOwner.authUserId, captureOwner.kingdomCode))
     if (snapshotError) return NextResponse.json({ error: snapshotError.message }, { status: 500 })
+
+    // Keep a single current-state projection alongside the append-only history.
+    // This is what the dashboard uses for fast current-state reads and graphs.
+    const projectionState = {
+      province_id: captureOwner.accountId,
+      kingdom_id: captureOwner.kingdomCode,
+      observed_at: snapshotForPersistence.observedAt,
+      age: snapshotForPersistence.age,
+      game_year: snapshotForPersistence.gameYear,
+      game_tick: snapshotForPersistence.gameTick,
+      source: snapshotForPersistence.source,
+      source_id: snapshotForPersistence.sourceId,
+      acres: snapshotForPersistence.acres,
+      networth: snapshotForPersistence.networth,
+      population: snapshotForPersistence.population,
+      peons: snapshotForPersistence.peons,
+      soldiers: snapshotForPersistence.soldiers,
+      off_specs: snapshotForPersistence.offSpecs,
+      def_specs: snapshotForPersistence.defSpecs,
+      elites: snapshotForPersistence.elites,
+      thieves: snapshotForPersistence.thieves,
+      wizards: snapshotForPersistence.wizards,
+      generals: snapshotForPersistence.generals,
+      prisoners: snapshotForPersistence.prisoners,
+      war_horses: snapshotForPersistence.warHorses,
+      offense: snapshotForPersistence.offense,
+      defense: snapshotForPersistence.defense,
+      defense_home: snapshotForPersistence.defenseHome,
+      mana: snapshotForPersistence.mana,
+      stealth: snapshotForPersistence.stealth,
+      r_tpa: snapshotForPersistence.rTpa,
+      o_tpa: snapshotForPersistence.oTpa,
+      d_tpa: snapshotForPersistence.dTpa,
+      r_wpa: snapshotForPersistence.rWpa,
+      o_wpa: snapshotForPersistence.oWpa,
+      d_wpa: snapshotForPersistence.dWpa,
+      build_efficiency: snapshotForPersistence.buildEfficiency,
+      wages: snapshotForPersistence.wages,
+      raw_state: snapshotForPersistence.rawState ?? {},
+    }
+    const { data: existingProjection, error: projectionReadError } = await supabase
+      .from('spartan_state_projection')
+      .select('version')
+      .eq('province_id', captureOwner.accountId)
+      .maybeSingle()
+    if (projectionReadError) return NextResponse.json({ error: projectionReadError.message }, { status: 500 })
+    const { error: projectionError } = await supabase.from('spartan_state_projection').upsert({
+      province_id: captureOwner.accountId,
+      kingdom_id: captureOwner.kingdomCode,
+      state: projectionState,
+      version: Number(existingProjection?.version ?? 0) + 1,
+      updated_at: snapshotForPersistence.observedAt ?? new Date().toISOString(),
+    }, { onConflict: 'province_id' })
+    if (projectionError) return NextResponse.json({ error: projectionError.message }, { status: 500 })
 
     if (body.events?.length) {
       const eventRows = body.events.map((event) => ({
