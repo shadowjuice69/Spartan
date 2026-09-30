@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server'
 import { createClient as createSupabaseAdmin } from '@supabase/supabase-js'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { extractDiscordId } from '@/lib/spartan/security'
 
 export const dynamic = 'force-dynamic'
 
 type Snapshot = Record<string, any>
-function adminClient() { const url = process.env.NEXT_PUBLIC_SUPABASE_URL; const key = process.env.SUPABASE_SERVICE_ROLE_KEY; if (!url || !key) throw new Error('Spartan history service is not configured.'); return createSupabaseAdmin(url, key, { auth: { autoRefreshToken: false, persistSession: false } }) }
+function adminClient() { return createServiceClient() }
 function object(v: unknown): Snapshot { return v && typeof v === 'object' && !Array.isArray(v) ? v as Snapshot : {} }
 function number(v: unknown) {
   if (typeof v !== 'string') { const n = Number(v); return Number.isFinite(n) ? n : null }
