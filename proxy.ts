@@ -39,6 +39,17 @@ export async function proxy(request: NextRequest) {
 
   if (PUBLIC_PATHS.has(path)) return response
 
+  // API callers must receive a machine-readable auth failure, never an HTML
+  // login redirect. A redirect here makes fetch('/api/...').json() fail and
+  // leaves every dashboard page looking empty instead of showing the real
+  // authentication problem. Browser navigation still gets the normal login UI.
+  if (!authUserId && path.startsWith('/api/')) {
+    return NextResponse.json(
+      { error: 'Unauthorized', code: 'AUTH_REQUIRED' },
+      { status: 401, headers: { 'Cache-Control': 'no-store' } }
+    )
+  }
+
   if (!authUserId) return login(request)
 
   // The Supabase auth user is the durable session identity. Discord metadata is
