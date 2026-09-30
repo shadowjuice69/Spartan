@@ -54,16 +54,20 @@ export async function GET(request: Request) {
   const auth = await requireAccount()
   if (!auth.ok) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const search = new URL(request.url).searchParams.get('search') || ''
+  const params = new URL(request.url).searchParams
+  const search = params.get('search') || ''
+  const view = params.get('view') || 'library'
   let query = auth.db
     .from('spartan_builds')
-    .select('id,name,race,personality,author,updated_at')
+    .select('id,name,race,personality,author,updated_at,active,created_by_discord_id')
     .order('updated_at', { ascending: false })
+
+  if (view !== 'vault') query = query.eq('active', true)
   if (search) query = query.ilike('name', `%${search}%`)
 
   const { data, error } = await query
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ builds: data })
+  return NextResponse.json({ builds: data, view })
 }
 
 export async function POST(request: Request) {
@@ -71,6 +75,23 @@ export async function POST(request: Request) {
   if (!auth.ok) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await request.json()
+
+  // Restore existing stored builds into the user's visible Library without
+  // duplicating the underlying records.
+  if (body?.action === 'restore') {
+    const ids = Array.isArray(body.buildIds) ? body.buildIds.filter((id: unknown) => typeof id === 'string') : []
+    if (!ids.length) return NextResponse.json({ error: 'Select at least one stored build.' }, { status: 400 })
+
+    const { data, error } = await auth.db
+      .from('spartan_builds')
+      .update({ active: true, updated_at: new Date().toISOString() })
+      .in('id', ids)
+      .select('id,name,race,personality,author,updated_at,active')
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ builds: data, restored: data?.length || 0 })
+  }
+
   const { name, race, personality, author, buildings, science, military_requirement,
           raw_build_text, raw_military_text, raw_science_text } = body
   if (!name) return NextResponse.json({ error: 'Build name is required.' }, { status: 400 })
