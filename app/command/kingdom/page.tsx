@@ -1,5 +1,7 @@
 "use client"
 
+import JeevesSummary from "@/components/spartan/JeevesSummary"
+
 import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import CanonicalIntelStrip from "@/app/components/CanonicalIntelStrip"
