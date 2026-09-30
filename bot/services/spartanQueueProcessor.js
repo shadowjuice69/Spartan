@@ -129,20 +129,33 @@ async function writeProvinceHistory(sb, flow, state, canonical) {
   if (error && !String(error.message).toLowerCase().includes('duplicate')) throw new Error(`province history insert: ${error.message}`);
   return true;
 }
+function deriveIntelTarget(text) {
+  const normalized = String(text || '').replace(/\s+/g, ' ').trim();
+  const patterns = [
+    /(?:to|at|against|target(?:ed|ing)?(?:\s+province)?|arrive at)\s+(?:\*\*)?#?(\\d+)\\s+([^(*—:]+?)(?:\\s*\\*\\*)?\\s*\\((\\d+:\\d+)\\)/i,
+    /(?:from|by)\s+(?:an?\s+)?(?:unknown\s+province|province)?\\s*(?:from\\s+)?([^(*—:]+?)\\s*\\((\\d+:\\d+)\\)/i,
+    /#(\\d+)\\s+([^—:]+?)\\s*\\((\\d+:\\d+)\\)/i
+  ];
+  for (const re of patterns) {
+    const m = normalized.match(re);
+    if (m) {
+      if (m.length === 4) return { slot: m[1] || null, name: m[2]?.trim() || null, kingdom: m[3] || null };
+      if (m.length === 3) return { slot: null, name: m[1]?.trim() || null, kingdom: m[2] || null };
+    }
+  }
+  const kingdom = normalized.match(/(?:target kingdom|kingdom(?:\s+mate)?|from).*?\\((\\d+:\\d+)\\)/i)?.[1] || null;
+  return kingdom ? { slot: null, name: null, kingdom } : null;
+}
+
 function deriveIntelIdentity(pageKind, text, flow) {
   const normalized = String(text || '').replace(/\s+/g, ' ').trim();
-  const actor = normalized.match(/#(\d+)\s+([^—:]+?)(?:\s+—|:)/i);
-  const target = normalized.match(/→\s+(?:\*\*)?#(\d+)\s+([^(*—]+?)(?:\s*\*\*)?\s*\((\d+:\d+)\)/i)
-    || normalized.match(/arrive at\s+(?:\*\*)?([^(*—]+?)(?:\s*\*\*)?\s*\((\d+:\d+)\)/i);
-  const targetCoord = target?.[3] || target?.[2] || null;
-  const targetName = target?.[2] || target?.[1] || null;
-  const actorName = actor?.[2]?.trim() || null;
-  const actorSlot = actor?.[1] || null;
-  const identityType = ['thievery', 'news'].includes(pageKind) && (targetCoord || targetName) ? 'target' : 'actor';
+  const actor = normalized.match(/#(\\d+)\\s+([^—:]+?)(?:\\s+—|:)/i);
+  const target = deriveIntelTarget(normalized);
+  const identityType = ['thievery', 'news', 'aid', 'magic', 'attack'].includes(pageKind) && target ? 'target' : 'actor';
   const identity = identityType === 'target'
-    ? [targetCoord || '', targetName || ''].join('|').toLowerCase()
-    : [flow.kingdom_id || '', actorSlot || '', actorName || ''].join('|').toLowerCase();
-  return identity.replace(/\s+/g, ' ').trim() || null;
+    ? [target?.kingdom || '', target?.slot || '', target?.name || ''].join('|').toLowerCase()
+    : [flow.kingdom_id || '', actor?.[1] || '', actor?.[2]?.trim() || ''].join('|').toLowerCase();
+  return identity.replace(/\\s+/g, ' ').trim() || null;
 }
 
 async function removePreviousIntelProjection(sb, pageKind, kingdomId, intelKey, currentCaptureId) {
@@ -218,6 +231,17 @@ async function syncBotIntelRecord(sb, flow, capture, state) {
     reason = 'Channel/content identifies dragon';
   }
 
+  const target = deriveIntelTarget(text);
+  const sourceKingdom = String(flow.kingdom_id || '').trim() || null;
+  const targetKingdom = target?.kingdom || null;
+  const visibility = targetKingdom
+    ? (sourceKingdom && targetKingdom === sourceKingdom ? 'own' : 'enemy')
+    : 'own';
+  const intelType = 'province';
+  const targetProvinceId = target
+    ? [target.slot ? String(target.slot) : '', target.name || ''].filter(Boolean).join(' ').trim() || null
+    : null;
+
   const capturedAt = capture?.captured_at || new Date().toISOString();
   const expiresAt = new Date(new Date(capturedAt).getTime() + 48 * 60 * 60 * 1000).toISOString();
   const intelKey = deriveIntelIdentity(pageKind, text, flow);
@@ -240,12 +264,16 @@ async function syncBotIntelRecord(sb, flow, capture, state) {
     source_vault_id: capture.id,
     user_id: capture.user_id || null,
     province_id: flow.province_id || null,
-    kingdom_id: flow.kingdom_id || null,
+    kingdom_id: sourceKingdom,
+    target_province_id: targetProvinceId,
+    target_kingdom_id: targetKingdom,
     captured_at: capturedAt,
     source: 'discord-bot',
     source_id: flow.source_id || discord.message_id || flow.capture_id,
     url: capture.url || null,
     page_kind: pageKind,
+    intel_type: intelType,
+    visibility,
     classification_source: 'channel+content',
     classification_confidence: confidence,
     classification_reason: reason,
@@ -259,7 +287,7 @@ async function syncBotIntelRecord(sb, flow, capture, state) {
     parsed_payload: parsedPayload,
     content_hash: capture.content_hash || null,
     updated_at: new Date().toISOString()
-  }, { onConflict: 'capture_id' });
+  }, { onConflict: 'capture_id,intel_type,province_id,kingdom_id' });
 
   if (error) throw new Error(`bot intel projection: ${error.message}`);
   return { pageKind, confidence };
