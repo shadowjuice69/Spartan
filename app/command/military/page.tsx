@@ -229,6 +229,7 @@ export default function MilitaryPage() {
         </div>
         <button onClick={() => router.push("/")} style={{ padding: "11px 16px", borderRadius: 9, border: "1px solid #d8ff54", background: "#101c23", color: "#d8ff54", fontWeight: 900, fontSize: 10, cursor: "pointer" }}>← COMMAND CENTER</button>
       </header>
+      <JeevesSummary compact />
 
       {loading && !data && !error && <div style={{ padding: 18, color: "#67f0b0" }}>LOADING MILITARY INTELLIGENCE…</div>}
       {error && <div style={{ padding: 14, color: "#ff9b9b" }}>{error}</div>}
