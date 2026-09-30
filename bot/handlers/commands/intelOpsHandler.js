@@ -1,5 +1,6 @@
 const supabaseService = require("../../services/supabase");
 const spartanAccess = require("../../services/spartanAccessService");
+const canonicalIntel = require("../../services/canonicalIntelService");
 
 const PAGE_KEYS = ["throne", "survey", "science", "magic", "som", "universal"];
 const LABEL = { throne: "Thr", survey: "Sur", science: "Sci", magic: "Mag", som: "SoM", universal: "Uni" };
@@ -115,6 +116,16 @@ const UNSUPPORTED = {
 module.exports = async function intelOpsHandler(interaction) {
   const sb = supabaseService.getClient(); if (!sb) return interaction.reply({ content: "❌ Supabase is unavailable.", ephemeral: true });
   const sub = interaction.options.getSubcommand();
+  if (sub === "canonical") {
+    const section = interaction.options.getString("section") || "all";
+    const access = await spartanAccess.get(interaction.user.id).catch(() => null);
+    const kd = access?.metadata?.coordinates || access?.kingdom_code || "";
+    const rows = await canonicalIntel.getIntel({ kd, section, limit: 40 });
+    const summary = canonicalIntel.summarize(rows);
+    const lines = rows.slice(0, 18).map((r) => { const when = r.captured_at ? new Date(r.captured_at).toLocaleString() : "—"; const target = r.target_province_id ? ` → ${r.target_province_id}` : ""; return `• ${String(r.page_kind || "intel").toUpperCase()} ${r.visibility === "enemy" ? "ENEMY" : "OWN"}${target} · ${when}\n  ${String(r.raw_text || JSON.stringify(r.parsed_payload || {})).slice(0, 260)}`; });
+    const body = `🧠 **CANONICAL SPARTAN INTEL — ${section.toUpperCase()}**\n**${summary.count} records** · ${Object.entries(summary.byKind).map(([k,v]) => `${k}:${v}`).join(" · ")}\n\n${lines.join("\n") || "No canonical Intel is available for this section."}`;
+    return interaction.reply({ content: body.slice(0, 1900), ephemeral: false });
+  }
   if (UNSUPPORTED[sub]) return interaction.reply({ content: `🚧 **/spartan-intel ${sub}** isn't built yet. ${UNSUPPORTED[sub]}`, ephemeral: true });
   let me = null;
   try {
