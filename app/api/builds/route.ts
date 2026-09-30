@@ -8,12 +8,29 @@ async function requireAccount() {
   const { data: { user } } = await client.auth.getUser()
   if (!user) return { ok: false as const }
   const db = createServiceClient()
+
   const { data: account } = await db
     .from('spartan_accounts')
     .select('discord_user_id')
     .eq('auth_user_id', user.id)
     .maybeSingle()
-  return { ok: true as const, db, discordId: account?.discord_user_id ? String(account.discord_user_id) : null }
+
+  if (account) {
+    return { ok: true as const, db, discordId: account.discord_user_id ? String(account.discord_user_id) : null }
+  }
+
+  // Canonical Spartan identity linkage lives in the province registry.
+  // This keeps existing builds visible after an auth/account recreation without
+  // creating a duplicate spartan_accounts row.
+  const { data: registry } = await db
+    .from('spartan_province_registry')
+    .select('province_id,province_name,kingdom_code,user_id')
+    .eq('user_id', user.id)
+    .maybeSingle()
+
+  if (!registry) return { ok: false as const }
+
+  return { ok: true as const, db, discordId: null }
 }
 
 async function lookupRuleSnapshots(db: any, race: string | null, personality: string | null) {
