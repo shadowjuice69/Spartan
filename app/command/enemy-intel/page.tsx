@@ -40,6 +40,7 @@ export default function EnemyIntel(){
         <div><div style={{fontSize:9,color:"#ffbd66",letterSpacing:".2em"}}>SPARTAN // SHARED INTELLIGENCE</div><h1 style={{fontSize:34,margin:"7px 0 0"}}>ENEMY INTEL</h1><div style={{fontSize:12,color:"#778493",marginTop:5}}>Your province {data?.ownProvince||"—"} · KD {data?.ownKingdom||"—"} · auto-refresh 15s</div></div>
         <button onClick={()=>router.push("/")} style={{position:"fixed",top:16,right:18,zIndex:1000,background:"#101c23",border:"1px solid #d8ff54",color:"#d8ff54",padding:"11px 16px",borderRadius:9,fontWeight:900,fontSize:10,letterSpacing:".08em",cursor:"pointer"}}>← RETURN TO COMMAND CENTER</button>
       </header>
+      <JeevesSummary compact />
 
       {loading&&!data&&!error&&<div style={{padding:18,marginBottom:18,border:"1px solid rgba(103,240,176,.18)",background:"rgba(103,240,176,.04)",borderRadius:10,color:"#67f0b0"}}>LOADING SHARED ENEMY INTELLIGENCE…</div>}
       {error&&<div style={{padding:14,marginBottom:18,border:"1px solid rgba(255,100,100,.3)",background:"rgba(255,60,60,.06)",borderRadius:10,color:"#ff9b9b"}}>{error}</div>}
