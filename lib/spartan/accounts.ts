@@ -146,7 +146,14 @@ export async function registerSpartanAccount({ screenName, password, provinceNam
     if (insertProvinceError) console.error(`[SPARTAN REGISTER] Failed to bootstrap province registry row: ${insertProvinceError.message}`)
   }
 
-  const { data: verifiedAccount, error: verifyError } = await supabase.from('spartan_accounts').select('id,auth_user_id,discord_user_id,account_status').eq('auth_user_id', authUserId).maybeSingle()\n  if (verifyError) throw new Error(`Spartan account verification failed: ${verifyError.message}`)\n  if (!verifiedAccount || verifiedAccount.discord_user_id !== discordUserId || verifiedAccount.account_status !== 'active') {\n    if (createdAuthUser) await supabase.auth.admin.deleteUser(authUserId)\n    throw new Error('Spartan account creation did not complete. No login account was persisted; please try registration again.')\n  }\n\n  return { screenName: name, discordUserId, provinceName: province, provinceLocation: location, ip }
+  const { data: verifiedAccount, error: verifyError } = await supabase.from('spartan_accounts').select('id,auth_user_id,discord_user_id,account_status').eq('auth_user_id', authUserId).maybeSingle()
+  if (verifyError) throw new Error(`Spartan account verification failed: ${verifyError.message}`)
+  if (!verifiedAccount || verifiedAccount.discord_user_id !== discordUserId || verifiedAccount.account_status !== 'active') {
+    if (createdAuthUser) await supabase.auth.admin.deleteUser(authUserId)
+    throw new Error('Spartan account creation did not complete. No login account was persisted; please try registration again.')
+  }
+
+  return { screenName: name, discordUserId, provinceName: province, provinceLocation: location, ip }
 }
 
 export function accountEmail(screenName: string) { return internalEmail(screenName.trim()) }
