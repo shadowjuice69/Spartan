@@ -1,5 +1,6 @@
 'use client'
 
+import JeevesSummary from '@/components/spartan/JeevesSummary'
 import {
   AllData, C, DataTable, Donut, Empty, Gauge, Grid, HBars, LineChart, Panel, Shell, Skeletons, Stat, Tag,
   ago, compact, fmt, pct, seriesFrom, usePageModel,
@@ -120,6 +121,7 @@ export default function ProvincePage() {
           )}
         </>
       )}
+      <JeevesSummary compact />
       {data && <AllData fields={data.fields} captures={data.captures} note={t ? `Throne visits this month: ${s?.throneVisits ? `${s.throneVisits.days} of ${s.throneVisits.of}` : '—'} · Multi-attack protection: ${s?.protection ?? '—'}` : undefined} />}
     </Shell>
   )

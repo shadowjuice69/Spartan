@@ -1,5 +1,6 @@
 'use client'
 
+import JeevesSummary from '@/components/spartan/JeevesSummary'
 import {
   AllData, C, DataTable, Donut, Empty, Gauge, Grid, HBars, LineChart, Panel, Shell, Skeletons, Stat, Tag,
   ago, compact, fmt, pct, seriesFrom, usePageModel,
@@ -98,6 +99,7 @@ export default function MilitaryPage() {
           </Grid>
         </>
       )}
+      <JeevesSummary compact />
       {data && <AllData fields={data.fields} captures={data.captures} />}
     </Shell>
   )

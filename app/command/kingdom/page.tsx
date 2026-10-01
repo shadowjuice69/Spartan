@@ -1,5 +1,6 @@
 'use client'
 
+import JeevesSummary from '@/components/spartan/JeevesSummary'
 import { useState } from 'react'
 import {
   AllData, C, DataTable, Donut, Empty, Grid, HBars, Panel, Scatter, Shell, Skeletons, Stat, Tag,
@@ -144,6 +145,7 @@ export default function KingdomPage() {
           )}
         </>
       )}
+      <JeevesSummary compact />
       {data && <AllData fields={data.fields} captures={data.captures} />}
     </Shell>
   )
