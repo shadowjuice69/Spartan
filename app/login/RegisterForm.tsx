@@ -34,7 +34,7 @@ export default function RegisterForm() {
       </label>
       <label>
         KD / LOCATION
-        <input name="provinceLocation" placeholder="6:9" inputMode="numeric" required />
+        <input name="provinceLocation" placeholder="6:9" inputMode="text" autoComplete="off" required />
       </label>
       <label>
         PASSWORD
