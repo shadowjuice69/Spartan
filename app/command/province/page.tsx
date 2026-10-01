@@ -1,34 +1,126 @@
-"use client"
+'use client'
 
-import JeevesSummary from "@/components/spartan/JeevesSummary"
+import {
+  AllData, C, DataTable, Donut, Empty, Gauge, Grid, HBars, LineChart, Panel, Shell, Skeletons, Stat, Tag,
+  ago, compact, fmt, pct, seriesFrom, usePageModel,
+} from '@/components/spartan/ui'
 
-import { Suspense, useEffect, useState } from "react"
-import { useRouter, useSearchParams } from "next/navigation"
+const label = { fontSize: 10, letterSpacing: '.16em', color: '#7d8fa0' } as const
 
-const navCommand = [["Command","/"],["Province","/command/province"],["War Room","/command/war-room"],["Build Lab","/command/build-lab"],["Draft Calc","/command/draft-calc"],["Wiki","/command/wiki"],["Tools","/command/tools"],["Scraper Generator","/command/scraper"]]
-const navIntel = [["Intel","/command/intel"],["Kingdom","/command/kingdom"],["Military","/command/military"],["Magic","/command/magic"],["Thievery","/command/thievery"],["Science","/command/science"],["Buildings","/command/buildings"],["Throne","/command/throne"],["Enemy Intel","/command/enemy-intel"]]
-const fmt=(v:any)=>v==null||v===""?"—":Number.isFinite(Number(v))?Number(v).toLocaleString():String(v)
-const pct=(v:any)=>v==null||v===""?"—":`${Number(v).toFixed(1)}%`
+export default function ProvincePage() {
+  const { data, error, loading, reload } = usePageModel('province')
+  const m = data?.model
+  const t = m?.throne
+  const f = m?.throneFields || {}
+  const s = m?.state
+  const history: any[] = data?.history || []
+  const acres = f.acres ?? s?.land
+  const nw = f.networth ?? s?.networth
+  const off = f.offense
+  const def = f.defense
+  const pop = s?.population
+  const popSlices = pop ? [
+    { label: 'Peasants', value: pop.peasants || 0, color: C.cyan },
+    { label: 'Army', value: Math.max(0, (pop.army || 0) - (pop.thieves || 0) - (pop.wizards || 0)), color: C.red },
+    { label: 'Thieves', value: pop.thieves || 0, color: C.amber },
+    { label: 'Wizards', value: pop.wizards || 0, color: C.violet },
+  ] : []
+  const army = [
+    ['Strongarms (offense)', f.off_specs, C.red], ['Slingers (defense)', f.def_specs, C.cyan], ['Elites', f.elites, C.violet],
+    ['Soldiers', f.soldiers, C.amber], ['War horses', f.war_horses, C.lime], ['Thieves', f.thieves, C.pink], ['Wizards', f.wizards, C.blue],
+  ].filter(r => r[1] != null) as Array<[string, number, string]>
+  const resources = [['Gold', f.gold, C.amber], ['Food', f.food, C.green], ['Runes', f.runes, C.violet], ['Peasants', f.peons, C.cyan]].filter(r => r[1] != null) as Array<[string, number, string]>
+  const trends: any[] = s?.trends || []
+  const net = (name: string) => trends.find(x => x.label === name)
 
-function ProvinceCommand(){
-  const router=useRouter(); const searchParams=useSearchParams(); const provinceId=searchParams.get("id"); const provinceName=searchParams.get("province")
-  const [data,setData]=useState<any>(null); const [error,setError]=useState("")
-  useEffect(()=>{let alive=true; const load=async()=>{try{const query=provinceId?`?provinceId=${encodeURIComponent(provinceId)}`:provinceName?`?province=${encodeURIComponent(provinceName)}`:""; const r=await fetch(`/api/throne${query}`,{cache:"no-store"}); const body=await r.json(); if(!r.ok) throw new Error(body.error||"Province Intel unavailable"); if(alive){setData(body);setError("")}}catch(e){if(alive)setError(e instanceof Error?e.message:"Province Intel unavailable")}}; load(); const t=setInterval(load,15000); return()=>{alive=false;clearInterval(t)}},[provinceId,provinceName])
-  const t=data?.throne||{}; const p=data?.province||{}; const troop=t.troops||{}; const state=p.state_data||{}
-  const cards=[["ACRES",t.land??p.acres],["NETWORTH",t.networth??p.nw],["OFFENSE",t.offense??p.off],["DEFENSE",t.defense??p.def],["BUILD EFFICIENCY",t.be??p.be],["MANA",t.mana??p.mana],["STEALTH",t.stealth??p.stlth],["WAGES",t.wages??p.wages]]
-  const forces=[["Soldiers",troop.soldiers??p.soldiers],["Off Specs",troop.off_specs??p.off_specs],["Def Specs",troop.def_specs??p.def_specs],["Elites",troop.elites??p.elites],["Thieves",t.thieves??p.thieves],["Wizards",t.wizards??p.wizards],["War Horses",troop.war_horses??p.war_horses],["Prisoners",troop.prisoners??p.prisoners]]
-  return <main style={{minHeight:"100vh",background:"#05080d",color:"#e7eef5",fontFamily:"Inter,system-ui,sans-serif",display:"flex"}}>
-    <aside style={{width:245,flexShrink:0,minHeight:"100vh",background:"#071018",borderRight:"1px solid rgba(255,255,255,.08)",padding:24}}><div style={{fontWeight:900,letterSpacing:".18em",color:"#d8ff54"}}>SPARTAN</div><div style={{fontSize:9,color:"#718091",letterSpacing:".16em",marginTop:5}}>UTOPIA COMMAND</div><div style={{margin:"30px 0 10px",fontSize:9,color:"#5f6c7a",letterSpacing:".18em"}}>COMMAND SYSTEMS</div>{navCommand.map(([name,path])=><button key={name} onClick={()=>router.push(path)} style={{display:"block",width:"100%",textAlign:"left",padding:"11px 12px",marginBottom:4,border:0,borderRadius:8,background:name==="Province"?"rgba(216,255,84,.08)":"transparent",color:name==="Province"?"#d8ff54":"#aeb9c5",fontWeight:700,fontSize:11,cursor:"pointer"}}>{name}</button>)}<div style={{margin:"22px 0 10px",fontSize:9,color:"#5f6c7a",letterSpacing:".18em"}}>INTEL DATA</div>{navIntel.map(([name,path])=><button key={name} onClick={()=>router.push(path)} style={{display:"block",width:"100%",textAlign:"left",padding:"11px 12px",marginBottom:4,border:0,borderRadius:8,background:name==="Province"?"rgba(216,255,84,.08)":"transparent",color:name==="Province"?"#d8ff54":"#aeb9c5",fontWeight:700,fontSize:11,cursor:"pointer"}}>{name}</button>)}<div style={{marginTop:25,padding:12,border:"1px solid rgba(103,240,176,.18)",borderRadius:9,color:"#67f0b0",fontSize:9}}>● THRONE FEED ONLINE<br/><span style={{color:"#718091"}}>Live province telemetry</span></div></aside>
-    <section style={{flex:1,padding:"30px 34px",maxWidth:1500}}><header style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:24}}><div><div style={{fontSize:9,color:"#67f0b0",letterSpacing:".2em"}}>SPARTAN // THRONE INTELLIGENCE</div><h1 style={{fontSize:36,margin:"7px 0 4px"}}>{t.province||p.name||"Province"}</h1><div style={{fontSize:12,color:"#83919f"}}>Kingdom {t.kd_code||p.kd_code||"—"} · {t.race||p.race||"Race unknown"} · {t.personality||p.personality||"Personality unknown"}</div></div><button onClick={()=>router.push("/command/kingdom")} style={{padding:"10px 14px",borderRadius:8,border:"1px solid rgba(255,255,255,.1)",background:"rgba(255,255,255,.04)",color:"#dce7ee"}}>KINGDOM</button></header>
-      <JeevesSummary compact />
-      {error&&<div style={{padding:14,marginBottom:18,border:"1px solid rgba(255,100,100,.3)",background:"rgba(255,60,60,.06)",borderRadius:10,color:"#ff9b9b"}}><strong>DATA CORE NOTICE</strong><div style={{marginTop:5}}>{error}</div></div>}
-      <section style={{display:"grid",gridTemplateColumns:"repeat(4,minmax(0,1fr))",gap:10,marginBottom:18}}>{cards.map(([k,v])=><div key={String(k)} style={{padding:17,border:"1px solid rgba(255,255,255,.08)",borderRadius:10,background:"#081119"}}><div style={{fontSize:9,color:"#687686",letterSpacing:".12em"}}>{k}</div><strong style={{display:"block",fontSize:22,marginTop:7}}>{fmt(v)}</strong></div>)}</section>
-      <section style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:16}}><article style={{padding:20,border:"1px solid rgba(255,255,255,.08)",borderRadius:12,background:"#081119"}}><div style={{fontSize:9,color:"#67f0b0",letterSpacing:".16em"}}>MILITARY TELEMETRY</div><h2 style={{margin:"7px 0 18px"}}>Current forces</h2><div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:9}}>{forces.map(([n,v])=><div key={String(n)} style={{padding:13,border:"1px solid rgba(255,255,255,.06)",background:"rgba(255,255,255,.025)",display:"flex",justifyContent:"space-between"}}><span style={{color:"#91a2b0",fontSize:11}}>{n}</span><strong>{fmt(v)}</strong></div>)}</div></article><article style={{padding:20,border:"1px solid rgba(255,255,255,.08)",borderRadius:12,background:"#081119"}}><div style={{fontSize:9,color:"#67f0b0",letterSpacing:".16em"}}>OPERATIONAL STATE</div><h2 style={{margin:"7px 0 18px",fontSize:20}}>Ratios</h2>{[["Real TPA",p.r_tpa],["Off TPA",t.tpa??p.o_tpa],["Def TPA",p.d_tpa],["Real WPA",p.r_wpa],["Off WPA",t.wpa??p.o_wpa],["Def WPA",p.d_wpa],["BE",t.be??p.be],["Wages",t.wages??p.wages]].map(([n,v])=><div key={String(n)} style={{display:"flex",justifyContent:"space-between",padding:"10px 0",borderBottom:"1px solid rgba(255,255,255,.05)",fontSize:11}}><span style={{color:"#91a2b0"}}>{n}</span><strong>{n==="BE"||n==="Wages"?pct(v):fmt(v)}</strong></div>)}</article></section>
-      <section style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginTop:16}}><article style={{padding:20,border:"1px solid rgba(255,255,255,.08)",borderRadius:12,background:"#081119"}}><div style={{fontSize:9,color:"#67f0b0",letterSpacing:".16em"}}>CAPTURE SOURCES</div><h2 style={{margin:"7px 0 14px"}}>Canonical Intel state</h2><div style={{fontSize:11,color:"#91a2b0",lineHeight:1.8}}>Source: <strong style={{color:"#e7eef5"}}>{data?.source||"—"}</strong><br/>Captured: <strong style={{color:"#e7eef5"}}>{data?.capturedAt?new Date(data.capturedAt).toLocaleString():"—"}</strong><br/>Province updated: <strong style={{color:"#e7eef5"}}>{p.updated_at?new Date(p.updated_at).toLocaleString():"—"}</strong></div></article><article style={{padding:20,border:"1px solid rgba(255,255,255,.08)",borderRadius:12,background:"#081119"}}><div style={{fontSize:9,color:"#67f0b0",letterSpacing:".16em"}}>SPECIALIZED INTEL</div><h2 style={{margin:"7px 0 14px"}}>What Spartan has captured</h2><div style={{display:"grid",gap:8}}>{[["SCIENCE",p.science],["BUILDINGS",p.buildings],["STATE DATA",state]].map(([n,v])=><div key={String(n)} style={{padding:10,border:"1px solid rgba(255,255,255,.05)",borderRadius:7}}><span style={{fontSize:9,color:"#687686"}}>{n}</span><strong style={{display:"block",marginTop:3,fontSize:12}}>{v&&typeof v==="object"?`${Object.keys(v).length} fields captured`:v?String(v):"No data yet"}</strong></div>)}</div></article></section>
-    </section>
-  </main>
-}
+  return (
+    <Shell title={t?.province || data?.province || 'Province'} eyebrow="SPARTAN // PROVINCE OVERVIEW" accent={C.lime}
+      subtitle={t ? `${t.race ?? ''} · ${t.ruler ?? ''} · ${t.date ?? ''}`.replace(/^ · | · $/g, '') : 'Your province at a glance: land, networth, forces, economy, ratios and active spells.'}
+      data={data} error={error} loading={loading} reload={reload}>
+      {!data && !error && <Skeletons count={8} />}
+      {data && !t && !s && <Panel><Empty title="No province capture yet" hint="Open your Throne in Utopia with the Spartan scraper running. This page fills in within seconds." /></Panel>}
+      {(t || s) && (
+        <>
+          <Grid>
+            <Stat label="Land" value={acres} sub={s?.landRank ? `Rank ${s.landRank.rank} of ${fmt(s.landRank.of)}` : undefined} color={C.lime} delay={0} />
+            <Stat label="Networth" value={nw} sub={s?.networthRank ? `Rank ${s.networthRank.rank} of ${fmt(s.networthRank.of)}` : undefined} color={C.violet} delay={1} />
+            <Stat label="Offense" value={off} sub={t?.ratios.offSpa != null ? `${t.ratios.offSpa} per acre` : undefined} color={C.red} delay={2} />
+            <Stat label="Defense" value={def} sub={t?.ratios.defSpa != null ? `${t.ratios.defSpa} per acre` : undefined} color={C.cyan} delay={3} />
+          </Grid>
 
-export default function Page(){
-  return <Suspense fallback={<main style={{minHeight:"100vh",background:"#05080d",color:"#67f0b0",display:"grid",placeItems:"center",fontFamily:"Inter,system-ui,sans-serif"}}>Loading Province Intelligence…</main>}><ProvinceCommand /></Suspense>
+          <Grid>
+            <Panel span={4} title="FORCES" sub={m.throneAt ? `Throne · captured ${ago(m.throneAt)}` : undefined} delay={1}>
+              <HBars items={army.map(([name, value, color]) => ({ label: name, value, color }))} />
+            </Panel>
+            <Panel span={4} title="POPULATION" sub={pop?.max ? `${fmt(pop.total)} of ${fmt(pop.max)} max` : undefined} delay={2}>
+              {popSlices.length ? <Donut slices={popSlices} centerBottom="Population" /> : <Empty title="No state capture" hint="Open Council → State to fill this in." />}
+            </Panel>
+            <Panel span={4} title="HEALTH" delay={3}>
+              <div style={{ display: 'flex', justifyContent: 'space-around', flexWrap: 'wrap', gap: 6 }}>
+                <Gauge value={t?.buildingEfficiency ?? f.build_efficiency} max={130} label="Build eff." text={pct(t?.buildingEfficiency ?? f.build_efficiency, 0)} color={C.lime} size={130} />
+                <Gauge value={s?.economy.employment} max={100} label="Employment" text={pct(s?.economy.employment, 0)} color={C.green} size={130} />
+              </div>
+            </Panel>
+          </Grid>
+
+          <Grid>
+            <Panel span={7} title="PROVINCE OVER TIME" sub="Each throne visit adds a point" delay={2}>
+              <LineChart height={230} series={[seriesFrom(history, 'networth', 'Networth', C.violet, compact), seriesFrom(history, 'offense', 'Offense', C.red, compact), seriesFrom(history, 'defense', 'Defense', C.cyan, compact)]} />
+            </Panel>
+            <Panel span={5} title="RESOURCES" delay={3}>
+              <HBars items={resources.map(([name, value, color]) => ({ label: name, value, color }))} />
+              <div style={{ marginTop: 12, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <div><div style={label}>DAILY INCOME</div><b style={{ fontSize: 18 }}>{fmt(s?.economy.dailyIncome)}</b></div>
+                <div><div style={label}>DAILY WAGES</div><b style={{ fontSize: 18 }}>{fmt(s?.economy.dailyWages)}</b></div>
+                <div><div style={label}>TRADE BALANCE</div><b style={{ fontSize: 18 }}>{fmt(t?.tradeBalance)}</b></div>
+                <div><div style={label}>HONOR</div><b style={{ fontSize: 18 }}>{fmt(s?.honor)}</b></div>
+              </div>
+            </Panel>
+          </Grid>
+
+          <Grid>
+            <Panel span={6} title="ACTIVE SPELLS & RITUAL" delay={3}>
+              {t?.ritual && (
+                <div style={{ marginBottom: 14, padding: 12, borderRadius: 12, background: 'rgba(177,140,255,.09)', border: '1px solid rgba(177,140,255,.3)' }}>
+                  <Tag color={C.violet}>RITUAL</Tag> <b>{t.ritual.name}</b> <span style={{ color: '#8597a8' }}>· {t.ritual.effectiveness}% effective · {t.ritual.days} days left</span>
+                </div>
+              )}
+              {t?.spells?.length ? <HBars max={Math.max(30, ...t.spells.map((x: any) => x.days))} items={t.spells.map((x: any) => ({ label: x.name, value: x.days, color: C.cyan, text: `${x.days} days` }))} />
+                : <Empty title="No active spells captured" hint="Spells appear on your Throne page." />}
+            </Panel>
+            <Panel span={6} title="RATIOS PER ACRE" delay={4}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10 }}>
+                {t ? [['OFF SPA', t.ratios.offSpa], ['DEF SPA', t.ratios.defSpa], ['PEASANTS', t.ratios.peasantsPerAcre], ['ELITES', t.ratios.elitesPerAcre], ['THIEVES TPA', t.ratios.thievesPerAcre], ['WIZARDS WPA', t.ratios.wizardsPerAcre]].map(([k, v]) => (
+                  <div key={String(k)} style={{ padding: 12, borderRadius: 12, background: 'rgba(255,255,255,.04)' }}><div style={label}>{k}</div><b style={{ fontSize: 22 }}>{v ?? '—'}</b></div>
+                )) : <Empty title="No throne capture" hint="Open your Throne." />}
+              </div>
+              {t && <div style={{ marginTop: 12, fontSize: 12, color: '#8597a8' }}>Thieves ready {pct(t.thievesReady, 0)} · Wizards ready {pct(t.wizardsReady, 0)}</div>}
+            </Panel>
+          </Grid>
+
+          {trends.length > 0 && (
+            <Grid>
+              <Panel span={12} title="RECENT TRENDS" sub={m.stateAt ? `Council State · captured ${ago(m.stateAt)}` : undefined} delay={4}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(250px,1fr))', gap: 14, marginBottom: 14 }}>
+                  {[['Net gold', net('Net Gold'), C.amber], ['Net food', net('Net Food'), C.green], ['Net runes', net('Net Runes'), C.violet], ['Peasants', net('Peasants'), C.cyan]].map(([name, row, color]: any) => row && (
+                    <div key={name} style={{ padding: 12, borderRadius: 12, background: 'rgba(255,255,255,.035)' }}>
+                      <div style={label}>{String(name).toUpperCase()}</div>
+                      <HBars items={[{ label: 'Yesterday', value: row.yesterday, color }, { label: 'This month', value: row.month, color }, { label: 'Last month', value: row.lastMonth, color }]} />
+                    </div>
+                  ))}
+                </div>
+                <DataTable<any> initialSort="label" desc={false} columns={[
+                  { key: 'label', label: 'TREND', value: r => r.label },
+                  { key: 'yesterday', label: 'YESTERDAY', value: r => r.yesterday, render: r => fmt(r.yesterday), align: 'right' },
+                  { key: 'month', label: 'THIS MONTH', value: r => r.month, render: r => fmt(r.month), align: 'right' },
+                  { key: 'lastMonth', label: 'LAST MONTH', value: r => r.lastMonth, render: r => fmt(r.lastMonth), align: 'right' },
+                ]} rows={trends} />
+              </Panel>
+            </Grid>
+          )}
+        </>
+      )}
+      {data && <AllData fields={data.fields} captures={data.captures} note={t ? `Throne visits this month: ${s?.throneVisits ? `${s.throneVisits.days} of ${s.throneVisits.of}` : '—'} · Multi-attack protection: ${s?.protection ?? '—'}` : undefined} />}
+    </Shell>
+  )
 }
