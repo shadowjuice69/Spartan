@@ -68,8 +68,11 @@ export async function proxy(request: NextRequest) {
     response.headers.set('x-spartan-role', security.access?.role ?? (security.protectedIdentity ? 'protected' : 'member'))
     response.headers.set('x-spartan-access', 'active')
     return response
-  } catch {
-    return deny(request, 'security')
+  } catch (error) {
+    // A failure here is a system problem (database unreachable, misconfiguration), not a decision
+    // about this user. Log the real cause and show a distinct reason instead of "not authorized".
+    console.error('[SPARTAN PROXY] access check failed:', error instanceof Error ? error.message : error)
+    return deny(request, 'system_error')
   }
 }
 

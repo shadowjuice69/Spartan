@@ -99,16 +99,9 @@ export async function getSpartanAccess(discordUserId: string) {
   return data ?? null
 }
 
-export async function getSpartanAccessForAuthUser(authUserId: string) {
-  const supabase = adminClient()
-  const { data: account, error } = await supabase
-    .from('spartan_accounts')
-    .select('auth_user_id,screen_name,province_name,province_location,role,discord_user_id')
-    .eq('auth_user_id', authUserId)
-    .maybeSingle()
-  if (error) throw new Error(`Spartan account access lookup failed: ${error.message}`)
-  if (!account) return null
+type SpartanAccountRow = { auth_user_id: string; screen_name: string | null; province_name: string | null; province_location: string | null; role: string | null; discord_user_id: string | number | null }
 
+function accessFromAccount(account: SpartanAccountRow) {
   const role = account.role || 'member'
   return {
     auth_user_id: account.auth_user_id,
@@ -121,6 +114,18 @@ export async function getSpartanAccessForAuthUser(authUserId: string) {
       discord_user_id: account.discord_user_id ?? null,
     },
   }
+}
+
+export async function getSpartanAccessForAuthUser(authUserId: string) {
+  const supabase = adminClient()
+  const { data: account, error } = await supabase
+    .from('spartan_accounts')
+    .select('auth_user_id,screen_name,province_name,province_location,role,discord_user_id')
+    .eq('auth_user_id', authUserId)
+    .maybeSingle()
+  if (error) throw new Error(`Spartan account access lookup failed: ${error.message}`)
+  if (!account) return null
+  return accessFromAccount(account)
 }
 
 export async function resolveDashboardIdentity(authUserId: string, sessionDiscordId?: string | null) {
@@ -165,19 +170,22 @@ export async function authorizeDashboard(request: Request, discordUserId: string
   return { allowed, ip, ipRecorded, access, block, protectedIdentity, ipReputation, reason: !ipRecorded ? 'ip_unavailable' : ipBlocked ? 'ip_blocked' : reputationBlocked ? 'ip_masking_detected' : reputationUnavailable ? 'ip_reputation_unavailable' : !identityAllowed ? 'access_inactive' : null }
 }
 
-export async function authorizeDashboardForAuthUser(request: Request, authUserId: string, sessionDiscordId?: string | null) {
+async function authorizeDashboardForAuthUserUncached(request: Request, authUserId: string, sessionDiscordId?: string | null) {
   const identity = await resolveDashboardIdentity(authUserId, sessionDiscordId)
   if (!identity.account) {
     return { allowed: false, reason: 'security_identity_unavailable', access: null, protectedIdentity: false, ipRecorded: Boolean(requestIp(request)) }
   }
 
   const ip = requestIp(request)
-  const block = await getActiveIpBlock(ip)
   const ipRecorded = Boolean(ip)
   const discordUserId = identity.discordUserId
   const protectedIdentity = isProtectedIdentity(discordUserId)
-  const access = await getSpartanAccessForAuthUser(authUserId)
-  const ipReputation = protectedIdentity ? null : await checkIpReputation(ip)
+  // The account row was already loaded by resolveDashboardIdentity; do not query spartan_accounts a second time.
+  const access = accessFromAccount(identity.account as SpartanAccountRow)
+  const [block, ipReputation] = await Promise.all([
+    getActiveIpBlock(ip),
+    protectedIdentity ? Promise.resolve(null) : checkIpReputation(ip),
+  ])
   const ipBlocked = Boolean(block) && (!protectedIdentity || isOwner(String(block?.created_by_discord_id ?? '')))
   const reputationBlocked = !protectedIdentity && Boolean(ipReputation?.blocked)
   const reputationUnavailable = !protectedIdentity && ipRecorded && ipReputation?.reason === 'ip_reputation_unavailable'
@@ -199,4 +207,43 @@ export async function authorizeDashboardForAuthUser(request: Request, authUserId
   }
 
   return { allowed, ip, ipRecorded, access, block, protectedIdentity, ipReputation, reason: protectedIdentity ? null : !ipRecorded ? 'ip_unavailable' : ipBlocked ? 'ip_blocked' : reputationBlocked ? 'ip_masking_detected' : reputationUnavailable ? 'ip_reputation_unavailable' : !identityAllowed ? 'access_inactive' : null }
+}
+
+// The dashboard gate runs on nearly every request. Without a cache each request cost about six
+// database round trips, two audit inserts and (for non-protected users) an ipinfo.io call. Allowed
+// results are now reused for a short window per user + IP, and simultaneous requests share one check.
+// Denials are never cached, so a blocked or removed user is re-checked on every request.
+// Trade-off: an IP block or a removed account can take up to ACCESS_CACHE_TTL_MS to take effect.
+const ACCESS_CACHE_TTL_MS = 60_000
+const ACCESS_CACHE_MAX = 500
+type AccessResult = Awaited<ReturnType<typeof authorizeDashboardForAuthUserUncached>>
+const accessCache = new Map<string, { at: number; result: AccessResult }>()
+const accessInflight = new Map<string, Promise<AccessResult>>()
+
+export async function authorizeDashboardForAuthUser(request: Request, authUserId: string, sessionDiscordId?: string | null): Promise<AccessResult> {
+  const key = `${authUserId}|${requestIp(request) ?? 'no-ip'}`
+  const now = Date.now()
+  const hit = accessCache.get(key)
+  if (hit && now - hit.at < ACCESS_CACHE_TTL_MS) return hit.result
+  const pending = accessInflight.get(key)
+  if (pending) return pending
+
+  const run = authorizeDashboardForAuthUserUncached(request, authUserId, sessionDiscordId)
+    .then((result) => {
+      if (result.allowed) {
+        if (accessCache.size >= ACCESS_CACHE_MAX) {
+          for (const [k, v] of accessCache) if (Date.now() - v.at >= ACCESS_CACHE_TTL_MS) accessCache.delete(k)
+          if (accessCache.size >= ACCESS_CACHE_MAX) accessCache.clear()
+        }
+        accessCache.set(key, { at: Date.now(), result })
+      } else {
+        accessCache.delete(key)
+      }
+      return result
+    })
+    .finally(() => {
+      accessInflight.delete(key)
+    })
+  accessInflight.set(key, run)
+  return run
 }
