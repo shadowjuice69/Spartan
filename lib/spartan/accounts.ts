@@ -5,8 +5,8 @@ import { requestIp } from './security'
 
 function adminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const key = process.env.SUPABASE_SECRET_KEY
-  if (!url || !key) throw new Error('Spartan account service is not configured.')
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY
+  if (!url || !key) throw new Error('Spartan account service is not configured. Set SUPABASE_SERVICE_ROLE_KEY or SUPABASE_SECRET_KEY on Render.')
   return createSupabaseAdmin(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
 }
 
@@ -123,7 +123,7 @@ export async function registerSpartanAccount({ screenName, password, provinceNam
 
   const { error: accessUpdateError } = await supabase.from('spartan_access')
     .update({ username: name, updated_at: new Date().toISOString() }).eq('discord_user_id', discordUserId)
-  if (accessUpdateError) throw new Error(`Spartan access profile update failed: ${accessUpdateError.message}`)
+  if (accessUpdateError) console.error(`[SPARTAN REGISTER] Access profile sync failed: ${accessUpdateError.message}`)
 
   // Create or claim the province registry row now, whichever is needed. This
   // is what removes the old chicken-and-egg requirement.
@@ -146,7 +146,7 @@ export async function registerSpartanAccount({ screenName, password, provinceNam
     if (insertProvinceError) console.error(`[SPARTAN REGISTER] Failed to bootstrap province registry row: ${insertProvinceError.message}`)
   }
 
-  return { screenName: name, discordUserId, provinceName: province, provinceLocation: location, ip }
+  const { data: verifiedAccount, error: verifyError } = await supabase.from('spartan_accounts').select('id,auth_user_id,discord_user_id,account_status').eq('auth_user_id', authUserId).maybeSingle()\n  if (verifyError) throw new Error(`Spartan account verification failed: ${verifyError.message}`)\n  if (!verifiedAccount || verifiedAccount.discord_user_id !== discordUserId || verifiedAccount.account_status !== 'active') {\n    if (createdAuthUser) await supabase.auth.admin.deleteUser(authUserId)\n    throw new Error('Spartan account creation did not complete. No login account was persisted; please try registration again.')\n  }\n\n  return { screenName: name, discordUserId, provinceName: province, provinceLocation: location, ip }
 }
 
 export function accountEmail(screenName: string) { return internalEmail(screenName.trim()) }
