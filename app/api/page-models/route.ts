@@ -249,7 +249,7 @@ export async function GET(request: Request) {
         const d = parseKingdomDetails(r.raw_text || '')
         if (d.code && !byCode.has(d.code)) byCode.set(d.code, { ...d, capturedAt: when(r) })
       }
-      const gridResult = await db.from('spartan_intel_records').select('id,created_at,url,grid:raw_payload->grid').eq('page_kind', 'intel').or(scope).order('created_at', { ascending: false }).limit(40)
+      const gridResult = await db.from('spartan_intel_records').select('id,created_at,url,grid:parsed_payload->grid').eq('page_kind', 'intel').or(scope).order('created_at', { ascending: false }).limit(40)
       const gridRecs = gridResult.error ? [] : gridResult.data || []
       const roster = new Map<string, any>()
       for (const g of gridRecs as any[]) {
