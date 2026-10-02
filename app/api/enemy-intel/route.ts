@@ -17,6 +17,8 @@ export async function GET() {
     const { data: { user } } = await auth.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+    const params = new URL(request.url).searchParams
+    const summary = params.get('summary') === '1'
     const db = createServiceClient()
     const { data: account, error: accountError } = await db
       .from('spartan_accounts')
@@ -30,7 +32,9 @@ export async function GET() {
 
     const { data, error } = await db
       .from('spartan_intel_records')
-      .select('id,capture_id,province_id,kingdom_id,target_province_id,target_kingdom_id,captured_at,created_at,source,url,page_kind,classification_source,classification_confidence,parsed_payload,raw_payload,intel_type,visibility,metrics')
+      .select(summary
+        ? 'id,capture_id,province_id,kingdom_id,target_province_id,target_kingdom_id,captured_at,created_at,source,url,page_kind,classification_source,classification_confidence,intel_type,visibility,metrics'
+        : 'id,capture_id,province_id,kingdom_id,target_province_id,target_kingdom_id,captured_at,created_at,source,url,page_kind,classification_source,classification_confidence,parsed_payload,raw_payload,intel_type,visibility,metrics')
       .order('captured_at', { ascending: false })
       .limit(1000)
     if (error) throw error
@@ -56,8 +60,8 @@ export async function GET() {
       classification_source: row.classification_source,
       classification_confidence: row.classification_confidence,
       metrics: row.metrics || {},
-      payload: payload(row),
-      raw_payload: row.raw_payload,
+      payload: summary ? {} : payload(row),
+      raw_payload: summary ? null : row.raw_payload,
     }))
 
     const groups = new Map<string, any>()
