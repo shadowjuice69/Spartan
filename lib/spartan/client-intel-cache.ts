@@ -42,7 +42,7 @@ export function getEnemyIntel() {
 }
 
 export function getLatestIntel() {
-  return getJson("/api/intel-data?section=intel")
+  return getJson("/api/intel-data?section=intel&summary=1")
 }
 
 export function getCommandIntel() {
