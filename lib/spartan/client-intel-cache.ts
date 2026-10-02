@@ -38,7 +38,7 @@ export function getKingdomData() {
 }
 
 export function getEnemyIntel() {
-  return getJson("/api/enemy-intel")
+  return getJson("/api/enemy-intel?summary=1")
 }
 
 export function getLatestIntel() {
