@@ -124,12 +124,12 @@ export default function Home() {
       {data && hasAny && (
         <>
           <Grid>
-            <Stat span={2} label="Land" value={acres} sub={s?.landRank ? `Rank ${s.landRank.rank} of ${fmt(s.landRank.of)}` : since("acres")} color={C.lime} delay={0} />
-            <Stat span={2} label="Networth" value={nw} sub={s?.networthRank ? `Rank ${s.networthRank.rank} of ${fmt(s.networthRank.of)}` : since("networth")} color={C.violet} delay={1} />
-            <Stat span={2} label="Offense" value={off} sub={t?.ratios?.offSpa != null ? `${t.ratios.offSpa} per acre` : since("offense")} color={C.red} delay={2} />
-            <Stat span={2} label="Defense" value={def} sub={t?.ratios?.defSpa != null ? `${t.ratios.defSpa} per acre` : since("defense")} color={C.cyan} delay={3} />
-            <Stat span={2} label="Peasants" value={peasants} sub={pop?.max ? `${fmt(pop.total)} of ${fmt(pop.max)} max pop` : since("peons")} color={C.green} delay={4} />
-            <Stat span={2} label="Build efficiency" value={buildEff} text={buildEff != null ? pct(buildEff, 0) : "—"} sub={s?.economy?.employment != null ? `${pct(s.economy.employment, 0)} employment` : undefined} color={C.amber} delay={5} />
+            <Stat span={4} label="Land" value={acres} sub={s?.landRank ? `Rank ${s.landRank.rank} of ${fmt(s.landRank.of)}` : since("acres")} color={C.lime} delay={0} />
+            <Stat span={4} label="Networth" value={nw} sub={s?.networthRank ? `Rank ${s.networthRank.rank} of ${fmt(s.networthRank.of)}` : since("networth")} color={C.violet} delay={1} />
+            <Stat span={4} label="Offense" value={off} sub={t?.ratios?.offSpa != null ? `${t.ratios.offSpa} per acre` : since("offense")} color={C.red} delay={2} />
+            <Stat span={4} label="Defense" value={def} sub={t?.ratios?.defSpa != null ? `${t.ratios.defSpa} per acre` : since("defense")} color={C.cyan} delay={3} />
+            <Stat span={4} label="Peasants" value={peasants} sub={pop?.max ? `${fmt(pop.total)} of ${fmt(pop.max)} max pop` : since("peons")} color={C.green} delay={4} />
+            <Stat span={4} label="Build efficiency" value={buildEff} text={buildEff != null ? pct(buildEff, 0) : "—"} sub={s?.economy?.employment != null ? `${pct(s.economy.employment, 0)} employment` : undefined} color={C.amber} delay={5} />
           </Grid>
 
           <Grid>
