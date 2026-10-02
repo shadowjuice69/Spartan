@@ -3,7 +3,7 @@
 import JeevesSummary from '@/components/spartan/JeevesSummary'
 import { useEffect, useMemo, useState } from 'react'
 import {
-  AllData, C, DataTable, Donut, Empty, Grid, HBars, LineChart, Panel, Scatter, Shell, Skeletons, Stat, Tag, Gauge,
+  AllData, C, DataTable, Donut, Empty, Grid, HBars, LineChart, Panel, Shell, Skeletons, Stat, Tag, Gauge,
   PALETTE, ago, compact, fmt, usePageModel,
 } from '@/components/spartan/ui'
 
@@ -19,7 +19,7 @@ const avg = (rows: any[], key: string) => rows.length ? sum(rows, key) / rows.le
 export default function KingdomPage() {
   const [kd, setKd] = useState('')
   const [history, setHistory] = useState<any>(null)
-  const { data, error, loading, reload } = usePageModel('kingdom', kd ? \`&kd=\${encodeURIComponent(kd)}\` : '')
+  const { data, error, loading, reload } = usePageModel('kingdom', kd ? `&kd=${encodeURIComponent(kd)}` : '')
   const m = data?.model
   const details = m?.details
   const roster: any[] = m?.roster || []
@@ -27,7 +27,6 @@ export default function KingdomPage() {
   const mine = data?.province
   const hasGrid = roster.length > 0
   const rows = hasGrid ? roster : provs
-  const isMine = m?.selected === data?.kingdom
 
   useEffect(() => {
     let alive = true
@@ -54,7 +53,6 @@ export default function KingdomPage() {
   const totalNw = details?.networth?.total ?? sum(rows, 'networth')
   const totalOff = sum(rows, 'off')
   const totalDef = sum(rows, 'def')
-  const totalPeons = sum(rows, 'peons')
   const totalDefHome = sum(rows, 'defHome')
   const totalOffTpa = sum(rows, 'offTpa')
   const totalDefTpa = sum(rows, 'defTpa')
@@ -92,7 +90,7 @@ export default function KingdomPage() {
       data={data} error={error} loading={loading} reload={reload}
       right={m?.available?.length > 1 ? (
         <select className="sp-btn" value={m.selected} onChange={(e: any) => setKd(e.target.value)} style={{ background: '#0b1622' }}>
-          {m.available.map((c: string) => <option key={c} value={c}>{c === data.kingdom ? \`\${c} (yours)\` : c}</option>)}
+          {m.available.map((c: string) => <option key={c} value={c}>{c === data.kingdom ? `${c} (yours)` : c}</option>)}
         </select>
       ) : undefined}>
       {!data && !error && <Skeletons count={8} />}
@@ -104,15 +102,15 @@ export default function KingdomPage() {
       {(details || hasGrid) && (
         <>
           <Grid>
-            <Stat label="PROVINCES" value={count} sub={known < count ? \`\${known} currently observed\` : details?.name ? \`\${details.name} · \${m.selected}\` : m.selected} color={C.cyan} delay={0} />
-            <Stat label="TOTAL LAND" value={totalAcres} sub={details?.landRank ? \`Rank \${details.landRank.rank} of \${details.landRank.of}\` : \`\${compact(totalAcres / (count || 1))} avg\`} color={C.lime} delay={1} />
-            <Stat label="TOTAL NETWORTH" value={totalNw} sub={details?.networthRank ? \`Rank \${details.networthRank.rank} of \${details.networthRank.of}\` : \`\${compact(totalNw / (count || 1))} avg\`} color={C.violet} delay={2} />
-            <Stat label="WAR RECORD" value={details?.wars?.won ?? null} sub={details?.wars ? \`Score \${details.wars.score}\` : undefined} color={C.red} delay={3} />
+            <Stat label="PROVINCES" value={count} sub={known < count ? `${known} currently observed` : details?.name ? `${details.name} · ${m.selected}` : m.selected} color={C.cyan} delay={0} />
+            <Stat label="TOTAL LAND" value={totalAcres} sub={details?.landRank ? `Rank ${details.landRank.rank} of ${details.landRank.of}` : `${compact(totalAcres / (count || 1))} avg`} color={C.lime} delay={1} />
+            <Stat label="TOTAL NETWORTH" value={totalNw} sub={details?.networthRank ? `Rank ${details.networthRank.rank} of ${details.networthRank.of}` : `${compact(totalNw / (count || 1))} avg`} color={C.violet} delay={2} />
+            <Stat label="WAR RECORD" value={details?.wars?.won ?? null} sub={details?.wars ? `Score ${details.wars.score}` : undefined} color={C.red} delay={3} />
           </Grid>
 
           <Grid>
-            <Stat label="KINGDOM OFFENSE" value={totalOff || null} sub={hasGrid ? \`\${offShare.toFixed(1)}% of known combat power\` : 'From captured Intel-site roster'} color={C.red} delay={0} />
-            <Stat label="KINGDOM DEFENSE" value={totalDef || null} sub={totalDefHome ? \`\${compact(totalDefHome)} home defense\` : 'From captured Intel-site roster'} color={C.cyan} delay={1} />
+            <Stat label="KINGDOM OFFENSE" value={totalOff || null} sub={hasGrid ? `${offShare.toFixed(1)}% of known combat power` : 'From captured Intel-site roster'} color={C.red} delay={0} />
+            <Stat label="KINGDOM DEFENSE" value={totalDef || null} sub={totalDefHome ? `${compact(totalDefHome)} home defense` : 'From captured Intel-site roster'} color={C.cyan} delay={1} />
             <Stat label="AVG TPA" value={avgTpa == null ? null : avgTpa.toFixed(2)} sub={totalOffTpa || totalDefTpa ? 'Modified TPA available' : 'Known provinces'} color={C.amber} delay={2} />
             <Stat label="AVG WPA" value={avgWpa == null ? null : avgWpa.toFixed(2)} sub={totalOffWpa || totalDefWpa ? 'Modified WPA available' : 'Known provinces'} color={C.green} delay={3} />
           </Grid>
@@ -127,10 +125,10 @@ export default function KingdomPage() {
                   <div style={label}>DEFENSE SHARE</div><b style={{ fontSize: 22, color: C.cyan }}>{defShare.toFixed(1)}%</b>
                 </div>
                 <div style={{ padding: 12, background: 'rgba(255,255,255,.035)', borderRadius: 10 }}>
-                  <div style={label}>AVG BUILD EFFICIENCY</div><b style={{ fontSize: 22 }}>{avgBe == null ? '—' : \`\${avgBe.toFixed(1)}%\`}</b>
+                  <div style={label}>AVG BUILD EFFICIENCY</div><b style={{ fontSize: 22 }}>{avgBe == null ? '—' : `${avgBe.toFixed(1)}%`}</b>
                 </div>
                 <div style={{ padding: 12, background: 'rgba(255,255,255,.035)', borderRadius: 10 }}>
-                  <div style={label}>AVG POPULATION</div><b style={{ fontSize: 22 }}>{avgPop == null ? '—' : \`\${avgPop.toFixed(1)}%\`}</b>
+                  <div style={label}>AVG POPULATION</div><b style={{ fontSize: 22 }}>{avgPop == null ? '—' : `${avgPop.toFixed(1)}%`}</b>
                 </div>
               </div>
               <HBars items={[...rows].filter(r => r.off != null || r.def != null).sort((a, b) => ((b.off || 0) + (b.def || 0)) - ((a.off || 0) + (a.def || 0))).slice(0, 16).map(r => ({
@@ -143,7 +141,7 @@ export default function KingdomPage() {
                 { label: 'Defense', value: totalDef, color: C.cyan },
               ]} centerBottom="Combat" />
               <div style={{ marginTop: 8 }}>
-                <Gauge value={avgBe} max={200} label="Avg BE" color={C.lime} text={avgBe == null ? '—' : \`\${avgBe.toFixed(0)}%\`} />
+                <Gauge value={avgBe} max={200} label="Avg BE" color={C.lime} text={avgBe == null ? '—' : `${avgBe.toFixed(0)}%`} />
               </div>
             </Panel>
           </Grid>
@@ -155,10 +153,10 @@ export default function KingdomPage() {
             <Panel span={4} title="PERSONALITY COMPOSITION" sub="Every observed province" delay={2}>
               <Donut slices={personalityCounts.map(([personality, value], i) => ({ label: personality, value, color: PALETTE[i % PALETTE.length] }))} format={v => String(v)} centerBottom="Provinces" />
             </Panel>
-            <Panel span={4} title="KINGDOM STATUS" sub={details?.name ? \`\${details.name} · \${m.selected}\` : m.selected} delay={3}>
+            <Panel span={4} title="KINGDOM STATUS" sub={details?.name ? `${details.name} · ${m.selected}` : m.selected} delay={3}>
               <div style={{ display: 'grid', gap: 12 }}>
                 <div><div style={label}>STANCE</div><Tag color={C.amber}>{details?.stance || 'Unknown'}</Tag></div>
-                <div><div style={label}>HONOR</div><b>{details?.honor ? fmt(details.honor.total) : '—'}</b> <span style={{ color: '#8597a8', fontSize: 11 }}>{details?.honor ? \`rank \${details.honor.rank} of \${details.honor.of}\` : ''}</span></div>
+                <div><div style={label}>HONOR</div><b>{details?.honor ? fmt(details.honor.total) : '—'}</b> <span style={{ color: '#8597a8', fontSize: 11 }}>{details?.honor ? `rank ${details.honor.rank} of ${details.honor.of}` : ''}</span></div>
                 <div><div style={label}>ATTITUDE</div><b>{details?.attitude?.theirs ? details.attitude.theirs.label : '—'}</b><span style={{ color: '#8597a8', fontSize: 11 }}> · theirs to us</span></div>
                 <div><div style={label}>DATA FRESHNESS</div><b>{details?.capturedAt ? ago(details.capturedAt) : data?.generatedAt ? ago(data.generatedAt) : '—'}</b></div>
               </div>
@@ -167,7 +165,7 @@ export default function KingdomPage() {
 
           {trend.length > 1 && (
             <Grid>
-              <Panel span={12} title="KINGDOM HISTORY" sub={\`\${history?.capturesAvailable || trend.length} kingdom snapshots preserved\`} delay={2}>
+              <Panel span={12} title="KINGDOM HISTORY" sub={`${history?.capturesAvailable || trend.length} kingdom snapshots preserved`} delay={2}>
                 <LineChart series={[
                   { name: 'Land', color: C.lime, points: trend.map((x: any) => ({ x: x.capturedAt, y: n(x.totalLand) })) },
                   { name: 'Networth', color: C.violet, points: trend.map((x: any) => ({ x: x.capturedAt, y: n(x.totalNw) })) },
@@ -189,10 +187,10 @@ export default function KingdomPage() {
                   { key: 'slot', label: '#', value: r => r.slot },
                   { key: 'name', label: 'PROVINCE', value: r => r.name, render: r => <b style={{ color: r.name === mine ? C.lime : '#fff' }}>{r.name}</b> },
                   { key: 'race', label: 'RACE', value: r => r.race },
-                  { key: 'changeLand', label: 'LAND Δ', value: r => r.changeLand, render: r => <span style={{ color: (r.changeLand || 0) >= 0 ? C.green : C.red }}>{r.changeLand == null ? '—' : \`\${r.changeLand > 0 ? '+' : ''}\${fmt(r.changeLand)}\`}</span>, align: 'right' },
-                  { key: 'changeNw', label: 'NW Δ', value: r => r.changeNw, render: r => <span style={{ color: (r.changeNw || 0) >= 0 ? C.green : C.red }}>{r.changeNw == null ? '—' : \`\${r.changeNw > 0 ? '+' : ''}\${compact(r.changeNw)}\`}</span>, align: 'right' },
-                  { key: 'changeNwpa', label: 'NWPA Δ', value: r => r.changeNwpa, render: r => r.changeNwpa == null ? '—' : \`\${r.changeNwpa > 0 ? '+' : ''}\${r.changeNwpa.toFixed(1)}\`, align: 'right' },
-                  { key: 'changeGains', label: 'GAINS Δ', value: r => r.changeGains, render: r => r.changeGains == null ? '—' : \`\${r.changeGains > 0 ? '+' : ''}\${fmt(r.changeGains)}\`, align: 'right' },
+                  { key: 'changeLand', label: 'LAND Δ', value: r => r.changeLand, render: r => <span style={{ color: (r.changeLand || 0) >= 0 ? C.green : C.red }}>{r.changeLand == null ? '—' : `${r.changeLand > 0 ? '+' : ''}${fmt(r.changeLand)}`}</span>, align: 'right' },
+                  { key: 'changeNw', label: 'NW Δ', value: r => r.changeNw, render: r => <span style={{ color: (r.changeNw || 0) >= 0 ? C.green : C.red }}>{r.changeNw == null ? '—' : `${r.changeNw > 0 ? '+' : ''}${compact(r.changeNw)}`}</span>, align: 'right' },
+                  { key: 'changeNwpa', label: 'NWPA Δ', value: r => r.changeNwpa, render: r => r.changeNwpa == null ? '—' : `${r.changeNwpa > 0 ? '+' : ''}${r.changeNwpa.toFixed(1)}`, align: 'right' },
+                  { key: 'changeGains', label: 'GAINS Δ', value: r => r.changeGains, render: r => r.changeGains == null ? '—' : `${r.changeGains > 0 ? '+' : ''}${fmt(r.changeGains)}`, align: 'right' },
                 ]} rows={latestChanges} />
               </Panel>
             </Grid>
@@ -230,8 +228,8 @@ export default function KingdomPage() {
                   { key: 'defTpa', label: 'MOD DEF TPA', value: r => r.defTpa, render: r => fmt(r.defTpa), align: 'right' },
                   { key: 'offWpa', label: 'MOD OFF WPA', value: r => r.offWpa, render: r => fmt(r.offWpa), align: 'right' },
                   { key: 'defWpa', label: 'MOD DEF WPA', value: r => r.defWpa, render: r => fmt(r.defWpa), align: 'right' },
-                  { key: 'be', label: 'BE', value: r => r.be, render: r => r.be != null ? \`\${r.be}%\` : '—', align: 'right' },
-                  { key: 'popPct', label: 'POP', value: r => r.popPct, render: r => r.popPct != null ? \`\${r.popPct}%\` : '—', align: 'right' },
+                  { key: 'be', label: 'BE', value: r => r.be, render: r => r.be != null ? `${r.be}%` : '—', align: 'right' },
+                  { key: 'popPct', label: 'POP', value: r => r.popPct, render: r => r.popPct != null ? `${r.popPct}%` : '—', align: 'right' },
                   { key: 'peons', label: 'PEONS', value: r => r.peons, render: r => fmt(r.peons), align: 'right' },
                   { key: 'bad', label: 'HARMFUL', value: r => r.badSpells.length, render: r => <>{r.badSpells.map((s: string) => <span key={s} style={{ marginRight: 4 }}><Tag color={C.red}>{s}</Tag></span>)}</> },
                   { key: 'good', label: 'BENEFICIAL', value: r => r.goodSpells.length, render: r => <>{r.goodSpells.map((s: string) => <span key={s} style={{ marginRight: 4 }}><Tag color={C.green}>{s}</Tag></span>)}</> },
@@ -243,12 +241,12 @@ export default function KingdomPage() {
 
           {details && (
             <Grid>
-              <Panel span={8} title="KINGDOM DETAILS · ROSTER" sub={\`Captured \${ago(details.capturedAt)} · \${details.provinces.length} provinces\`} delay={3}>
+              <Panel span={8} title="KINGDOM DETAILS · ROSTER" sub={`Captured ${ago(details.capturedAt)} · ${details.provinces.length} provinces`} delay={3}>
                 <DataTable<any> initialSort="networth" maxHeight={520} columns={[
                   { key: 'slot', label: '#', value: r => r.slot },
                   { key: 'name', label: 'PROVINCE', value: r => r.name, render: r => <b style={{ color: r.name === mine ? C.lime : '#fff' }}>{r.name}{r.monarch ? ' (M)' : ''}{r.steward ? ' (S)' : ''}</b> },
                   { key: 'race', label: 'RACE', value: r => r.race, render: r => <span style={{ color: RACE_COLOR[r.race] }}>● {r.race}</span> },
-                  { key: 'acres', label: 'LAND', value: r => r.acres, render: r => \`\${fmt(r.acres)}a\`, align: 'right' },
+                  { key: 'acres', label: 'LAND', value: r => r.acres, render: r => `${fmt(r.acres)}a`, align: 'right' },
                   { key: 'networth', label: 'NETWORTH', value: r => r.networth, render: r => compact(r.networth), align: 'right' },
                   { key: 'nwpa', label: 'NWPA', value: r => r.nwpa, align: 'right' },
                   { key: 'nobility', label: 'NOBILITY', value: r => r.nobility },
@@ -258,9 +256,9 @@ export default function KingdomPage() {
               <Panel span={4} title="WAR & RELATIONS" delay={4}>
                 <div style={{ display: 'grid', gap: 12 }}>
                   <div><div style={label}>STANCE</div><Tag color={C.amber}>{details.stance || '—'}</Tag></div>
-                  <div><div style={label}>HONOR</div><b>{fmt(details.honor?.total)}</b> <span style={{ color: '#8597a8', fontSize: 11 }}>{details.honor ? \`rank \${details.honor.rank} of \${details.honor.of}\` : ''}</span></div>
-                  <div><div style={label}>ATTITUDE TO US</div><b>{details.attitude?.theirs ? \`\${details.attitude.theirs.label} (\${details.attitude.theirs.points})\` : '—'}</b></div>
-                  <div><div style={label}>OUR ATTITUDE TO THEM</div><b>{details.attitude?.ours ? \`\${details.attitude.ours.label} (\${details.attitude.ours.points})\` : '—'}</b></div>
+                  <div><div style={label}>HONOR</div><b>{fmt(details.honor?.total)}</b> <span style={{ color: '#8597a8', fontSize: 11 }}>{details.honor ? `rank ${details.honor.rank} of ${details.honor.of}` : ''}</span></div>
+                  <div><div style={label}>ATTITUDE TO US</div><b>{details.attitude?.theirs ? `${details.attitude.theirs.label} (${details.attitude.theirs.points})` : '—'}</b></div>
+                  <div><div style={label}>OUR ATTITUDE TO THEM</div><b>{details.attitude?.ours ? `${details.attitude.ours.label} (${details.attitude.ours.points})` : '—'}</b></div>
                   <div><div style={label}>WAR HISTORY</div>
                     {details.warHistory.length ? details.warHistory.map((w: any, i: number) => (
                       <div key={i} style={{ fontSize: 12, margin: '5px 0' }}><Tag color={w.result === 'Win' ? C.green : C.red}>{w.result}</Tag> {w.name} <span style={{ color: '#8597a8' }}>({w.kingdom})</span></div>
@@ -276,7 +274,7 @@ export default function KingdomPage() {
               <Panel span={12} title="WAR DOCTRINES" sub="Bonuses from the race mix of the kingdom" delay={4}>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(260px,1fr))', gap: 10 }}>
                   {details.doctrines.map((d: any, i: number) => (
-                    <div key={d.race} style={{ padding: 12, borderRadius: 12, background: 'rgba(255,255,255,.035)', borderLeft: \`3px solid \${RACE_COLOR[d.race] ?? PALETTE[i % PALETTE.length]}\` }}>
+                    <div key={d.race} style={{ padding: 12, borderRadius: 12, background: 'rgba(255,255,255,.035)', borderLeft: `3px solid ${RACE_COLOR[d.race] ?? PALETTE[i % PALETTE.length]}` }}>
                       <b>{d.race}</b> <span style={{ color: '#8597a8' }}>· {d.provinces} provinces</span>
                       <div style={{ fontSize: 12, color: '#b9c7d4', marginTop: 6 }}>{d.effects}</div>
                     </div>
