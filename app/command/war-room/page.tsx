@@ -1,2 +1,5 @@
-import IntelSectionPage from "@/app/components/IntelSectionPage"
-export default function Page(){return <IntelSectionPage section="war-room" title="War Room" description="The operational combat picture: attacks, military movement, hostile operations, magic and war events from the canonical Intel feed."/>}
+import WarRoomPage from "@/app/components/WarRoomPage"
+
+export default function Page() {
+  return <WarRoomPage />
+}
