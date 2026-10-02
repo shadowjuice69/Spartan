@@ -11,7 +11,7 @@ function payload(row: any) {
   return row.raw_payload ?? {}
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const auth = await createClient()
     const { data: { user } } = await auth.auth.getUser()
