@@ -2,6 +2,8 @@ name: Spartan predeploy check
 on:
   push:
     branches: [fix/jeeves-data-core]
+  pull_request:
+    branches: [main]
 jobs:
   build:
     runs-on: ubuntu-latest
