@@ -38,7 +38,7 @@ type Briefing = {
   };
 };
 
-const SHOWN_KEY = "spartan.jeeves.briefing.v2";
+const LOGIN_KEY = "spartan.jeeves.login.v3";
 
 function formatNumber(value: unknown): string {
   const number = Number(value);
@@ -48,10 +48,6 @@ function formatNumber(value: unknown): string {
 function formatChange(value: NumberValue): string {
   if (value == null) return "—";
   return `${value > 0 ? "+" : ""}${value.toLocaleString()}`;
-}
-
-function shownMarker(userKey: string, briefingId: string): string {
-  return `${SHOWN_KEY}:${userKey}:${briefingId}`;
 }
 
 export default function Jeeves() {
@@ -66,10 +62,11 @@ export default function Jeeves() {
 
   useEffect(() => {
     if (pathname === "/login") return;
-    if (loaded.current === pathname) return;
-    loaded.current = pathname;
+    // Greet once per login. The layout stays mounted across in-app navigation, so one check per page load is enough.
+    if (loaded.current) return;
+    loaded.current = "checked";
 
-    let cancelled = false;
+    const cancelled = false as boolean; // the layout never unmounts, so keep the result even if the route changes mid-request
 
     async function fetchBriefing() {
       const response = await fetch("/api/welcome", {
@@ -88,8 +85,34 @@ export default function Jeeves() {
       return result;
     }
 
+    async function fetchPeek() {
+      const response = await fetch("/api/welcome?peek=1", {
+        method: "GET",
+        cache: "no-store",
+        headers: { accept: "application/json" },
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || result.ok !== true) {
+        throw new Error(result.error || "Jeeves could not reach the Spartan data core.");
+      }
+      return result as { userId: string; loginAt: string | null; firstArrival: boolean };
+    }
+
     async function loadBriefing() {
       try {
+        let peek;
+        try {
+          peek = await fetchPeek();
+        } catch {
+          await new Promise((resolve) => setTimeout(resolve, 900));
+          peek = await fetchPeek();
+        }
+        if (cancelled) return;
+
+        // Already greeted for this login (and the name intro is done): skip the full briefing request.
+        const greetedKey = `${peek.userId}:${peek.loginAt ?? "none"}`;
+        if (!peek.firstArrival && window.localStorage.getItem(LOGIN_KEY) === greetedKey) return;
+
         let result;
         try {
           result = await fetchBriefing();
@@ -108,14 +131,8 @@ export default function Jeeves() {
         setName(next.jeeves.preferredName || "");
         setError("");
 
-        const userKey = next.identity.screenName || next.identity.provinceName || "authenticated";
-        const marker = shownMarker(userKey, next.briefingId);
-        const alreadyShown = window.localStorage.getItem(SHOWN_KEY) === marker;
-
-        if (!alreadyShown) {
-          window.localStorage.setItem(SHOWN_KEY, marker);
-          setOpen(true);
-        }
+        window.localStorage.setItem(LOGIN_KEY, greetedKey);
+        setOpen(true);
       } catch (cause) {
         if (!cancelled) {
           setError(cause instanceof Error ? cause.message : "Jeeves could not load your briefing.");
@@ -126,9 +143,6 @@ export default function Jeeves() {
     }
 
     void loadBriefing();
-    return () => {
-      cancelled = true;
-    };
   }, [pathname]);
 
   async function introduce() {

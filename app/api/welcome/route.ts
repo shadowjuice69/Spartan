@@ -18,7 +18,21 @@ async function context() {
   const now = new Date().toISOString(); const { error: sync } = await supabase.from('spartan_province_registry').update({ user_id: user.id, province_name: account.province_name, kingdom_code: account.province_location, last_seen_at: now, updated_at: now }).eq('province_id', registry.province_id); if (sync) throw sync
   return { user, supabase, account, registry: { ...registry, user_id: user.id, province_name: account.province_name, kingdom_code: account.province_location, updated_at: now } }
 }
-export async function GET() {
+export async function GET(request: Request) {
+  // Lightweight check used by the Jeeves popup: tells the client which login this is, without building a full briefing.
+  if (new URL(request.url).searchParams.get('peek') === '1') {
+    try {
+      const auth = await createClient(); const { data: { user } } = await auth.auth.getUser()
+      if (!user) return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 })
+      const supabase = db()
+      const [{ data: acct, error: ae }, { data: prof, error: pe }] = await Promise.all([
+        supabase.from('spartan_accounts').select('last_login_at').eq('auth_user_id', user.id).maybeSingle(),
+        supabase.from('spartan_jeeves_profiles').select('introduced_at').eq('auth_user_id', user.id).maybeSingle(),
+      ])
+      if (ae) throw ae; if (pe) throw pe
+      return NextResponse.json({ ok: true, peek: true, userId: user.id, loginAt: acct?.last_login_at ?? null, firstArrival: !prof?.introduced_at })
+    } catch (error) { return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : 'Jeeves check unavailable' }, { status: 503 }) }
+  }
   try {
     const { user, supabase, account, registry } = await context()
     let { data: profile, error: pe } = await supabase.from('spartan_jeeves_profiles').select('*').eq('auth_user_id', user.id).maybeSingle(); if (pe) throw pe
