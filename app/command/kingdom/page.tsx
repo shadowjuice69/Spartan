@@ -111,8 +111,8 @@ export default function KingdomPage() {
           <Grid>
             <Stat label="KINGDOM OFFENSE" value={totalOff || null} sub={hasGrid ? `${offShare.toFixed(1)}% of known combat power` : 'From captured Intel-site roster'} color={C.red} delay={0} />
             <Stat label="KINGDOM DEFENSE" value={totalDef || null} sub={totalDefHome ? `${compact(totalDefHome)} home defense` : 'From captured Intel-site roster'} color={C.cyan} delay={1} />
-            <Stat label="AVG TPA" value={avgTpa == null ? null : avgTpa.toFixed(2)} sub={totalOffTpa || totalDefTpa ? 'Modified TPA available' : 'Known provinces'} color={C.amber} delay={2} />
-            <Stat label="AVG WPA" value={avgWpa == null ? null : avgWpa.toFixed(2)} sub={totalOffWpa || totalDefWpa ? 'Modified WPA available' : 'Known provinces'} color={C.green} delay={3} />
+            <Stat label="AVG TPA" value={avgTpa} format={(v) => v.toFixed(2)} sub={totalOffTpa || totalDefTpa ? 'Modified TPA available' : 'Known provinces'} color={C.amber} delay={2} />
+            <Stat label="AVG WPA" value={avgWpa} format={(v) => v.toFixed(2)} sub={totalOffWpa || totalDefWpa ? 'Modified WPA available' : 'Known provinces'} color={C.green} delay={3} />
           </Grid>
 
           <Grid>
