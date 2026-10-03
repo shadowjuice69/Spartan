@@ -40,6 +40,21 @@ const COMMANDS={
 };
 for(const [command,subs] of Object.entries(COMMANDS))for(const [sub,handler] of Object.entries(subs)){if(!commandRegistry.has(command,sub)){const access=command==='spartan'&&(sub==='register'||sub==='status'||sub==='wiki')?'public':command==='spartan'&&sub==='access'?'admin':command==='spartan-admin'?'admin':'registered';commandRegistry.register(command,sub,handler,{access});}}
 async function hasSpartanAccess(userId){return spartanAccess.hasAccess(userId);}
+
+function forceEphemeralInteraction(interaction){
+ const wrapPayload = payload => {
+  if (payload == null || typeof payload === 'string') return {content: payload == null ? '' : payload, ephemeral:true};
+  if (typeof payload === 'object') return {...payload, ephemeral:true};
+  return payload;
+ };
+ const originalReply = interaction.reply.bind(interaction);
+ const originalFollowUp = interaction.followUp ? interaction.followUp.bind(interaction) : null;
+ const originalDeferReply = interaction.deferReply ? interaction.deferReply.bind(interaction) : null;
+ interaction.reply = payload => originalReply(wrapPayload(payload));
+ if (originalFollowUp) interaction.followUp = payload => originalFollowUp(wrapPayload(payload));
+ if (originalDeferReply) interaction.deferReply = options => originalDeferReply({...options, ephemeral:true});
+ return interaction;
+}
 module.exports=async function commandHandler(interaction){
  const command=interaction.commandName;let sub='';try{sub=interaction.options.getSubcommand(false)||'';}catch(_){sub='';}
  const entry=commandRegistry.get(command,sub);console.log(`[SPARTAN COMMAND] /${command}${sub?` ${sub}`:''} entry=${entry?'found':'missing'}`);
@@ -47,6 +62,6 @@ module.exports=async function commandHandler(interaction){
  if(!['spartan','spartan-music','spartan-intel','spartan-calc','spartan-war','spartan-admin'].includes(command))return interaction.reply({content:'❌ This command surface has been retired. Use the new `/spartan` commands.',ephemeral:true});
  if(!commandAccess.canAccess(entry,interaction.user,permissionService))return interaction.reply({content:commandAccess.denialMessage(entry),ephemeral:true});
  if(entry.access==='registered'&&!permissionService.isOwner(interaction.user.id)&&!(await hasSpartanAccess(interaction.user.id)))return interaction.reply({content:'❌ Spartan access is required. Use `/spartan register`.',ephemeral:true});
- try{return await entry.handler(interaction);}catch(e){console.error(`[SPARTAN COMMAND] /${command} ${sub}`,e);if(!interaction.replied&&!interaction.deferred)return interaction.reply({content:`❌ ${e.message||'Spartan command failed.'}`,ephemeral:true});throw e;}
+ try{return await entry.handler(forceEphemeralInteraction(interaction));}catch(e){console.error(`[SPARTAN COMMAND] /${command} ${sub}`,e);if(!interaction.replied&&!interaction.deferred)return interaction.reply({content:`❌ ${e.message||'Spartan command failed.'}`,ephemeral:true});throw e;}
 };
 module.exports.commandRegistry=commandRegistry;
