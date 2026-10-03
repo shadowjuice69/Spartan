@@ -163,6 +163,8 @@ function BuildDetail({ id, races, personalities, onBack, onDeleted }: { id: stri
   const [error, setError] = useState("")
   const [deleting, setDeleting] = useState(false)
   const [books, setBooks] = useState({ economy: 0, military: 0, arcane: 0 })
+  const [currentAge, setCurrentAge] = useState<number | null>(null)
+  const [ageChanged, setAgeChanged] = useState(false)
 
   useEffect(() => {
     fetch(`/api/builds/${id}`).then((r) => r.json()).then((j) => j.build ? setBuild(j.build) : setError(j.error || "Not found"))
@@ -182,7 +184,7 @@ function BuildDetail({ id, races, personalities, onBack, onDeleted }: { id: stri
     return () => { cancelled = true }
   }, [])
 
-  const plan = useMemo(() => build ? buildPlan(build.science, live?.cats || null, books) : [], [build, live, books])
+  useEffect(() => {\n    if (!build || currentAge == null) return\n    const pinnedAge = Number(build.rules_age_number)\n    if (Number.isFinite(pinnedAge) && pinnedAge !== currentAge) {\n      setBooks({ economy: 0, military: 0, arcane: 0 })\n      setAgeChanged(true)\n    }\n  }, [build, currentAge])\n\n  const plan = useMemo(() => build ? buildPlan(build.science, live?.cats || null, books) : [], [build, live, books])
   const pct = (n: number) => `${n > 0 ? "+" : ""}${n.toFixed(1)}%`
   const raceRule = build?.race_rule_snapshot || null
   const personalityRule = build?.personality_rule_snapshot || null
@@ -267,17 +269,39 @@ function BuildDetail({ id, races, personalities, onBack, onDeleted }: { id: stri
       <div style={{ display:"flex", gap:14, marginBottom:14, flexWrap:"wrap", alignItems:"flex-end" }}>
         {(["economy","military","arcane"] as const).map((cat) => {
           const p = plan.find((x) => x.category === cat)
+          const hasOverride = books[cat] > 0
           return (
             <label key={cat} style={{ fontSize:11, display:"flex", flexDirection:"column", gap:4 }}>
-              <span style={{ color:"#8993a1", textTransform:"capitalize" }}>{cat} books</span>
-              <input type="number" min={0} style={{ ...input, width:110 }} placeholder={live && p ? String(p.invested + p.available) : "0"} value={books[cat] || ""} onChange={(e) => setBooks((b) => ({ ...b, [cat]: Number(e.target.value) || 0 }))} />
+              <span style={{ color:"#8993a1", textTransform:"capitalize", display:"flex", alignItems:"center", gap:6 }}>
+                {cat} books
+                <button
+                  type="button"
+                  title="Clear this planning override and return to live books"
+                  style={{ ...btnGhost, padding:"2px 6px", fontSize:9, opacity:hasOverride ? 1 : 0.45 }}
+                  onClick={() => setBooks((b) => ({ ...b, [cat]: 0 }))}
+                >CLEAR</button>
+              </span>
+              <input type="number" min={0} style={{ ...input, width:130 }} placeholder={live && p ? String(p.invested + p.available) : "0"} value={books[cat] || ""} onChange={(e) => setBooks((b) => ({ ...b, [cat]: Number(e.target.value) || 0 }))} />
             </label>
           )
         })}
-        {(books.economy > 0 || books.military > 0 || books.arcane > 0) && (
-          <button style={btnGhost} onClick={() => setBooks({ economy: 0, military: 0, arcane: 0 })}>{live ? "Reset to live books" : "Clear"}</button>
-        )}
+        <button
+          type="button"
+          style={{ ...btnGhost, borderColor:"rgba(216,255,84,.25)", color:"#d8ff54" }}
+          onClick={() => setBooks({ economy: 0, military: 0, arcane: 0 })}
+          title="Clear all planning overrides and return every category to live books"
+        >CLEAR ALL</button>
       </div>
+      {ageChanged && currentAge != null && build?.rules_age_number != null && (
+        <div style={{ ...card, marginBottom:14, borderColor:"rgba(216,255,84,.22)", background:"rgba(216,255,84,.035)" }}>
+          <div style={{ fontSize:9, color:"#d8ff54", letterSpacing:".12em", fontWeight:800 }}>AGE CHANGE DETECTED</div>
+          <p style={{ margin:"6px 0 0", fontSize:11, color:"#b7c2cc" }}>
+            This build is pinned to Age {build.rules_age_number}, while the current Spartan rules are Age {currentAge}.
+            Science Plan book overrides were cleared so the planner starts from the current live science totals.
+            Your stored build and previous-age data are not deleted or changed.
+          </p>
+        </div>
+      )}
       <div style={{ display:"grid", gap:14 }}>
         {plan.filter((p) => p.rows.length > 0).map((p) => (
           <div key={p.category} style={{ border:"1px solid rgba(255,255,255,.06)", borderRadius:8, padding:12 }}>
