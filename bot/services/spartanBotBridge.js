@@ -4,6 +4,15 @@ const crypto = require('crypto');
 
 function clean(value, max = 12000) { return String(value || '').slice(0, max); }
 
+const configuredChannelIds = new Set(
+  (process.env.DISCORD_CHANNEL_IDS || '').split(',').map(id => id.trim()).filter(id => /^\\d{17,20}$/.test(id))
+);
+
+function channelIsConfigured(channelId) {
+  if (!configuredChannelIds.size) return true;
+  return configuredChannelIds.has(String(channelId || '').trim());
+}
+
 async function resolveCaptureOwner(sb, event) {
   const select = 'id,account_status,province_name,province_location';
   const discordUserId = String(event.userId || '').trim();
@@ -63,11 +72,12 @@ async function recordEvent({ direction, eventType, userId, channelId, guildId, m
 }
 
 async function inboundMessage(message) {
-  if (!message) return;
+  if (!message || !channelIsConfigured(message.channelId)) return null;
   return recordEvent({ direction: message.author?.bot ? 'outbound' : 'inbound', eventType: 'discord_message', userId: message.author?.id, channelId: message.channelId, guildId: message.guildId, messageId: message.id, content: message.content, metadata: { author_bot: Boolean(message.author?.bot), channel_name: message.channel?.name || null } });
 }
 
 async function inboundInteraction(interaction) {
+  if (!interaction || !channelIsConfigured(interaction.channelId)) return null;
   const command = interaction?.commandName || null; let subcommand = null;
   try { subcommand = interaction.options?.getSubcommand(false) || null; } catch (_) {}
   return recordEvent({ direction: 'inbound', eventType: 'discord_interaction', userId: interaction?.user?.id, channelId: interaction?.channelId, guildId: interaction?.guildId, messageId: interaction?.id, commandName: command, content: command ? `/${command}` : 'interaction', metadata: { subcommand } });
