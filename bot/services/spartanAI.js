@@ -1,7 +1,7 @@
 const supabaseService = require('./supabase');
 const logger = require('./logger');
 const crypto = require('crypto');
-const wikiService = require('./wikiService');
+const rulesContext = require('./rulesContext');
 
 const MODEL = process.env.SPARTAN_AI_MODEL || 'openai/gpt-oss-20b';
 const API_URL = process.env.SPARTAN_AI_URL || 'https://openrouter.ai/api/v1/chat/completions';
@@ -18,30 +18,11 @@ async function ask({ question, userId, channelId, guildId }) {
   if (!sb) throw new Error('Supabase unavailable.');
   const sessionId = crypto.randomUUID();
   const context = await contextFor(sb);
-  // Reference the knowledge already stored in Spartan before asking the model
-  // to answer. Rules/Wiki data is authoritative reference material; captured
-  // province/event state is observed game state. The AI must not tell users to
-  // manually browse the game/wiki and re-capture information that Spartan
-  // already has.
-  // Use the structured rules already stored in Supabase first. The local Wiki
-  // is only a fallback when the structured rules do not contain an answer.
-  // This keeps normal AI questions fast and avoids scanning the full Wiki on
-  // every request.
-  const rulesReference = await wikiService.searchRules(question).catch(() => null);
-  let wikiReference = '';
-  if (!rulesReference) {
-    const wikiResults = await wikiService.searchWiki(question).catch(() => []);
-    wikiReference = (wikiResults || [])
-      .slice(0, 3)
-      .map(entry => `${entry.title || 'Wiki entry'}:\n${String(entry.content || '').slice(0, 1800)}`)
-      .join('\n\n');
-  }
-  const reference = [
-    rulesReference ? `STRUCTURED SPARTAN RULES:\n${rulesReference}` : '',
-    wikiReference ? `SPARTAN WIKI FALLBACK:\n${wikiReference}` : '',
-  ].filter(Boolean).join('\n\n');
-  const system = `You are Spartan AI inside Spartan. Treat Spartan's stored rules, Wiki reference, and captured structured data as your authoritative operating context.\n\nReference priority:\n1. Structured Spartan rules for exact mechanics and current ruleset values.\n2. Spartan Wiki reference for additional definitions/explanations.\n3. Captured province/kingdom/event data for observed current state.\n\nIf the requested information exists in these references, answer from them directly. Do NOT tell the user to open the Utopia client, visit an external wiki, manually capture JSON, or add a new state record merely to obtain information Spartan already stores. Only report information as unavailable when the supplied Spartan references genuinely do not contain it. Never invent missing values. Clearly distinguish reference facts, observed state, and recommendations.`;
-  const user = `QUESTION:\n${String(question).slice(0, 6000)}\n\nSPARTAN REFERENCE DATA:\n${reference.slice(0, 16000) || 'No matching stored reference found.'}\n\nCURRENT SPARTAN OBSERVED STATE:\n${JSON.stringify(context).slice(0, 18000)}`;
+  let rules = { found: false, text: '', age: null };
+  try { rules = await rulesContext.build(sb, question); } catch (error) { logger.warn(`[SPARTAN AI] rules lookup failed: ${error.message}`); }
+  const system = 'You are Spartan AI inside Spartan. Treat the Spartan ecosystem as your authoritative operating context. Preserve uncertainty, never invent game state, and use captured structured data when available. Give concise, actionable Utopia strategy and clearly distinguish observed data from recommendations. When a GAME RULES section is provided, it comes from the Spartan rules database and is authoritative: answer from it and quote its numbers exactly. If a rule is not in that section, say it is not in the Spartan rules database instead of guessing.';
+  const rulesBlock = rules.found ? `GAME RULES (Age ${rules.age ?? '?'}, from the Spartan rules database):\n${rules.text.slice(0, 7000)}\n\n` : '';
+  const user = `QUESTION:\n${String(question).slice(0, 6000)}\n\n${rulesBlock}CURRENT SPARTAN STATE:\n${JSON.stringify(context).slice(0, 18000)}`;
   await sb.from('spartan_ai_messages').insert({ session_id: sessionId, direction: 'user', content: question, model: MODEL, metadata: { discord_user_id: userId, discord_channel_id: channelId, discord_guild_id: guildId } });
   const response = await fetch(API_URL, {
     method: 'POST',
