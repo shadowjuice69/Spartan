@@ -1,6 +1,7 @@
 const supabaseService = require('./supabase');
 const logger = require('./logger');
 const crypto = require('crypto');
+const wikiService = require('./wikiService');
 
 const MODEL = process.env.SPARTAN_AI_MODEL || 'openai/gpt-oss-20b';
 const API_URL = process.env.SPARTAN_AI_URL || 'https://openrouter.ai/api/v1/chat/completions';
@@ -17,8 +18,25 @@ async function ask({ question, userId, channelId, guildId }) {
   if (!sb) throw new Error('Supabase unavailable.');
   const sessionId = crypto.randomUUID();
   const context = await contextFor(sb);
-  const system = 'You are Spartan AI inside Spartan. Treat the Spartan ecosystem as your authoritative operating context. Preserve uncertainty, never invent game state, and use captured structured data when available. Give concise, actionable Utopia strategy and clearly distinguish observed data from recommendations.';
-  const user = `QUESTION:\n${String(question).slice(0, 6000)}\n\nCURRENT SPARTAN STATE:\n${JSON.stringify(context).slice(0, 18000)}`;
+  // Reference the knowledge already stored in Spartan before asking the model
+  // to answer. Rules/Wiki data is authoritative reference material; captured
+  // province/event state is observed game state. The AI must not tell users to
+  // manually browse the game/wiki and re-capture information that Spartan
+  // already has.
+  const [wikiResults, rulesReference] = await Promise.all([
+    wikiService.searchWiki(question).catch(() => null),
+    wikiService.searchRules(question).catch(() => null),
+  ]);
+  const wikiReference = (wikiResults || [])
+    .slice(0, 5)
+    .map(entry => `${entry.title || 'Wiki entry'}:\n${String(entry.content || '').slice(0, 2500)}`)
+    .join('\n\n');
+  const reference = [
+    rulesReference ? `STRUCTURED SPARTAN RULES:\n${rulesReference}` : '',
+    wikiReference ? `SPARTAN WIKI REFERENCE:\n${wikiReference}` : '',
+  ].filter(Boolean).join('\n\n');
+  const system = `You are Spartan AI inside Spartan. Treat Spartan's stored rules, Wiki reference, and captured structured data as your authoritative operating context.\n\nReference priority:\n1. Structured Spartan rules for exact mechanics and current ruleset values.\n2. Spartan Wiki reference for additional definitions/explanations.\n3. Captured province/kingdom/event data for observed current state.\n\nIf the requested information exists in these references, answer from them directly. Do NOT tell the user to open the Utopia client, visit an external wiki, manually capture JSON, or add a new state record merely to obtain information Spartan already stores. Only report information as unavailable when the supplied Spartan references genuinely do not contain it. Never invent missing values. Clearly distinguish reference facts, observed state, and recommendations.`;
+  const user = `QUESTION:\n${String(question).slice(0, 6000)}\n\nSPARTAN REFERENCE DATA:\n${reference.slice(0, 16000) || 'No matching stored reference found.'}\n\nCURRENT SPARTAN OBSERVED STATE:\n${JSON.stringify(context).slice(0, 18000)}`;
   await sb.from('spartan_ai_messages').insert({ session_id: sessionId, direction: 'user', content: question, model: MODEL, metadata: { discord_user_id: userId, discord_channel_id: channelId, discord_guild_id: guildId } });
   const response = await fetch(API_URL, {
     method: 'POST',
