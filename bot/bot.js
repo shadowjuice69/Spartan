@@ -91,6 +91,23 @@ client.once('clientReady', async () => {
   } catch (error) {
     logger.error(`[WIKI SYNC ERROR] ${error.stack || error.message}`);
   }
+  // Retired guild exits configured through Render; active Spartan guilds are unaffected.
+  const leaveGuildIds = (process.env.DISCORD_LEAVE_GUILD_IDS || '').split(',').map(id => id.trim()).filter(Boolean);
+  for (const guildId of leaveGuildIds) {
+    try {
+      const guild = client.guilds.cache.get(guildId);
+      if (guild) {
+        logger.warn('[DISCORD] Leaving retired guild ' + guildId + ' (' + guild.name + ')');
+        await guild.leave();
+        logger.info('[DISCORD] Left retired guild ' + guildId);
+      } else {
+        logger.info('[DISCORD] Retired guild ' + guildId + ' is not present in the bot cache');
+      }
+    } catch (error) {
+      logger.error('[DISCORD] Failed to leave retired guild ' + guildId + ': ' + (error.stack || error.message));
+    }
+  }
+
   spartanAI.start();
   spartanQueueProcessor.start();
   try { directMusicAdapter.initialize(client); musicPlayer.setAdapter(directMusicAdapter); logger.info('🎵 Music backend ready: Direct Discord Voice / yt-dlp / FFmpeg'); }
