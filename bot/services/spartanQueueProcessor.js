@@ -182,57 +182,104 @@ async function syncBotIntelRecord(sb, flow, capture, state) {
   const text = String(capture?.raw_text || data?.content || '').trim();
   if (!text) return null;
 
-  // Only promote actual bot/game information into Intel. Normal member chatter
-  // stays in spartan_bot_events / Capture Vault and is not treated as intel.
+  // Utopia's bot is the authoritative Discord game-feed author. Do not trust
+  // a channel name for classification: the same ops channel carries Magic,
+  // Thievery, and potentially other game operations.
   const authorBot = metadata.author_bot === true || metadata.author_bot === 'true';
-  // Discord ops logs can be posted by a member on behalf of the game/bot feed.
-  // Treat the dedicated ops-log channel as trusted Intel input, while keeping
-  // ordinary member chatter out of spartan_intel_records.
-  const trustedOpsChannel = channel.includes('ops-log') || channel.includes('thieve');
-  if (!authorBot && !trustedOpsChannel) return null;
+  if (!authorBot) return null;
+
+  // These vocabularies are derived directly from the Magic/Mystics and
+  // Thievery sections of utopia-wiki.html. The message operation name is
+  // normalized before matching, so Discord formatting such as
+  // <<__spy on defense__>> still resolves to the Wiki operation.
+  const WIKI_MAGIC_OPS = [
+    'Aggression','Animate Dead','Anonymity','Bloodlust',"Builders' Boon",'Clear Sight',
+    'Divine Shield','Fanaticism','Fertile Lands','Fountain of Knowledge','Ghost Workers',
+    'Greater Protection','Guile','Illuminate Shadows','Inspire Army','Invisibility',
+    "Love & Peace","Mage's Fury",'Magic Shield','Mind Focus',"Miner's Mystique",
+    'Minor Protection',"Nature's Blessing",'Paradise','Patriotism','Quick Feet',
+    'Reflect Magic','Revelation','Salvation','Shadowlight','Town Watch','Tree of Gold',
+    'War Spoils','Wrath','Abolish Ritual','Blizzard','Chastity','Crystal Ball',
+    'Crystal Eye','Droughts','Explosions','Expose Thieves','Fireball',"Fool's Gold",
+    'Gluttony','Greed','Lightning Strike','Land Lust','Meteor Showers','Mystic Vortex',
+    'Nightmares','Pitfalls','Storms','Tornadoes','Vermin','Amnesia',"Hero's Inspiration",
+    'Nightfall','Righteous Aggressor','Righteous Defender','Sloth','Soul Blight'
+  ];
+  const WIKI_THIEVERY_OPS = [
+    'Spy on Throne','Spy on Defense','Spy on Exploration','Snatch News','Infiltrate',
+    'Survey','Spy on Military','Spy on Sciences','Sabotage Wizards','Destabilize Guilds',
+    'Rob the Granaries','Rob the Vaults','Rob the Towers','Kidnapping','Steal Horses',
+    'Arson','Greater Arson','Night Strike','Incite Riots','Steal War Horses',
+    'Bribe Thieves','Bribe Generals','Free Prisoners','Assassinate Wizards','Propaganda'
+  ];
+
+  const normalizeOperation = value => String(value || '')
+    .toLowerCase()
+    .replace(/&amp;/g, '&')
+    .replace(/[’']/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\b(the|an|a)\b/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  const wikiMagic = new Map(WIKI_MAGIC_OPS.map(name => [normalizeOperation(name), name]));
+  const wikiThievery = new Map(WIKI_THIEVERY_OPS.map(name => [normalizeOperation(name), name]));
+
+  // Utopia's Discord feed puts the operation in <<__...__>>. Prefer that
+  // structured marker; fall back to a compact content signature for feeds
+  // that omit the marker.
+  const operationMarkers = [...text.matchAll(/<<__([^_]+?)__>>/gi)]
+    .map(match => normalizeOperation(match[1]))
+    .filter(Boolean);
+
+  const normalizedText = normalizeOperation(text);
+  const findWikiOperation = (ops, vocabulary) => {
+    for (const op of ops) {
+      if (vocabulary.has(op)) return vocabulary.get(op);
+    }
+    return null;
+  };
+
+  const magicOperation = findWikiOperation(operationMarkers, wikiMagic);
+  const thieveryOperation = findWikiOperation(operationMarkers, wikiThievery);
 
   let pageKind = 'bot_event';
   let confidence = 0.55;
   let reason = 'Fallback bot-event classification';
 
-  if (channel.includes('ritual') || /\b(ritual|sacrifice|ceremony|rituals)\b/i.test(text)) {
+  if (thieveryOperation) {
+    pageKind = 'thievery';
+    confidence = 0.98;
+    reason = `Wiki-defined Thievery operation: ${thieveryOperation}`;
+  } else if (magicOperation) {
+    pageKind = 'magic';
+    confidence = 0.98;
+    reason = `Wiki-defined Magic operation: ${magicOperation}`;
+  } else if (/\bspy\s+on\s+(?:defense|throne|military|sciences?|exploration)\b/i.test(normalizedText) ||
+             /\b(?:thieves?|stealth)\b.*\b(?:sent|success|failed|op)\b/i.test(normalizedText)) {
+    pageKind = 'thievery';
+    confidence = 0.90;
+    reason = 'Thievery content signature matches Utopia ops feed';
+  } else if (/\b(?:spell|wizards?|mana|runes?|casting)\b/i.test(normalizedText)) {
+    pageKind = 'magic';
+    confidence = 0.82;
+    reason = 'Magic content signature matches Utopia ops feed';
+  } else if (channel.includes('ritual') || /\b(ritual|sacrifice|ceremony|rituals)\b/i.test(normalizedText)) {
     pageKind = 'ritual';
     confidence = 0.80;
-    reason = 'Channel/content identifies ritual';
-  } else if (
-    channel.includes('thieve') ||
-    /\b(thiev|thieves|thievery|rob|steal|op success|op failed|night strike|assassinate|kidnap|riots|sabotage)\b/i.test(text) ||
-    /\bspy on\b/i.test(text) ||
-    /\bstealth\s+\d+%/i.test(text)
-  ) {
-    pageKind = 'thievery';
-    confidence = 0.80;
-    reason = 'Channel/content identifies thievery/spy operation';
-  } else if (channel.includes('selfspell') || channel.includes('offensive-spell') || /\b(spell|wizards?|mana|runes?|casting|fireball|storms?|drought|chastity|sloth|magic ward|shadow light|nature's blessing|inspire army)\b/i.test(text)) {
-    pageKind = 'magic';
-    confidence = 0.76;
-    reason = 'Channel/content identifies magic';
-    if (/\b(science|scientists?|science books?|fountain of knowledge)\b/i.test(text)) {
-      pageKind = 'science';
-      confidence = 0.76;
-      reason = 'Page content identifies science';
-    }
-  } else if (channel.includes('attack') || /\b(attacked|attack|invaded|march|plunder|learn|massacre|land grab|conquest|ambush)\b/i.test(text)) {
+    reason = 'Content identifies ritual';
+  } else if (channel.includes('attack') || /\b(attacked|attack|invaded|march|plunder|learn|massacre|land grab|conquest|ambush)\b/i.test(normalizedText)) {
     pageKind = 'news';
     confidence = 0.74;
-    reason = 'Channel/content identifies attack/news';
-  } else if (channel.includes('ritual') || /\b(ritual|sacrifice|ceremony|rituals)\b/i.test(text)) {
-    pageKind = 'ritual';
-    confidence = 0.74;
-    reason = 'Channel/content identifies ritual';
-   } else if (channel.includes('aid') || /\b(aid|assistance|sent .* aid|received .* aid)\b/i.test(text)) {
+    reason = 'Content identifies attack/news';
+  } else if (channel.includes('aid') || /\b(aid|assistance|sent .* aid|received .* aid)\b/i.test(normalizedText)) {
     pageKind = 'aid';
     confidence = 0.74;
-    reason = 'Channel/content identifies aid';
-  } else if (channel.includes('dragon') || /\b(dragon|emerald|ruby|amethyst|topaz|sapphire)\b/i.test(text)) {
+    reason = 'Content identifies aid';
+  } else if (channel.includes('dragon') || /\b(dragon|emerald|ruby|amethyst|topaz|sapphire)\b/i.test(normalizedText)) {
     pageKind = 'dragon';
     confidence = 0.74;
-    reason = 'Channel/content identifies dragon';
+    reason = 'Content identifies dragon';
   }
 
   const target = deriveIntelTarget(text);
