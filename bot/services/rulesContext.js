@@ -44,7 +44,7 @@ function raceBlock(r) {
   if (r.bonuses) out.push(`  Bonuses: ${r.bonuses}`);
   if (r.penalties) out.push(`  Penalties: ${r.penalties}`);
   if (r.unique_name) out.push(`  Unique: ${r.unique_name}${r.unique_desc ? ' - ' + r.unique_desc : ''}`);
-  if (r.war_doctrine) out.push(`  War doctrine: ${r.war_doctrine}`);
+  if (r.war_doctrine) out.push(`  War doctrine (applies only while in war): ${r.war_doctrine}`);
   if (r.units) out.push(`  Units: ${r.units}`);
   if (r.spells) out.push(`  Spells: ${r.spells}`);
   return out.join('\n');
