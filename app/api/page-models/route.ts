@@ -19,6 +19,7 @@ const KINDS: Record<string, string[]> = {
   buildings: ['buildings', 'council_internal', 'survey'],
   province: ['throne', 'kingdom', 'province_state'],
   kingdom: ['kingdom'],
+  'war-room': ['kingdom', 'military', 'council_military'],
   command: [], // built by buildCommandModel below, not by the generic query
 }
 
@@ -270,6 +271,42 @@ export async function GET(request: Request) {
       }
       body.fields = fields(detailRecs[0])
       logRecords = detailRecs.length ? detailRecs : records
+    }
+
+    if (page === 'war-room') {
+      // Combat picture: your own recorded events (attacks, ops, losses) plus war record and military posture.
+      // Discord/bot-sourced events are left out on purpose; this page only shows game data.
+      const eventsResult = await db
+        .from('spartan_event_history')
+        .select('occurred_at,event_type,source,attacker,defender,target_kingdom,acres_change,troops_lost,thieves_lost,wizards_lost,gold_change,food_change,runes_change')
+        .eq('user_id', user.id).order('occurred_at', { ascending: false }).limit(300)
+      const own = String(account.province_name).trim().toLowerCase()
+      const n = (v: unknown) => toNum(v) ?? 0
+      const events = (eventsResult.error ? [] : eventsResult.data || [])
+        .filter((e: any) => !/discord|bot/i.test(String(e.source || '')))
+        .map((e: any) => {
+          const attacker = e.attacker || null
+          const defender = e.defender || null
+          const direction = attacker && String(attacker).trim().toLowerCase() === own ? 'out'
+            : defender && String(defender).trim().toLowerCase() === own ? 'in' : 'other'
+          return {
+            at: e.occurred_at, type: e.event_type, attacker, defender, targetKingdom: e.target_kingdom || null, direction,
+            acres: n(e.acres_change), troops: n(e.troops_lost), thieves: n(e.thieves_lost), wizards: n(e.wizards_lost),
+            gold: n(e.gold_change), food: n(e.food_change), runes: n(e.runes_change),
+          }
+        })
+      const militaryRec = allByPath(records, '/wol/game/council_military')[0] || null
+      let kingdom: any = null
+      for (const r of allByPath(records, '/wol/game/kingdom_details')) {
+        const d = parseKingdomDetails(r.raw_text || '')
+        if (d.code === account.province_location) { kingdom = { ...d, capturedAt: when(r) }; break }
+      }
+      body.model = {
+        events,
+        military: militaryRec?.raw_text ? { ...parseMilitary(militaryRec.raw_text), capturedAt: when(militaryRec) } : null,
+        kingdom,
+      }
+      body.fields = fields(militaryRec)
     }
 
     if (provinceParam) {
