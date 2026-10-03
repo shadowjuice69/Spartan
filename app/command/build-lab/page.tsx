@@ -184,7 +184,16 @@ function BuildDetail({ id, races, personalities, onBack, onDeleted }: { id: stri
     return () => { cancelled = true }
   }, [])
 
-  useEffect(() => {\n    if (!build || currentAge == null) return\n    const pinnedAge = Number(build.rules_age_number)\n    if (Number.isFinite(pinnedAge) && pinnedAge !== currentAge) {\n      setBooks({ economy: 0, military: 0, arcane: 0 })\n      setAgeChanged(true)\n    }\n  }, [build, currentAge])\n\n  const plan = useMemo(() => build ? buildPlan(build.science, live?.cats || null, books) : [], [build, live, books])
+  useEffect(() => {
+    if (!build || currentAge == null) return
+    const pinnedAge = Number(build.rules_age_number)
+    if (Number.isFinite(pinnedAge) && pinnedAge !== currentAge) {
+      setBooks({ economy: 0, military: 0, arcane: 0 })
+      setAgeChanged(true)
+    }
+  }, [build, currentAge])
+
+  const plan = useMemo(() => build ? buildPlan(build.science, live?.cats || null, books) : [], [build, live, books])
   const pct = (n: number) => `${n > 0 ? "+" : ""}${n.toFixed(1)}%`
   const raceRule = build?.race_rule_snapshot || null
   const personalityRule = build?.personality_rule_snapshot || null
