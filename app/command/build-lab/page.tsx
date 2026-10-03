@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useMemo, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { parseBuildText, parseMilitaryRequirementText, parseScienceText, ParsedBuild, ParsedMilitaryRequirement, ParsedScience } from "@/lib/spartan/build-parser"
-import { calculateAllocations } from "@/lib/spartan/science-calculator"
+import { buildPlan, type LiveCategory } from "@/lib/spartan/science-plan"
 
 const navCommand = [["Command","/"],["Province","/command/province"],["War Room","/command/war-room"],["Build Lab","/command/build-lab"],["Draft Calc","/command/draft-calc"],["Wiki","/command/wiki"],["Tools","/command/tools"],["Scraper Generator","/command/scraper"]]
 const navIntel = [["Kingdom","/command/kingdom"],["Military","/command/military"],["Magic","/command/magic"],["Thievery","/command/thievery"],["Science","/command/science"],["Buildings","/command/buildings"],["Throne","/command/throne"]]
@@ -168,7 +168,22 @@ function BuildDetail({ id, races, personalities, onBack, onDeleted }: { id: stri
     fetch(`/api/builds/${id}`).then((r) => r.json()).then((j) => j.build ? setBuild(j.build) : setError(j.error || "Not found"))
   }, [id])
 
-  const allocations = useMemo(() => build ? calculateAllocations(build.science, books) : [], [build, books])
+  // Live books and effects from the player's captured Science council page (when signed in and captured).
+  const [live, setLive] = useState<{ cats: LiveCategory[]; at: string | null } | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    fetch("/api/page-models?page=science", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        const cats = j?.model?.current?.categories
+        if (!cancelled && Array.isArray(cats) && cats.length) setLive({ cats, at: j.model.capturedAt || null })
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [])
+
+  const plan = useMemo(() => build ? buildPlan(build.science, live?.cats || null, books) : [], [build, live, books])
+  const pct = (n: number) => `${n > 0 ? "+" : ""}${n.toFixed(1)}%`
   const raceRule = build?.race_rule_snapshot || null
   const personalityRule = build?.personality_rule_snapshot || null
   const [resyncing, setResyncing] = useState(false)
@@ -243,28 +258,64 @@ function BuildDetail({ id, races, personalities, onBack, onDeleted }: { id: stri
       </p>
       {mil.notes && <p style={{ fontSize:11, color:"#8993a1", fontStyle:"italic" }}>{mil.notes}</p>}
 
-      <h3 style={{ fontSize:12, color:"#67f0b0", letterSpacing:".1em", marginTop:20 }}>SCIENCE CALCULATOR</h3>
-      <div style={{ display:"flex", gap:14, marginBottom:14 }}>
-        {(["economy","military","arcane"] as const).map((cat) => (
-          <label key={cat} style={{ fontSize:11, display:"flex", flexDirection:"column", gap:4 }}>
-            <span style={{ color:"#8993a1", textTransform:"capitalize" }}>{cat} books</span>
-            <input type="number" min={0} style={{ ...input, width:110 }} value={books[cat] || ""} onChange={(e) => setBooks((b) => ({ ...b, [cat]: Number(e.target.value) || 0 }))} />
-          </label>
-        ))}
+      <h3 style={{ fontSize:12, color:"#67f0b0", letterSpacing:".1em", marginTop:20 }}>SCIENCE PLAN</h3>
+      <p style={{ fontSize:10, color:"#687686", margin:"0 0 10px" }}>
+        {live
+          ? `Using your live books from the Science council page${live.at ? ` (captured ${new Date(live.at).toLocaleString()})` : ""}. Type a number to plan for a different book count.`
+          : "No live Science capture found, so enter your books below. Open Council → Science with the scraper running to fill these in automatically."}
+      </p>
+      <div style={{ display:"flex", gap:14, marginBottom:14, flexWrap:"wrap", alignItems:"flex-end" }}>
+        {(["economy","military","arcane"] as const).map((cat) => {
+          const p = plan.find((x) => x.category === cat)
+          return (
+            <label key={cat} style={{ fontSize:11, display:"flex", flexDirection:"column", gap:4 }}>
+              <span style={{ color:"#8993a1", textTransform:"capitalize" }}>{cat} books</span>
+              <input type="number" min={0} style={{ ...input, width:110 }} placeholder={live && p ? String(p.invested + p.available) : "0"} value={books[cat] || ""} onChange={(e) => setBooks((b) => ({ ...b, [cat]: Number(e.target.value) || 0 }))} />
+            </label>
+          )
+        })}
+        {(books.economy > 0 || books.military > 0 || books.arcane > 0) && (
+          <button style={btnGhost} onClick={() => setBooks({ economy: 0, military: 0, arcane: 0 })}>{live ? "Reset to live books" : "Clear"}</button>
+        )}
       </div>
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:14 }}>
-        {allocations.map((alloc) => (
-          <div key={alloc.category}>
-            <p style={{ fontSize:9, color:"#687686", textTransform:"uppercase" }}>{alloc.category}</p>
-            {alloc.rows.map((row) => (
-              <p key={row.name} style={{ fontSize:11, display:"flex", justifyContent:"space-between" }}>
-                <span>{row.name}</span>
-                <b style={{ color:"#d8ff54" }}>{row.books.toLocaleString()}{row.type === "actual_pct" && <span style={{ color:"#687686" }}> (fixed {row.input}%)</span>}</b>
+      <div style={{ display:"grid", gap:14 }}>
+        {plan.filter((p) => p.rows.length > 0).map((p) => (
+          <div key={p.category} style={{ border:"1px solid rgba(255,255,255,.06)", borderRadius:8, padding:12 }}>
+            <p style={{ fontSize:9, color:"#687686", textTransform:"uppercase", margin:"0 0 2px" }}>{p.category}</p>
+            <p style={{ fontSize:10, color:"#8993a1", margin:"0 0 8px" }}>
+              Planning for <b style={{ color:"#dce7ee" }}>{p.totalBooks.toLocaleString()}</b> books
+              {live && p.available > 0 && books[p.category] <= 0 ? ` (${p.invested.toLocaleString()} invested + ${p.available.toLocaleString()} unspent)` : ""}
+            </p>
+            <div style={{ display:"grid", gridTemplateColumns:"minmax(80px,1.4fr) 1fr 1fr 1fr 1.3fr", gap:"4px 8px", fontSize:11, alignItems:"baseline" }}>
+              {["SCIENCE","NOW","TARGET","MOVE","BONUS"].map((h) => <span key={h} style={{ fontSize:9, color:"#687686", letterSpacing:".08em", textAlign: h === "SCIENCE" ? "left" : "right" }}>{h}</span>)}
+              {p.rows.map((r) => {
+                const done = Math.abs(r.delta) < 1
+                return [
+                  <span key={r.name + "n"}>{r.name}{r.type === "actual_pct" && <span style={{ color:"#687686" }}> ({r.input}%)</span>}</span>,
+                  <span key={r.name + "c"} style={{ textAlign:"right", color:"#8993a1" }}>{live ? r.current.toLocaleString() : "—"}</span>,
+                  <b key={r.name + "t"} style={{ textAlign:"right", color:"#d8ff54" }}>{r.target.toLocaleString()}</b>,
+                  <span key={r.name + "d"} style={{ textAlign:"right", color: !live ? "#687686" : done ? "#67f0b0" : r.delta > 0 ? "#d8ff54" : "#ffb35c" }}>
+                    {!live ? "—" : done ? "✓" : `${r.delta > 0 ? "+" : "−"}${Math.abs(r.delta).toLocaleString()}`}
+                  </span>,
+                  <span key={r.name + "b"} style={{ textAlign:"right", color:"#8993a1" }}>
+                    {r.currentEffect == null ? "—" : r.projectedEffect == null ? pct(r.currentEffect) : <>{pct(r.currentEffect)} → <b style={{ color:"#dce7ee" }}>{pct(r.projectedEffect)}</b></>}
+                  </span>,
+                ]
+              })}
+            </div>
+            {p.extras.length > 0 && (
+              <p style={{ fontSize:10, color:"#687686", margin:"8px 0 0" }}>
+                Not in this build: {p.extras.map((e) => `${e.name} ${e.books.toLocaleString()}`).join(", ")}
               </p>
-            ))}
+            )}
           </div>
         ))}
       </div>
+      {live && (
+        <p style={{ fontSize:9, color:"#687686", marginTop:10 }}>
+          MOVE shows books to add (+) or take out (−) to reach the build. BONUS is an estimate scaled from the effect captured for each science; a science with no books yet has no estimate.
+        </p>
+      )}
     </div>
   )
 }
