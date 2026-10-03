@@ -313,9 +313,138 @@ function BuildDetail({ id, races, personalities, onBack, onDeleted }: { id: stri
       </div>
       {live && (
         <p style={{ fontSize:9, color:"#687686", marginTop:10 }}>
-          MOVE shows books to add (+) or take out (−) to reach the build. BONUS is an estimate scaled from the effect captured for each science; a science with no books yet has no estimate.
+          MOVE is a comparison only: + means books to add, − means you are over the target, and ✓ means on target. Spartan does not move books. BONUS is an estimate scaled from the effect captured for each science; a science with no books yet has no estimate.
         </p>
       )}
+    </div>
+  )
+}
+
+function BuildInstructions() {
+  const sectionTitle: any = { fontSize:12, color:"#67f0b0", letterSpacing:".1em", margin:"22px 0 8px" }
+  const muted: any = { fontSize:11, color:"#8993a1", lineHeight:1.65 }
+  const table: any = { width:"100%", borderCollapse:"collapse", fontSize:11 }
+  const th: any = { textAlign:"left", fontSize:9, color:"#687686", letterSpacing:".08em", padding:"8px 6px", borderBottom:"1px solid rgba(255,255,255,.08)" }
+  const td: any = { padding:"9px 6px", borderBottom:"1px solid rgba(255,255,255,.05)", verticalAlign:"top" }
+
+  return (
+    <div style={{ ...card, maxWidth:1100 }}>
+      <div style={{ fontSize:9, color:"#d8ff54", letterSpacing:".18em" }}>BUILD LIBRARY // INSTRUCTIONS</div>
+      <h2 style={{ margin:"7px 0 4px" }}>How the Science Plan Works</h2>
+      <p style={muted}>
+        The Science Plan turns the science priorities saved in a build into a practical roadmap.
+        Spartan calculates the targets and comparisons for you, but it does not invest or move books.
+        You still make the actual investments on Utopia's Science page.
+      </p>
+
+      <h3 style={sectionTitle}>1 — SCIENCE WEIGHTS</h3>
+      <p style={muted}>
+        When you create a build, each science can have a weight. A higher weight gives that science
+        a higher priority when Spartan calculates the build's target allocation. A weight is a
+        priority — it is not a number of books.
+      </p>
+      <div style={{ ...card, marginTop:10, background:"rgba(255,255,255,.02)" }}>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:6, fontSize:11 }}>
+          <span>Income</span><b style={{color:"#d8ff54"}}>40</b>
+          <span>Housing</span><b style={{color:"#d8ff54"}}>20</b>
+          <span>Military Science</span><b style={{color:"#d8ff54"}}>30</b>
+          <span>Magic Science</span><b style={{color:"#d8ff54"}}>10</b>
+        </div>
+      </div>
+
+      <h3 style={sectionTitle}>2 — BOOKS</h3>
+      <p style={muted}>
+        With a live Science council capture, Spartan plans around your invested books plus your
+        unspent books. For example: 10,000 invested + 2,000 unspent = a 12,000-book planning pool.
+        You can also type a different total to plan for a future book count.
+      </p>
+
+      <h3 style={sectionTitle}>3 — TARGET</h3>
+      <p style={muted}>
+        Spartan applies the build's science weights to the planning pool and calculates how many
+        books the build wants at each science. You do not have to calculate the target yourself.
+      </p>
+
+      <h3 style={sectionTitle}>4 — NOW</h3>
+      <p style={muted}>
+        NOW is the number of books currently invested in that science according to your latest
+        captured Science page.
+      </p>
+
+      <h3 style={sectionTitle}>5 — MOVE</h3>
+      <p style={muted}>
+        MOVE is simply <b style={{color:"#dce7ee"}}>TARGET − NOW</b>. It is information only.
+        Spartan does not move or invest any books.
+      </p>
+      <div style={{ overflowX:"auto", marginTop:10 }}>
+        <table style={table}>
+          <thead><tr><th style={th}>MOVE</th><th style={th}>MEANING</th><th style={th}>WHAT YOU DO</th></tr></thead>
+          <tbody>
+            <tr><td style={td}><b style={{color:"#d8ff54"}}>+2,000</b></td><td style={td}>2,000 books below target</td><td style={td}>Invest 2,000 more books into that science.</td></tr>
+            <tr><td style={td}><b style={{color:"#ffb35c"}}>−2,000</b></td><td style={td}>2,000 books over target</td><td style={td}>Do not treat this as an instruction to remove books. It simply shows the existing investment is above the build target.</td></tr>
+            <tr><td style={td}><b style={{color:"#67f0b0"}}>✓</b></td><td style={td}>On target</td><td style={td}>No additional books are needed to reach the target.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 style={sectionTitle}>6 — BONUS</h3>
+      <p style={muted}>
+        BONUS shows the current captured effect and, when enough live information exists, Spartan's
+        estimate of the effect at the target. The projection uses the same science-effect scaling
+        used by the Science / Summary calculator.
+      </p>
+      <div style={{ ...card, marginTop:10, background:"rgba(255,255,255,.02)", fontSize:11 }}>
+        <b>Example:</b> <span style={{color:"#8993a1"}}>+10.0% → +11.5%</span>
+        <div style={{...muted, marginTop:5}}>Current captured effect → estimated effect at the target book amount.</div>
+      </div>
+
+      <h3 style={sectionTitle}>7 — NOT IN THIS BUILD</h3>
+      <p style={muted}>
+        If your live Science capture contains a science where you already have books invested but
+        the build does not assign it a target, Spartan lists it as <b>Not in this build</b>.
+        This lets you see existing investments that are outside the build's priorities.
+      </p>
+
+      <h3 style={sectionTitle}>8 — PLANNING FOR THE FUTURE</h3>
+      <p style={muted}>
+        The Science Plan normally uses your live captured totals. You can type a different book
+        total for Economy, Military, or Arcane to see what the build would target at that investment
+        level. Use <b>Reset to live books</b> to return to your captured totals.
+      </p>
+
+      <h3 style={sectionTitle}>QUICK REFERENCE</h3>
+      <div style={{ overflowX:"auto" }}>
+        <table style={table}>
+          <thead><tr><th style={th}>FIELD</th><th style={th}>MEANING</th></tr></thead>
+          <tbody>
+            <tr><td style={td}><b>WEIGHT</b></td><td style={td}>The priority assigned to a science in the build.</td></tr>
+            <tr><td style={td}><b>NOW</b></td><td style={td}>Your current captured book investment.</td></tr>
+            <tr><td style={td}><b>TARGET</b></td><td style={td}>The book amount the build calculates for that science.</td></tr>
+            <tr><td style={td}><b>MOVE</b></td><td style={td}>TARGET − NOW. Positive means add books; negative means you are over target; ✓ means on target.</td></tr>
+            <tr><td style={td}><b>BONUS</b></td><td style={td}>Current captured effect → estimated effect at the target.</td></tr>
+            <tr><td style={td}><b>NOT IN THIS BUILD</b></td><td style={td}>Existing science investments that the build does not assign a target.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div style={{ marginTop:18, padding:12, borderRadius:8, border:"1px solid rgba(216,255,84,.16)", background:"rgba(216,255,84,.035)" }}>
+        <div style={{ fontSize:10, color:"#d8ff54", letterSpacing:".08em", fontWeight:800 }}>THE SIMPLE VERSION</div>
+        <p style={{ ...muted, margin:"6px 0 0" }}>
+          <b>Build weights → Target → Compare with NOW → Follow MOVE.</b><br />
+          A <b>+</b> tells you where to invest more. A <b>−</b> tells you that science is already
+          over the target. A <b>✓</b> means you are on target. Spartan calculates the plan; you
+          make the actual investments in Utopia.
+        </p>
+      </div>
+
+      <div style={{ marginTop:20, paddingTop:14, borderTop:"1px solid rgba(255,255,255,.06)" }}>
+        <div style={{ fontSize:9, color:"#687686", letterSpacing:".12em" }}>BUILD CREATION GUIDE</div>
+        <p style={{ ...muted, marginBottom:0 }}>
+          This tab will also be the home for the step-by-step guide to creating and saving a build.
+          The Science Plan guide is ready now; the build-creation instructions can be added here
+          without changing how the Build Library works.
+        </p>
+      </div>
     </div>
   )
 }
@@ -328,6 +457,7 @@ function BuildLab() {
   const [races, setRaces] = useState<RaceRule[]>([])
   const [personalities, setPersonalities] = useState<PersonalityRule[]>([])
   const [showForm, setShowForm] = useState(false)
+  const [showInstructions, setShowInstructions] = useState(false)
   const [showVault, setShowVault] = useState(false)
   const [vaultBuilds, setVaultBuilds] = useState<any[]>([])
   const [selectedVaultBuilds, setSelectedVaultBuilds] = useState<string[]>([])
@@ -400,7 +530,13 @@ function BuildLab() {
             <h1 style={{ fontSize:34, margin:"7px 0 0" }}>Build Library</h1>
           </div>
           {!id && (
-            <div style={{ display:"flex", gap:8 }}>
+            <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+              <button
+                style={showInstructions ? btnPrimary : btnGhost}
+                onClick={() => setShowInstructions((s) => !s)}
+              >
+                {showInstructions ? "Library" : "▤ Instructions"}
+              </button>
               <button style={btnGhost} onClick={loadVault}>▣ Stored Builds</button>
               <button style={btnPrimary} onClick={() => setShowForm((s) => !s)}>{showForm ? "Close" : "+ Add Build"}</button>
             </div>
@@ -462,6 +598,8 @@ function BuildLab() {
 
         {id ? (
           <BuildDetail id={id} races={races} personalities={personalities} onBack={() => router.push("/command/build-lab")} onDeleted={() => router.push("/command/build-lab")} />
+        ) : showInstructions ? (
+          <BuildInstructions />
         ) : (
           <>
             {showForm && <NewBuildForm races={races} personalities={personalities} onSaved={() => { setShowForm(false); loadBuilds() }} />}
