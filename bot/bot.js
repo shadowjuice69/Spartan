@@ -95,13 +95,15 @@ client.once('clientReady', async () => {
   const leaveGuildIds = (process.env.DISCORD_LEAVE_GUILD_IDS || '').split(',').map(id => id.trim()).filter(Boolean);
   for (const guildId of leaveGuildIds) {
     try {
-      const guild = client.guilds.cache.get(guildId);
-      if (guild) {
-        logger.warn('[DISCORD] Leaving retired guild ' + guildId + ' (' + guild.name + ')');
-        await guild.leave();
-        logger.info('[DISCORD] Left retired guild ' + guildId);
+      const response = await fetch('https://discord.com/api/v10/users/@me/guilds/' + guildId, {
+        method: 'DELETE',
+        headers: { Authorization: 'Bot ' + process.env.DISCORD_TOKEN },
+      });
+      if (response.ok || response.status === 404) {
+        logger.info('[DISCORD] Left/confirmed absent from retired guild ' + guildId + ' (HTTP ' + response.status + ')');
       } else {
-        logger.info('[DISCORD] Retired guild ' + guildId + ' is not present in the bot cache');
+        const body = await response.text().catch(() => '');
+        logger.error('[DISCORD] Failed to leave retired guild ' + guildId + ' (HTTP ' + response.status + '): ' + body);
       }
     } catch (error) {
       logger.error('[DISCORD] Failed to leave retired guild ' + guildId + ': ' + (error.stack || error.message));
