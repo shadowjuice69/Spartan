@@ -185,7 +185,11 @@ async function syncBotIntelRecord(sb, flow, capture, state) {
   // Only promote actual bot/game information into Intel. Normal member chatter
   // stays in spartan_bot_events / Capture Vault and is not treated as intel.
   const authorBot = metadata.author_bot === true || metadata.author_bot === 'true';
-  if (!authorBot) return null;
+  // Discord ops logs can be posted by a member on behalf of the game/bot feed.
+  // Treat the dedicated ops-log channel as trusted Intel input, while keeping
+  // ordinary member chatter out of spartan_intel_records.
+  const trustedOpsChannel = channel.includes('ops-log') || channel.includes('thieve');
+  if (!authorBot && !trustedOpsChannel) return null;
 
   let pageKind = 'bot_event';
   let confidence = 0.55;
