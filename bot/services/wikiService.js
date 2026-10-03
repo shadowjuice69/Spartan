@@ -24,19 +24,18 @@ function loadLocalWiki() {
 
 function stripWikiHtml(html) {
   return String(html || "")
-    .replace(/<script[\s\S]*?<\\/script>/gi, " ")
-    .replace(/<style[\s\S]*?<\\/style>/gi, " ")
-    .replace(/<[^>]+>/g, " ")
+    .replace(new RegExp("<script[\\s\\S]*?<\\/script>", "gi"), " ")
+    .replace(new RegExp("<style[\\s\\S]*?<\\/style>", "gi"), " ")
+    .replace(new RegExp("<[^>]+>", "g"), " ")
     .replace(/&nbsp;/gi, " ")
     .replace(/&amp;/gi, "&")
     .replace(/&lt;/gi, "<")
     .replace(/&gt;/gi, ">")
     .replace(/&#39;|&apos;/gi, "'")
     .replace(/&quot;/gi, '"')
-    .replace(/\s+/g, " ")
+    .replace(/\\s+/g, " ")
     .trim();
 }
-
 function searchLocalWiki(question, limit = 5) {
   const html = loadLocalWiki();
   if (!html) return [];
