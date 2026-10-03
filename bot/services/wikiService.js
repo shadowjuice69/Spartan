@@ -1,8 +1,99 @@
 const supabaseService = require("./supabase");
+const fs = require("fs");
+const path = require("path");
+
+let localWikiCache = null;
+
+function loadLocalWiki() {
+  if (localWikiCache !== null) return localWikiCache;
+  const candidates = [
+    path.join(process.cwd(), "utopia-wiki.html"),
+    path.join(__dirname, "../../utopia-wiki.html"),
+  ];
+  for (const file of candidates) {
+    try {
+      localWikiCache = fs.readFileSync(file, "utf8");
+      console.log("[WIKI] Loaded authoritative local utopia-wiki.html:", file);
+      return localWikiCache;
+    } catch (_) {}
+  }
+  localWikiCache = "";
+  console.warn("[WIKI] Authoritative utopia-wiki.html was not found locally");
+  return localWikiCache;
+}
+
+function stripWikiHtml(html) {
+  return String(html || "")
+    .replace(/<script[\\s\\S]*?<\\/script>/gi, " ")
+    .replace(/<style[\\s\\S]*?<\\/style>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&#39;|&apos;/gi, "'")
+    .replace(/&quot;/gi, '"')
+    .replace(/\\s+/g, " ")
+    .trim();
+}
+
+function searchLocalWiki(question, limit = 5) {
+  const html = loadLocalWiki();
+  if (!html) return [];
+  const plain = stripWikiHtml(html);
+  const stopWords = new Set([
+    "what","does","do","is","are","the","a","an","should","i","use","in",
+    "during","war","age","how","why","can","my","with","wiki","data",
+    "about","for","of","on","to","and","or","me","tell","give"
+  ]);
+  const terms = String(question || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9'\\s]/g, " ")
+    .split(/\\s+/)
+    .filter(w => w.length > 2 && !stopWords.has(w));
+
+  if (!terms.length) return [];
+
+  const lower = plain.toLowerCase();
+  const scored = [];
+  for (const term of terms) {
+    let from = 0;
+    let hits = 0;
+    while (hits < 8) {
+      const idx = lower.indexOf(term, from);
+      if (idx < 0) break;
+      const start = Math.max(0, idx - 650);
+      const end = Math.min(plain.length, idx + term.length + 900);
+      const snippet = plain.slice(start, end).replace(/\\s+/g, " ").trim();
+      const score = terms.reduce((n, t) => n + (snippet.toLowerCase().includes(t) ? 1 : 0), 0);
+      scored.push({ title: `Utopia Wiki — ${term}`, content: snippet, score });
+      from = idx + term.length;
+      hits++;
+    }
+  }
+
+  const seen = new Set();
+  return scored
+    .sort((a,b) => b.score - a.score)
+    .filter(row => {
+      const key = row.content.slice(0, 220);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .slice(0, limit)
+    .map(({title, content}) => ({title, content}));
+}
 
 async function searchWiki(question) {
+  // Search Spartan's authoritative local Wiki snapshot first. This is the
+  // same utopia-wiki.html shipped with the repo, so AI answers do not depend
+  // on a stale external page or a manually copied rule list.
+  const localResults = searchLocalWiki(question, 5);
+
   const supabase = supabaseService.getClient();
-  if (!supabase) return null;
+  if (!supabase) return localResults;
+
   let searchTerm = question.toLowerCase().trim();
 
   const stopWords = [
@@ -12,23 +103,25 @@ async function searchWiki(question) {
   ];
 
   const words = searchTerm
-    .replace(/[^\w\s']/g, "")
-    .split(/\s+/)
+    .replace(/[^\\w\\s']/g, "")
+    .split(/\\s+/)
     .filter(w => !stopWords.includes(w));
 
   searchTerm = words.join(" ");
   const { data: exactMatch } = await supabase
     .from("wiki_entries").select("*").ilike("title", searchTerm).limit(1);
-  if (exactMatch && exactMatch.length > 0) return exactMatch;
-  const { data: ftsData } = await supabase
+  const dbResults = exactMatch && exactMatch.length > 0 ? exactMatch : (await supabase
     .from("wiki_entries").select("*")
-    .textSearch("search_vector", searchTerm, { type: "websearch", config: "english" }).limit(2);
-  if (ftsData && ftsData.length > 0) return ftsData;
-  const { data, error } = await supabase
-    .from("wiki_entries").select("*")
-    .or(`title.ilike.%${searchTerm}%,keywords.ilike.%${searchTerm}%`).limit(2);
-  if (error) { console.error("Wiki search error:", error); return null; }
-  return data;
+    .textSearch("search_vector", searchTerm, { type: "websearch", config: "english" }).limit(2)).data;
+
+  const combined = [...(localResults || []), ...(dbResults || [])];
+  const seen = new Set();
+  return combined.filter(row => {
+    const key = `${row.title || ""}|${String(row.content || "").slice(0, 300)}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).slice(0, 5);
 }
 
 async function searchRules(question) {
@@ -84,8 +177,6 @@ async function searchRules(question) {
   const { data: raceData } = raceName ? await supabase
     .from("race_rules").select("race_name, rule_name, value, age_number")
     .ilike("race_name", raceName).limit(50) : { data: [] };
-    .from("race_rules").select("race_name, rule_name, value, age_number")
-    .ilike("race_name", `%${q}%`).limit(10);
   if (raceData && raceData.length > 0) {
     lines.push(`⚔️ **${raceData[0].race_name} (Age ${raceData[0].age_number} Rules)**`);
     for (const row of raceData) lines.push(`• ${row.rule_name}: ${row.value}`);
