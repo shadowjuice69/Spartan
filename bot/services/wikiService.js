@@ -24,8 +24,8 @@ function loadLocalWiki() {
 
 function stripWikiHtml(html) {
   return String(html || "")
-    .replace(/<script[\\s\\S]*?<\\/script>/gi, " ")
-    .replace(/<style[\\s\\S]*?<\\/style>/gi, " ")
+    .replace(/<script[\s\S]*?<\\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\\/style>/gi, " ")
     .replace(/<[^>]+>/g, " ")
     .replace(/&nbsp;/gi, " ")
     .replace(/&amp;/gi, "&")
@@ -33,7 +33,7 @@ function stripWikiHtml(html) {
     .replace(/&gt;/gi, ">")
     .replace(/&#39;|&apos;/gi, "'")
     .replace(/&quot;/gi, '"')
-    .replace(/\\s+/g, " ")
+    .replace(/\s+/g, " ")
     .trim();
 }
 
@@ -48,8 +48,8 @@ function searchLocalWiki(question, limit = 5) {
   ]);
   const terms = String(question || "")
     .toLowerCase()
-    .replace(/[^a-z0-9'\\s]/g, " ")
-    .split(/\\s+/)
+    .replace(/[^a-z0-9'\s]/g, " ")
+    .split(/\s+/)
     .filter(w => w.length > 2 && !stopWords.has(w));
 
   if (!terms.length) return [];
@@ -64,7 +64,7 @@ function searchLocalWiki(question, limit = 5) {
       if (idx < 0) break;
       const start = Math.max(0, idx - 650);
       const end = Math.min(plain.length, idx + term.length + 900);
-      const snippet = plain.slice(start, end).replace(/\\s+/g, " ").trim();
+      const snippet = plain.slice(start, end).replace(/\s+/g, " ").trim();
       const score = terms.reduce((n, t) => n + (snippet.toLowerCase().includes(t) ? 1 : 0), 0);
       scored.push({ title: `Utopia Wiki — ${term}`, content: snippet, score });
       from = idx + term.length;
@@ -103,8 +103,8 @@ async function searchWiki(question) {
   ];
 
   const words = searchTerm
-    .replace(/[^\\w\\s']/g, "")
-    .split(/\\s+/)
+    .replace(/[^\w\s']/g, "")
+    .split(/\s+/)
     .filter(w => !stopWords.includes(w));
 
   searchTerm = words.join(" ");
