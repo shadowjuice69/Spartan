@@ -50,6 +50,8 @@ async function searchRules(question) {
 
   q = words.join(" ");
 
+  const lines = [];
+
   // Search each word individually to handle apostrophes and partial matches
   const searchWords = words.filter(w => w.length > 2);
   let exactSpells = [];
@@ -77,9 +79,11 @@ async function searchRules(question) {
     lines.push('');
   }
 
-  const lines = [];
-
-  const { data: raceData } = await supabase
+  const RACES = ["avian","dark elf","darkelf","dryad","dwarf","elf","faery","halfling","human","orc","undead"];
+  const raceName = RACES.find(name => q.includes(name)) || null;
+  const { data: raceData } = raceName ? await supabase
+    .from("race_rules").select("race_name, rule_name, value, age_number")
+    .ilike("race_name", raceName).limit(50) : { data: [] };
     .from("race_rules").select("race_name, rule_name, value, age_number")
     .ilike("race_name", `%${q}%`).limit(10);
   if (raceData && raceData.length > 0) {
