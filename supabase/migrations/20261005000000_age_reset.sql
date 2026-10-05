@@ -20,6 +20,7 @@ alter table public.spartan_age_log enable row level security;
 create or replace function public.spartan_start_new_age(p_ending_age integer, p_new_age integer, p_confirm boolean default false)
 returns jsonb
 language plpgsql
+set search_path = public, pg_catalog
 as $fn$
 declare
   v_clear text[] := array[
