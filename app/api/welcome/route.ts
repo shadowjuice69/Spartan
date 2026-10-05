@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createAdmin } from '@supabase/supabase-js'
+import { buildHourlyReport } from '@/lib/spartan/jeeves-hourly'
 
 export const dynamic = 'force-dynamic'
 
@@ -33,6 +34,38 @@ export async function GET(request: Request) {
       return NextResponse.json({ ok: true, peek: true, userId: user.id, loginAt: acct?.last_login_at ?? null, firstArrival: !prof?.introduced_at })
     } catch (error) { return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : 'Jeeves check unavailable' }, { status: 503 }) }
   }
+  if (new URL(request.url).searchParams.get('hourly') === '1') {
+    try {
+      const nowMs = Date.now()
+      const asked = Date.parse(new URL(request.url).searchParams.get('since') || '')
+      const sinceMs = Math.min(Math.max(Number.isFinite(asked) ? asked : nowMs - 3_600_000, nowMs - 24 * 3_600_000), nowMs - 60_000)
+      const { supabase, account, registry } = await context()
+      const [{ data: history, error: he }, { data: intel, error: ie }, { data: events, error: ee }] = await Promise.all([
+        supabase.from('spartan_province_history').select('observed_at,acres,networth,population,soldiers,off_specs,def_specs,elites,thieves,wizards,offense,defense,mana,stealth').eq('province_id', registry.province_id).order('observed_at', { ascending: false }).limit(300),
+        supabase.from('spartan_intel_records').select('captured_at,raw_payload').eq('province_id', registry.province_id).eq('page_kind', 'throne').order('captured_at', { ascending: false }).limit(5),
+        supabase.from('spartan_event_history').select('occurred_at,troops_lost,thieves_lost,wizards_lost').eq('province_id', registry.province_id).gte('occurred_at', new Date(sinceMs).toISOString()).order('occurred_at', { ascending: false }).limit(200),
+      ])
+      if (he) throw he
+      if (ie) throw ie
+      if (ee) throw ee
+      const liveRow = (intel || []).find((row: any) => {
+        const parsed = parseLive(row.raw_payload?.rawDom)
+        return parsed && (parsed.acres != null || parsed.networth != null)
+      })
+      const report = buildHourlyReport({
+        history: history || [],
+        live: liveRow ? parseLive(liveRow.raw_payload?.rawDom) : null,
+        liveAt: liveRow?.captured_at ?? null,
+        events: events || [],
+        sinceMs,
+      })
+      return NextResponse.json({ ok: true, hourly: true, since: new Date(sinceMs).toISOString(), now: new Date(nowMs).toISOString(), name: account.screen_name || account.province_name, province: account.province_name, ...report })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Jeeves hourly report unavailable'
+      return NextResponse.json({ ok: false, error: message }, { status: message === 'Unauthorized' ? 401 : 503 })
+    }
+  }
+
   try {
     const { user, supabase, account, registry } = await context()
     let { data: profile, error: pe } = await supabase.from('spartan_jeeves_profiles').select('*').eq('auth_user_id', user.id).maybeSingle(); if (pe) throw pe
