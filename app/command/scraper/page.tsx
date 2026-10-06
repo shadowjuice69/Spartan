@@ -71,15 +71,15 @@ export default function ScraperGeneratorPage() {
         </p>
 
         <section style={{ marginTop: 22, display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit,minmax(240px,1fr))' }}>
-          <a href="https://github.com/shadowjuice69/Spartan/tree/main/scraper/chrome" target="_blank" rel="noreferrer" style={{ textDecoration: 'none', color: 'inherit', padding: 16, border: '1px solid rgba(216,255,84,.22)', borderRadius: 10, background: 'rgba(216,255,84,.04)' }}>
+          <a href="https://github.com/shadowjuice69/Spartan/blob/main/scraper/chrome/spartan-capture-chrome-4.0.12.zip" target="_blank" rel="noreferrer" style={{ textDecoration: 'none', color: 'inherit', padding: 16, border: '1px solid rgba(216,255,84,.22)', borderRadius: 10, background: 'rgba(216,255,84,.04)' }}>
             <div style={{ color: '#d8ff54', fontSize: 10, letterSpacing: '.14em', fontWeight: 800 }}>CHROME</div>
             <div style={{ marginTop: 7, fontWeight: 700 }}>Download Chrome scraper →</div>
-            <div style={{ marginTop: 6, color: '#8b949e', fontSize: 12 }}>Open the current Chrome scraper files.</div>
+            <div style={{ marginTop: 6, color: '#8b949e', fontSize: 12 }}>Download the complete Chrome scraper ZIP directly from GitHub.</div>
           </a>
-          <a href="https://github.com/shadowjuice69/Spartan/tree/main/scraper/tampermonkey" target="_blank" rel="noreferrer" style={{ textDecoration: 'none', color: 'inherit', padding: 16, border: '1px solid rgba(103,240,176,.22)', borderRadius: 10, background: 'rgba(103,240,176,.04)' }}>
+          <a href="https://github.com/shadowjuice69/Spartan/blob/main/scraper/chrome/spartan-universal-capture-4_0_12.user.txt" target="_blank" rel="noreferrer" style={{ textDecoration: 'none', color: 'inherit', padding: 16, border: '1px solid rgba(103,240,176,.22)', borderRadius: 10, background: 'rgba(103,240,176,.04)' }}>
             <div style={{ color: '#67f0b0', fontSize: 10, letterSpacing: '.14em', fontWeight: 800 }}>TAMPERMONKEY</div>
             <div style={{ marginTop: 7, fontWeight: 700 }}>Install Tampermonkey scraper →</div>
-            <div style={{ marginTop: 6, color: '#8b949e', fontSize: 12 }}>Open the current userscript files.</div>
+            <div style={{ marginTop: 6, color: '#8b949e', fontSize: 12 }}>Download the current Tampermonkey userscript directly from GitHub.</div>
           </a>
         </section>
 
@@ -87,9 +87,9 @@ export default function ScraperGeneratorPage() {
           <div style={{ color: '#d8ff54', fontSize: 10, letterSpacing: '.16em', fontWeight: 800 }}>INSTALLATION</div>
           <h2 style={{ fontSize: 16, margin: '8px 0 14px' }}>1. Install one scraper</h2>
           <div style={{ color: '#aeb9c5', fontSize: 13, lineHeight: 1.65 }}>
-            <b style={{ color: '#e7eef5' }}>Chrome:</b> open the Chrome scraper folder, download all scraper files, then load the extension in Chrome's Extensions page with Developer Mode enabled and <b style={{ color: '#e7eef5' }}>Load unpacked</b>.
+            <b style={{ color: '#e7eef5' }}>Chrome:</b> download the Chrome scraper ZIP, extract it, then load the extension in Chrome's Extensions page with Developer Mode enabled and <b style={{ color: '#e7eef5' }}>Load unpacked</b>.
             <br /><br />
-            <b style={{ color: '#e7eef5' }}>Tampermonkey:</b> install Tampermonkey first, then open the scraper userscript file and choose <b style={{ color: '#e7eef5' }}>Install</b>. Keep the userscript enabled.
+            <b style={{ color: '#e7eef5' }}>Tampermonkey:</b> install Tampermonkey first, then open the downloaded userscript file and choose <b style={{ color: '#e7eef5' }}>Install</b>. Keep the userscript enabled.
           </div>
           <h2 style={{ fontSize: 16, margin: '22px 0 14px' }}>2. Pair it with Spartan</h2>
           <ol style={{ color: '#aeb9c5', fontSize: 13, lineHeight: 1.7, paddingLeft: 20, margin: 0 }}>
