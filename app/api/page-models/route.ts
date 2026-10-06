@@ -5,6 +5,7 @@ import {
   parseGridRows, pathOf, toNum,
 } from '@/lib/spartan/page-models'
 import { mergeNews, findGameDate, realTimeOf, sideOf, dayIndex } from '@/lib/spartan/kingdom-news'
+import { mergeGrids, armiesFrom, parseStats, type GridCapture } from '@/lib/spartan/intel-site'
 
 export const dynamic = 'force-dynamic'
 
@@ -22,6 +23,7 @@ const KINDS: Record<string, string[]> = {
   kingdom: ['kingdom'],
   'war-room': ['kingdom', 'military', 'council_military'],
   news: ['news'],
+  intel: ['intel'],
   command: [], // built by buildCommandModel below, not by the generic query
 }
 
@@ -260,6 +262,30 @@ export async function GET(request: Request) {
         }),
       }
       body.fields = fields(construction || latest)
+    }
+
+    if (page === 'intel') {
+      // Grids scraped from the kingdom intel site. Each capture carries its kingdom code, and viewers pick
+      // different columns, so recent captures of the same kingdom are merged into one row per province.
+      const g = await db.from('spartan_intel_records')
+        .select('id,url,created_at,captured_at,parsed_payload,raw_text,grid:raw_payload->grid')
+        .eq('page_kind', 'intel').or(scope).order('created_at', { ascending: false }).limit(60)
+      const rows: any[] = g.error ? [] : g.data || []
+      const captures: GridCapture[] = rows
+        .filter(r => Array.isArray(r.grid?.rows) && r.parsed_payload?.kingdom_code)
+        .map(r => ({ kd: String(r.parsed_payload.kingdom_code), at: r.captured_at || r.created_at, url: String(r.url || '').replace(/^https?:\/\/[^/]+/, '').replace(/[?#].*$/, '') || '/', rows: r.grid.rows }))
+      const byKd: Record<string, GridCapture[]> = {}
+      for (const c of captures) (byKd[c.kd] ||= []).push(c)
+      const ownKd = String(account.province_location || '')
+      const kingdoms = Object.entries(byKd).map(([kd, caps]) => {
+        const recent = caps.slice(0, 15)
+        const provinces = mergeGrids(recent)[kd] || []
+        return { kd, own: kd === ownKd, source: recent[0].url, capturedAt: recent[0].at, captures: recent.length, provinces }
+      }).sort((a, b) => Number(b.own) - Number(a.own) || Date.parse(b.capturedAt) - Date.parse(a.capturedAt))
+      const statsRow = rows.find(r => /\/stats$/.test(String(r.url || '').split('?')[0]))
+      const armies = armiesFrom(byKd[ownKd] || []).filter(a => (a.secondsRemaining ?? 0) > 0)
+      body.model = { kingdoms, stats: parseStats(statsRow?.raw_text), statsAt: statsRow ? statsRow.captured_at || statsRow.created_at : null, armies, ownKd }
+      body.fields = []
     }
 
     if (page === 'news') {
