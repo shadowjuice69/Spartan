@@ -2,6 +2,7 @@ const { MessageFlags } = require('discord.js');
 const spartanAccess = require('../services/spartanAccessService');
 
 const EPHEMERAL = MessageFlags.Ephemeral;
+const SITE_URL = (process.env.SPARTAN_SITE_URL || process.env.RENDER_EXTERNAL_URL || 'https://sparta-west.onrender.com').replace(/\/+$/, '');
 
 function getField(interaction, id, required = false) {
   try {
@@ -60,7 +61,7 @@ module.exports = async function spartanRegistrationModalHandler(interaction) {
 👤 Discord: <@${userId}>
 🔗 Spartan identity: **${access.username || data.name}**
 
-Your Spartan screen name is now permanently linked to your Discord identity. Use **${data.name}** when registering on the Spartan website.`
+Your Spartan screen name is now permanently linked to your Discord identity. Use **${data.name}** when registering on the Spartan website.\n\n🌐 **Spartan website:** <${SITE_URL}/login>`
     });
   } catch (error) {
     console.error('[SPARTAN REGISTRATION ERROR]', error);
