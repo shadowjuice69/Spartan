@@ -4,6 +4,7 @@ import {
   parseBuildings, parseScience, parseMilitary, parseState, parseThrone, parseKingdomDetails,
   parseGridRows, pathOf, toNum,
 } from '@/lib/spartan/page-models'
+import { mergeNews, findGameDate, realTimeOf, sideOf, dayIndex } from '@/lib/spartan/kingdom-news'
 
 export const dynamic = 'force-dynamic'
 
@@ -20,6 +21,7 @@ const KINDS: Record<string, string[]> = {
   province: ['throne', 'kingdom', 'province_state'],
   kingdom: ['kingdom'],
   'war-room': ['kingdom', 'military', 'council_military'],
+  news: ['news'],
   command: [], // built by buildCommandModel below, not by the generic query
 }
 
@@ -50,6 +52,38 @@ const when = (r: Rec) => r.captured_at || r.created_at
 
 function captureLog(records: Rec[]) {
   return records.slice(0, 30).map(r => ({ id: r.id, kind: r.page_kind, path: pathOf(r.url), source: r.source, at: when(r) }))
+}
+
+// The newest Throne capture that shows the current game date. News events only carry game dates, so this is
+// what lets us place them on a real day (24 game ticks = one game day).
+async function gameAnchor(db: any, scope: string) {
+  const r = await db.from('spartan_intel_records').select('captured_at,created_at,raw_text').eq('page_kind', 'throne').or(scope).order('created_at', { ascending: false }).limit(8)
+  if (r.error) return null
+  for (const row of r.data || []) {
+    const d = findGameDate(row.raw_text)
+    if (d) return { at: row.captured_at || row.created_at, ...d }
+  }
+  return null
+}
+
+// Kingdom News captures (the same feed repeated), merged into one list of events with sides worked out for this province.
+async function newsEvents(db: any, scope: string, own: { name: string; kd: string | null }, records?: Rec[]) {
+  let rows = records
+  if (!rows) {
+    const r = await db.from('spartan_intel_records').select(COLUMNS).eq('page_kind', 'news').or(scope).order('created_at', { ascending: false }).limit(40)
+    rows = r.error ? [] : (r.data || []) as Rec[]
+  }
+  const anchor = await gameAnchor(db, scope)
+  const merged = mergeNews(rows.map(r => r.raw_text || ''))
+  const newest = rows.find(r => (r.raw_text || '').length > 0)
+  const events = merged.map(e => ({
+    at: realTimeOf(e, anchor) || (newest ? newest.captured_at || newest.created_at : null),
+    approx: !anchor,
+    gameDate: e.gameDate, type: e.type, attacker: e.attacker, defender: e.defender,
+    acres: e.acres, books: e.books, side: sideOf(e, own), text: e.text,
+    order: dayIndex(e.month, e.day, e.year) ?? 0,
+  })).sort((a, b) => b.order - a.order)
+  return { events, anchor, captures: rows.length }
 }
 
 // Command Center: one lean model for the home page. Every section is fetched on its own (newest capture only),
@@ -228,6 +262,13 @@ export async function GET(request: Request) {
       body.fields = fields(construction || latest)
     }
 
+    if (page === 'news') {
+      const own = { name: account.province_name, kd: account.province_location || null }
+      const n = await newsEvents(db, scope, own, records)
+      body.model = { events: n.events, anchor: n.anchor, captures: n.captures, own }
+      body.fields = []
+    }
+
     if (page === 'province') {
       const throneRec = records.find(r => r.page_kind === 'throne' && pathOf(r.url) === '/wol/game/throne') || null
       const stateRec = latestByPath(records, '/wol/game/council_state')
@@ -282,7 +323,7 @@ export async function GET(request: Request) {
         .eq('user_id', user.id).order('occurred_at', { ascending: false }).limit(300)
       const own = String(account.province_name).trim().toLowerCase()
       const n = (v: unknown) => toNum(v) ?? 0
-      const events = (eventsResult.error ? [] : eventsResult.data || [])
+      const events: any[] = (eventsResult.error ? [] : eventsResult.data || [])
         .filter((e: any) => !/discord|bot/i.test(String(e.source || '')))
         .map((e: any) => {
           const attacker = e.attacker || null
@@ -295,6 +336,17 @@ export async function GET(request: Request) {
             gold: n(e.gold_change), food: n(e.food_change), runes: n(e.runes_change),
           }
         })
+      // Hits from the Kingdom News feed that involve this province (the event history table can be empty).
+      const own2 = { name: account.province_name, kd: account.province_location || null }
+      const fromNews = (await newsEvents(db, scope, own2)).events
+        .filter(e => e.side !== 'other' && e.at)
+        .map(e => ({
+          at: e.at, type: e.type, attacker: e.attacker?.name || null, defender: e.defender?.name || null,
+          targetKingdom: (e.side === 'out' ? e.defender?.kd : e.attacker?.kd) || null, direction: e.side,
+          acres: e.acres, troops: 0, thieves: 0, wizards: 0, gold: 0, food: 0, runes: 0,
+        }))
+      events.push(...fromNews)
+      events.sort((a: any, b: any) => Date.parse(b.at) - Date.parse(a.at))
       const militaryRec = allByPath(records, '/wol/game/council_military')[0] || null
       let kingdom: any = null
       for (const r of allByPath(records, '/wol/game/kingdom_details')) {
