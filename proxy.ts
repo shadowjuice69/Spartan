@@ -2,7 +2,7 @@ import { type NextRequest, NextResponse } from 'next/server'
 import { updateSession } from '@/lib/supabase/proxy'
 import { authorizeDashboardForAuthUser } from '@/lib/spartan/security'
 
-const PUBLIC_PATHS = new Set(['/access-denied'])
+const PUBLIC_PATHS = new Set(['/access-denied', '/wiki'])
 
 function deny(request: NextRequest, reason: string) {
   const url = request.nextUrl.clone()
