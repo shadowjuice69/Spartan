@@ -24,7 +24,24 @@ function normalizeIp(value: string | null | undefined): string | null {
 
 export function requestIp(request: Request): string | null {
   const headers = request.headers
-  return normalizeIp(headers.get('x-forwarded-for')?.split(',')[0]?.trim()) || normalizeIp(headers.get('x-real-ip')?.trim())
+  // Render normally supplies x-forwarded-for. RFC 7239 Forwarded is a
+  // standards-based fallback for deployments/proxies that expose it instead.
+  const forwarded = headers.get('forwarded')?.split(',')[0]?.trim()
+  const forwardedFor = forwarded?.match(/(?:^|;)\\s*for=(?:"?\\[?([^;\\]"]+)\\]?"?)/i)?.[1] ?? null
+  return normalizeIp(headers.get('x-forwarded-for')?.split(',')[0]?.trim())
+    || normalizeIp(headers.get('x-real-ip')?.trim())
+    || normalizeIp(forwardedFor)
+}
+
+function browserLabel(userAgent: string | null): string {
+  const ua = String(userAgent ?? '')
+  if (/CriOS/i.test(ua)) return 'Safari/Chrome-iOS'
+  if (/FxiOS/i.test(ua)) return 'Safari/Firefox-iOS'
+  if (/Safari/i.test(ua) && !/Chrome|CriOS|Android/i.test(ua)) return 'Safari'
+  if (/Edg/i.test(ua)) return 'Edge'
+  if (/Chrome/i.test(ua)) return 'Chrome'
+  if (/Firefox/i.test(ua)) return 'Firefox'
+  return 'Other'
 }
 
 function adminClient() {
@@ -43,7 +60,8 @@ export async function recordDashboardSession({ discordUserId, sessionId, ipAddre
 
 export async function recordLoginCheckpoint({ authUserId, request }: { authUserId: string; request: Request }) {
   const ip = requestIp(request)
-  if (!ip) throw new Error('No valid client IP was available for Spartan login recording.')
+  const userAgent = request.headers.get('user-agent')
+  const browser = browserLabel(userAgent)
 
   const supabase = adminClient()
   const now = new Date().toISOString()
@@ -58,30 +76,32 @@ export async function recordLoginCheckpoint({ authUserId, request }: { authUserI
   const discordUserId = account.discord_user_id ? String(account.discord_user_id) : null
   const { error: accountError } = await supabase
     .from('spartan_accounts')
-    .update({ last_login_ip: ip, previous_login_at: account.last_login_at ?? null, last_login_at: now, updated_at: now })
+    .update({ ...(ip ? { last_login_ip: ip } : {}), previous_login_at: account.last_login_at ?? null, last_login_at: now, updated_at: now })
     .eq('auth_user_id', authUserId)
 
   if (accountError) throw new Error(`Spartan login IP recording failed: ${accountError.message}`)
 
-  await recordDashboardSession({
-    discordUserId,
-    sessionId: crypto.randomUUID(),
-    ipAddress: ip,
-    userAgent: request.headers.get('user-agent'),
-    route: '/login',
-    success: true,
-  })
+  if (ip) {
+    await recordDashboardSession({
+      discordUserId,
+      sessionId: crypto.randomUUID(),
+      ipAddress: ip,
+      userAgent,
+      route: '/login',
+      success: true,
+    })
+  }
 
   await recordSecurityEvent(
-    'login_ip_recorded',
+    ip ? 'login_ip_recorded' : 'login_ip_unavailable',
     discordUserId,
     ip,
     null,
-    'IP successfully recorded at Spartan login checkpoint.',
-    { authUserId, ipRecorded: true, route: '/login', previousLoginAt: account.last_login_at ?? null, discordOptional: true },
+    ip ? 'IP successfully recorded at Spartan login checkpoint.' : 'Authenticated login completed without a server-observable client IP; browser/session authentication remains the access control.',
+    { authUserId, ipRecorded: Boolean(ip), browser, route: '/login', previousLoginAt: account.last_login_at ?? null, discordOptional: true },
   )
 
-  return { ip, recordedAt: now, previousLoginAt: account.last_login_at ?? null, discordUserId }
+  return { ip, recordedAt: now, previousLoginAt: account.last_login_at ?? null, discordUserId, browser }
 }
 
 export async function getActiveIpBlock(ipAddress: string | null) {
@@ -189,11 +209,11 @@ async function authorizeDashboardForAuthUserUncached(request: Request, authUserI
   const ipBlocked = Boolean(block) && (!protectedIdentity || isOwner(String(block?.created_by_discord_id ?? '')))
   const reputationBlocked = !protectedIdentity && Boolean(ipReputation?.blocked)
   const reputationUnavailable = !protectedIdentity && ipRecorded && ipReputation?.reason === 'ip_reputation_unavailable'
-  // Protected identities are globally unrestricted. Security may audit them, but
-  // authentication, IP reputation, IP blocks, missing IPs, and account status can
-  // never become a reason to deny access.
+  // Website accounts are already authenticated by Supabase. A missing IP is
+  // treated as an audit limitation, not an authentication failure. When an IP
+  // exists, the full block/reputation checks remain enforced.
   const identityAllowed = protectedIdentity || Boolean(access && access.status === 'active')
-  const allowed = protectedIdentity || (identityAllowed && ipRecorded && !ipBlocked && !reputationBlocked && !reputationUnavailable)
+  const allowed = protectedIdentity || (identityAllowed && !ipBlocked && !reputationBlocked && !reputationUnavailable)
 
   // Auditing is best-effort for protected identities: logging must never become
   // a second access-control gate.
@@ -201,7 +221,7 @@ async function authorizeDashboardForAuthUserUncached(request: Request, authUserI
     if (ipRecorded) {
       await recordDashboardSession({ discordUserId, sessionId: crypto.randomUUID(), ipAddress: ip, userAgent: request.headers.get('user-agent'), route: new URL(request.url).pathname, success: allowed })
     }
-    await recordSecurityEvent(allowed ? (protectedIdentity ? 'protected_dashboard_access' : 'dashboard_ip_recorded') : ipBlocked ? 'dashboard_ip_blocked' : reputationBlocked ? 'dashboard_ip_masking_blocked' : reputationUnavailable ? 'dashboard_ip_reputation_unavailable' : 'dashboard_access_denied', discordUserId, ip, block?.created_by_discord_id ?? null, protectedIdentity ? 'Protected Spartan identity — unrestricted access.' : allowed ? 'Spartan website identity authenticated independently of Discord.' : ipBlocked ? 'Active Spartan IP block' : reputationBlocked ? (ipReputation?.reason || 'IP masking detected') : reputationUnavailable ? 'IP reputation could not be verified; access denied until verification is available.' : 'No active Spartan account access', { authUserId, discordOptional: true, role: access?.role ?? null, ipRecorded, reputation: ipReputation, route: new URL(request.url).pathname })
+    await recordSecurityEvent(allowed ? (protectedIdentity ? 'protected_dashboard_access' : ipRecorded ? 'dashboard_ip_recorded' : 'dashboard_ip_unavailable') : ipBlocked ? 'dashboard_ip_blocked' : reputationBlocked ? 'dashboard_ip_masking_blocked' : reputationUnavailable ? 'dashboard_ip_reputation_unavailable' : 'dashboard_access_denied', discordUserId, ip, block?.created_by_discord_id ?? null, protectedIdentity ? 'Protected Spartan identity — unrestricted access.' : allowed ? (ipRecorded ? 'Spartan website identity authenticated independently of Discord; IP recorded.' : 'Spartan website identity authenticated independently of Discord; no server-observable client IP was available.') : ipBlocked ? 'Active Spartan IP block' : reputationBlocked ? (ipReputation?.reason || 'IP masking detected') : reputationUnavailable ? 'IP reputation could not be verified; access denied until verification is available.' : 'No active Spartan account access', { authUserId, discordOptional: true, role: access?.role ?? null, ipRecorded, reputation: ipReputation, browser: browserLabel(request.headers.get('user-agent')), route: new URL(request.url).pathname })
   } catch {
     if (!protectedIdentity) throw new Error('Spartan security audit failed.')
   }
