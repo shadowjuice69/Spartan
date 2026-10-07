@@ -6,7 +6,7 @@ const spartanCommand={name:'spartan',description:'Spartan command and access cen
 {name:'ask',description:'Ask Spartan AI',type:1,options:[{name:'question',description:'Your question',type:3,required:true,max_length:2000}]},
 {name:'access',description:'Admin access control',type:1,options:[{name:'action',description:'Access action',type:3,required:true,choices:[{name:'grant',value:'grant'},{name:'suspend',value:'suspend'},{name:'revoke',value:'revoke'}]},{name:'user',description:'Discord user',type:6,required:true},{name:'reason',description:'Reason',type:3,required:false,max_length:500}]},
 {name:'help',description:'Show Spartan commands',type:1},
-{name:'wiki',description:'Get the Utopia Nexus Wiki link',type:1}
+{name:'wiki',description:'Get the public Utopia Wiki link',type:1}
 ]};
 
 const musicCommand={name:'spartan-music',description:'Spartan music',options:[{name:'join',description:'Join your voice channel',type:1},{name:'play',description:'Play or queue a track',type:1,options:[{name:'query',description:'Song or URL',type:3,required:true}]},{name:'pause',description:'Pause playback',type:1},{name:'resume',description:'Resume playback',type:1},{name:'skip',description:'Skip track',type:1},{name:'stop',description:'Stop playback',type:1},{name:'queue',description:'Show queue',type:1},{name:'nowplaying',description:'Show current track',type:1},{name:'volume',description:'Set volume',type:1,options:[{name:'level',description:'0-100',type:4,required:true,min_value:0,max_value:100}]}]};
