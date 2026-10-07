@@ -4,7 +4,13 @@ import path from "node:path";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const wikiPath = path.join(process.cwd(), "utopia-wiki.html");
+  const wikiPath = path.join(
+    process.cwd(),
+    "lib",
+    "spartan",
+    "knowledge",
+    "utopia-reference.html",
+  );
   const html = await readFile(wikiPath, "utf8");
 
   return new Response(html, {
