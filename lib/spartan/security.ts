@@ -178,12 +178,12 @@ export async function authorizeDashboard(request: Request, discordUserId: string
   const reputationBlocked = !protectedIdentity && Boolean(ipReputation?.blocked)
   const reputationUnavailable = !protectedIdentity && ipRecorded && ipReputation?.reason === 'ip_reputation_unavailable'
   const identityAllowed = protectedIdentity || access?.status === 'active'
-  const allowed = identityAllowed && ipRecorded && !ipBlocked && !reputationBlocked && !reputationUnavailable
+  const allowed = identityAllowed && !ipBlocked && !reputationBlocked
 
   await recordDashboardSession({ discordUserId, sessionId: crypto.randomUUID(), ipAddress: ip, userAgent: request.headers.get('user-agent'), route: new URL(request.url).pathname, success: allowed })
 
   const eventType = allowed ? 'dashboard_ip_recorded' : ipBlocked ? 'dashboard_ip_blocked' : reputationBlocked ? 'dashboard_ip_masking_blocked' : reputationUnavailable ? 'dashboard_ip_reputation_unavailable' : !ipRecorded ? 'dashboard_ip_unavailable' : 'dashboard_access_denied'
-  const reason = allowed ? 'IP successfully recorded at Spartan authentication checkpoint.' : ipBlocked ? 'Active Spartan IP block' : reputationBlocked ? (ipReputation?.reason || 'IP masking detected') : reputationUnavailable ? 'IP reputation could not be verified; access denied until verification is available.' : !ipRecorded ? 'No valid client IP was available; access denied until IP can be recorded.' : 'No active Spartan access'
+  const reason = allowed ? (reputationUnavailable ? 'IP reputation could not be verified; access allowed and event logged.' : ipRecorded ? 'IP successfully recorded at Spartan authentication checkpoint.' : 'No valid client IP was available; access allowed and event logged.') : ipBlocked ? 'Active Spartan IP block' : reputationBlocked ? (ipReputation?.reason || 'IP masking detected') : 'No active Spartan access'
 
   await recordSecurityEvent(eventType, discordUserId, ip, block?.created_by_discord_id ?? null, reason, { protectedIdentity, role: access?.role ?? null, ipRecorded, reputation: ipReputation, route: new URL(request.url).pathname })
 
@@ -213,7 +213,7 @@ async function authorizeDashboardForAuthUserUncached(request: Request, authUserI
   // treated as an audit limitation, not an authentication failure. When an IP
   // exists, the full block/reputation checks remain enforced.
   const identityAllowed = protectedIdentity || Boolean(access && access.status === 'active')
-  const allowed = protectedIdentity || (identityAllowed && !ipBlocked && !reputationBlocked && !reputationUnavailable)
+  const allowed = protectedIdentity || (identityAllowed && !ipBlocked && !reputationBlocked)
 
   // Auditing is best-effort for protected identities: logging must never become
   // a second access-control gate.
