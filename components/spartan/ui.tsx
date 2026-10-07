@@ -109,8 +109,8 @@ export function Styles() { return <style dangerouslySetInnerHTML={{ __html: CSS 
 
 /* ------------------------------------------------------------------- shell */
 
-const NAV_COMMAND: Array<[string, string]> = [['Command', '/'], ['Province', '/command/province'], ['Throne', '/command/throne'], ['War Room', '/command/war-room'], ['Build Lab', '/command/build-lab'], ['Draft Calc', '/command/draft-calc'], ['Wiki', '/command/wiki'], ['Tools', '/command/tools'], ['Scraper Generator', '/command/scraper']]
-const NAV_INTEL: Array<[string, string]> = [['Intel', '/command/intel'], ['Kingdom', '/command/kingdom'], ['Military', '/command/military'], ['Magic', '/command/magic'], ['Thievery', '/command/thievery'], ['Science', '/command/science'], ['Buildings', '/command/buildings'], ['Enemy Intel', '/command/enemy-intel']]
+const NAV_COMMAND: Array<[string, string]> = [['Command', '/'], ['Province', '/command/province'], ['Throne', '/command/throne'], ['Kingdom', '/command/kingdom'], ['War Room', '/command/war-room'], ['Build Lab', '/command/build-lab'], ['Draft Calc', '/command/draft-calc'], ['Wiki', '/command/wiki'], ['Tools', '/command/tools'], ['Scraper Generator', '/command/scraper']]
+const NAV_INTEL: Array<[string, string]> = [['Intel', '/command/intel'], ['Military', '/command/military'], ['Magic', '/command/magic'], ['Thievery', '/command/thievery'], ['Science', '/command/science'], ['Buildings', '/command/buildings'], ['Enemy Intel', '/command/enemy-intel']]
 
 export function Shell(props: {
   title: string; eyebrow: string; subtitle: string; accent: string
