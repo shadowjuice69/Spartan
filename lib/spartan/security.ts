@@ -27,7 +27,7 @@ export function requestIp(request: Request): string | null {
   // Render normally supplies x-forwarded-for. RFC 7239 Forwarded is a
   // standards-based fallback for deployments/proxies that expose it instead.
   const forwarded = headers.get('forwarded')?.split(',')[0]?.trim()
-  const forwardedFor = forwarded?.match(/(?:^|;)\\s*for=(?:"?\\[?([^;\\]"]+)\\]?"?)/i)?.[1] ?? null
+  const forwardedFor = forwarded?.match(/(?:^|;)\s*for=(?:"?\[?([^;\]"]+)\]?"?)/i)?.[1] ?? null
   return normalizeIp(headers.get('x-forwarded-for')?.split(',')[0]?.trim())
     || normalizeIp(headers.get('x-real-ip')?.trim())
     || normalizeIp(forwardedFor)
