@@ -5,6 +5,7 @@ import {
   parseGridRows, pathOf, toNum,
 } from '@/lib/spartan/page-models'
 import { mergeNews, findGameDate, realTimeOf, sideOf, dayIndex } from '@/lib/spartan/kingdom-news'
+import { parseThroneText } from '@/lib/spartan/throne-text'
 import { mergeGrids, armiesFrom, parseStats, type GridCapture } from '@/lib/spartan/intel-site'
 
 export const dynamic = 'force-dynamic'
@@ -23,6 +24,7 @@ const KINDS: Record<string, string[]> = {
   kingdom: ['kingdom'],
   'war-room': ['kingdom', 'military', 'council_military'],
   news: ['news'],
+  throne: ['throne'],
   intel: ['intel'],
   command: [], // built by buildCommandModel below, not by the generic query
 }
@@ -285,6 +287,32 @@ export async function GET(request: Request) {
       const statsRow = rows.find(r => /\/stats$/.test(String(r.url || '').split('?')[0]))
       const armies = armiesFrom(byKd[ownKd] || []).filter(a => (a.secondsRemaining ?? 0) > 0)
       body.model = { kingdoms, stats: parseStats(statsRow?.raw_text), statsAt: statsRow ? statsRow.captured_at || statsRow.created_at : null, armies, ownKd }
+      body.fields = []
+    }
+
+    if (page === 'throne') {
+      // Every Throne capture in scope: numbers from the payload, spells/armies/ritual/dragon from the page text.
+      const NUMS = ['acres', 'networth', 'gold', 'food', 'runes', 'peons', 'soldiers', 'off_specs', 'def_specs', 'elites', 'thieves', 'wizards', 'war_horses', 'prisoners', 'offense', 'defense', 'off_available', 'tpa', 'wpa', 'build_efficiency'] as const
+      const snaps = records
+        .filter(r => /\/throne/.test(String(r.url || '')) && r.parsed_payload && r.parsed_payload.acres != null)
+        .map(r => {
+          const pp: any = r.parsed_payload
+          const x = parseThroneText(r.raw_text)
+          const nums: Record<string, number | null> = {}
+          for (const k of NUMS) nums[k] = toNum(pp[k])
+          return {
+            id: r.id, at: when(r), province: String(pp.province_name || x.province || ''), kd: String(pp.kingdom_code || x.kd || ''),
+            nums, armiesDaysLeft: toNum(pp.armies_days_left), armiesLastAcres: toNum(pp.armies_last_acres), extras: x,
+          }
+        })
+        .filter(sn => sn.province)
+      const byProv = new Map<string, typeof snaps>()
+      for (const sn of snaps) { const list = byProv.get(sn.province) || []; list.push(sn); byProv.set(sn.province, list) }
+      const provinces = [...byProv.entries()].map(([name, list]) => {
+        const sorted = [...list].sort((a, b) => Date.parse(b.at) - Date.parse(a.at))
+        return { name, own: name === account.province_name, kd: sorted[0].kd, latest: sorted[0], series: sorted.slice(0, 40).reverse().map(sn => ({ at: sn.at, ...sn.nums })), captures: list.length }
+      }).sort((a, b) => Number(b.own) - Number(a.own) || Date.parse(b.latest.at) - Date.parse(a.latest.at))
+      body.model = { provinces, own: account.province_name }
       body.fields = []
     }
 
