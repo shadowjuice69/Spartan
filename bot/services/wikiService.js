@@ -257,7 +257,7 @@ async function searchScience(type) {
 }
 
 function getWikiLink() {
-  return "https://shadowjuice69.github.io/utopia-war-room/utopia-wiki.html";
+  return "https://sparta-west.onrender.com/wiki";
 }
 
 module.exports = { searchWiki, searchRules, searchScience, getWikiLink };
