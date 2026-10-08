@@ -78,12 +78,171 @@ function emptyCounts(): Record<Status, number> {
 /* text helpers                                                        */
 /* ------------------------------------------------------------------ */
 
+function expandStructuredRules(input: string): string {
+  // Accept Spartan's machine-oriented Age 117 blocks in addition to the older
+  // wiki/patch-note formats. Example: [RACE_AVIAN], [BONUSES], KEY=VALUE.
+  // We translate those blocks into the same canonical 117 shape used below,
+  // so the comparison engine has one parsing path and does not silently drop
+  // structured Age-change data.
+  const lines = input.replace(/\\r/g, '').split('\\n')
+  const out: string[] = []
+  let section: string | null = null
+  let entity: { category: Category; name: string } | null = null
+  let pool: string | null = null
+
+  const title = (s: string) =>
+    s.toLowerCase().split('_').map((x) => x ? x[0].toUpperCase() + x.slice(1) : x).join(' ')
+
+  const value = (line: string): [string, string] | null => {
+    const m = line.match(/^\\s*([A-Za-z][A-Za-z0-9 _-]*?)\\s*(?:=|:)\\s*(.*?)\\s*$/)
+    return m ? [m[1].trim().toUpperCase().replace(/[- ]+/g, '_'), m[2].trim()] : null
+  }
+
+  const emitPool = (key: string, val: string) => {
+    const k = key.toUpperCase()
+    if (/^(BONUS|BONUSES|PENALTY|PENALTIES)$/.test(k)) {
+      pool = k.startsWith('PEN') ? 'Penalties' : 'Bonuses'
+      out.push(pool + ': ' + val)
+      return
+    }
+    if (/^(SPELL|SPELLS|UNIQUE_SPELL|UNIQUE_SPELLS|UNIQUE_MAGIC)$/.test(k)) {
+      pool = 'Spells'
+      out.push('Spells: ' + val)
+      return
+    }
+    if (/^(DOCTRINE|DOCTRINES|WAR_DOCTRINE|WAR_DOCTRINES)$/.test(k)) {
+      pool = 'Doctrine'
+      out.push('Doctrine: ' + val)
+      return
+    }
+    if (/^(ABILITY|UNIQUE_ABILITY|UNIQUE_ABILITIES|PASSIVE)$/.test(k)) {
+      pool = 'Ability'
+      out.push('Unique Abilities')
+      out.push(val.includes(':') ? val : 'Unique ability: ' + val)
+      return
+    }
+    if (/^(MILITARY|UNITS|STARTING_UNITS)$/.test(k)) {
+      pool = 'Military'
+      out.push('Military: ' + val)
+      return
+    }
+    if (/^(EFFECT|EFFECTS|DESCRIPTION)$/.test(k)) {
+      pool = 'Effect'
+      out.push('Bonuses: ' + val)
+      return
+    }
+    if (/^(ARCHETYPE|ROLE|TAGLINE)$/.test(k)) {
+      // Entity header already carries the tagline. Do not turn this into a
+      // stat row that could pollute the comparison.
+      if (entity && val) out.push(entity.name + ' — ' + val)
+      return
+    }
+
+    // Structured unit fields. Keep them in the Military grammar understood by
+    // addUnits(), allowing individual key/value lines as well as a MILITARY row.
+    if (k === 'OSPEC_OFFENSE' || k === 'OFFSPEC_OFFENSE') {
+      out.push('Military: Offensive specialists: ' + val + '/0')
+      return
+    }
+    if (k === 'OSPEC_DEFENSE' || k === 'OFFSPEC_DEFENSE') {
+      out.push('Military: Offensive specialists: 0/' + val)
+      return
+    }
+    if (k === 'DSPEC_OFFENSE' || k === 'DEFSPEC_OFFENSE') {
+      out.push('Military: Defensive specialists: ' + val + '/0')
+      return
+    }
+    if (k === 'DSPEC_DEFENSE' || k === 'DEFSPEC_DEFENSE') {
+      out.push('Military: Defensive specialists: 0/' + val)
+      return
+    }
+    if (k === 'ELITE_OFFENSE') {
+      out.push('Military: Elite unit (' + val + '/0, 0 gc, 0 nw)')
+      return
+    }
+    if (k === 'ELITE_DEFENSE') {
+      out.push('Military: Elite unit (0/' + val + ', 0 gc, 0 nw)')
+      return
+    }
+    if (k === 'ELITE_COST') {
+      out.push('Military: Elite cost: ' + val)
+      return
+    }
+    if (k === 'ELITE_NW' || k === 'ELITE_NETWORTH') {
+      out.push('Military: Elite networth: ' + val)
+      return
+    }
+    if (k === 'HORSE' || k === 'WAR_HORSE') {
+      out.push('Military: War horse (' + val + '/0)')
+      return
+    }
+
+    // Unknown structured keys are retained as a normal trait. This is
+    // deliberate: the UI can flag it as changed instead of silently losing it.
+    if (val) out.push('Bonuses: ' + val)
+  }
+
+  for (const raw of lines) {
+    const line = raw.trim()
+    if (!line) continue
+
+    const h = line.match(/^\\[([A-Za-z0-9_ -]+)\\]$/)
+    if (h) {
+      section = h[1].trim().toUpperCase()
+      pool = null
+
+      const rm = section.match(/^RACE_(.+)$/)
+      const pm = section.match(/^PERSONALITY_(.+)$/)
+      const rim = section.match(/^RITUAL_(.+)$/)
+      const dm = section.match(/^DRAGON_(.+)$/)
+
+      if (rm || pm || rim || dm) {
+        const category: Category = rm ? 'Race' : pm ? 'Personality' : rim ? 'Ritual' : 'Dragon'
+        const rawName = (rm?.[1] ?? pm?.[1] ?? rim?.[1] ?? dm?.[1] ?? '').replace(/_/g, ' ')
+        const name = rawName.toLowerCase().replace(/\\b\\w/g, (m) => m.toUpperCase())
+        entity = { category, name }
+        out.push(category === 'Race' || category === 'Personality' ? name + ' — Age 117' : name)
+        if (category === 'Ritual' || category === 'Dragon') {
+          pool = 'Effect'
+          out.push('Bonuses')
+        }
+      } else if (section === 'GENERAL_CHANGES' || section === 'GENERAL' || section === 'AGE_117_CHANGE_OVERRIDES') {
+        entity = null
+        out.push('General Changes')
+      } else if (section === 'END_AGE_117') {
+        entity = null
+        section = null
+      }
+      continue
+    }
+
+    // Only activate this conversion when bracket sections are actually present.
+    if (!section) continue
+    const kv = value(line)
+    if (kv) {
+      emitPool(kv[0], kv[1])
+      continue
+    }
+
+    // Plain lines inside a structured section are still meaningful. Preserve
+    // them under the active pool rather than discarding them.
+    if (entity && pool === 'Ability') out.push('Unique ability: ' + line)
+    else if (entity && (pool === 'Effect' || entity.category === 'Ritual' || entity.category === 'Dragon')) out.push('Bonuses: ' + line)
+    else if (entity) out.push('Bonuses: ' + line)
+    else out.push(line)
+  }
+
+  return out.join('\\n')
+}
+
 function prepare(input: string): string[] {
-  return input
-    .replace(/\r/g, '')
-    .replace(/\[cite:[^\]]*\]/gi, '\n') // every cite tag ends an item
-    .split('\n')
-    .map((l) => l.replace(/[\u00a0\u200b]/g, ' ').replace(/\u2212/g, '-').trim())
+  const expanded = expandStructuredRules(input)
+  const source = /(^|\\n)\\s*\\[[A-Za-z0-9_ -]+\\]\\s*(?:$|\\n)/.test(input) ? expanded : input
+  return source
+    .replace(/\\r/g, '')
+    .replace(/\\[cite:[^\\]]*\\]/gi, '\\n') // every cite tag ends an item
+    .split('\\n')
+    .map((l) => l.replace(/[\\u00a0\\u200b]/g, ' ').replace(/\\u2212/g, '-').trim())
 }
 
 // Removes list bullets, including the doubled "- - x" and mangled "-+20%" / "++15%" / "+Destroys" forms.
