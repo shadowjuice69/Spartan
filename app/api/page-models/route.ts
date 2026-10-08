@@ -6,6 +6,7 @@ import {
 } from '@/lib/spartan/page-models'
 import { mergeNews, findGameDate, realTimeOf, sideOf, dayIndex } from '@/lib/spartan/kingdom-news'
 import { parseThroneText } from '@/lib/spartan/throne-text'
+import { buildMagicModel } from '@/lib/spartan/magic-model'
 import { mergeGrids, armiesFrom, parseStats, type GridCapture } from '@/lib/spartan/intel-site'
 
 export const dynamic = 'force-dynamic'
@@ -26,6 +27,7 @@ const KINDS: Record<string, string[]> = {
   news: ['news'],
   throne: ['throne'],
   intel: ['intel'],
+  magic: ['magic', 'ritual', 'council_spells'],
   command: [], // built by buildCommandModel below, not by the generic query
 }
 
@@ -366,6 +368,11 @@ export async function GET(request: Request) {
       }
       body.fields = fields(detailRecs[0])
       logRecords = detailRecs.length ? detailRecs : records
+    }
+
+    if (page === 'magic') {
+      body.model = buildMagicModel(records)
+      body.fields = []
     }
 
     if (page === 'war-room') {
