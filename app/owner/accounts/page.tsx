@@ -118,7 +118,7 @@ function Details({ rows }: { rows: Account[] }) {
           ['Province', r.provinceName], ['Kingdom', r.kingdom], ['Registration IP', r.registrationIp], ['Last login IP', r.lastLoginIp],
           ['Status', r.accountStatus], ['Role', r.role], ['Created', r.createdAt], ['Updated', r.updatedAt],
           ['Last login', r.lastLoginAt], ['Previous login', r.previousLoginAt], ['Last seen', r.lastSeenAt], ['Last browser', browser(r.lastBrowser)],
-        ].map(([k, v]) => <div key={k} style={{ padding: '9px 10px', borderRadius: 9, background: 'rgba(255,255,255,.035)', fontSize: 11, overflowWrap: 'anywhere' }}><span style={{ display: 'block', color: '#687686', fontSize: 9, letterSpacing: '.12em', marginBottom: 4 }}>{k.toUpperCase()}</span>{String(v ?? '—')}</div>)}
+        ].map(([k, v]) => <div key={k} style={{ padding: '9px 10px', borderRadius: 9, background: 'rgba(255,255,255,.035)', fontSize: 11, overflowWrap: 'anywhere' }}><span style={{ display: 'block', color: '#687686', fontSize: 9, letterSpacing: '.12em', marginBottom: 4 }}>{String(k).toUpperCase()}</span>{String(v ?? '—')}</div>)}
       </div>}
     </div>
   )
