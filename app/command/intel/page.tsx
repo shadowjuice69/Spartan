@@ -5,6 +5,7 @@ import {
   C, DataTable, Donut, Empty, Grid, HBars, Panel, Shell, Skeletons, Stat, Tag,
   ago, compact, fmt, usePageModel,
 } from '@/components/spartan/ui'
+import PayoffPanel from '@/components/spartan/PayoffPanel'
 
 type Ages = { SOT: number | null; SOM: number | null; Survey: number | null; SOS: number | null }
 type Prov = {
@@ -134,6 +135,10 @@ export default function IntelPage() {
               ]} rows={softest} />
               <p style={{ fontSize: 10, color: '#687686', margin: '8px 0 0' }}>Old intel (red) may not match what they have now. Refresh it before you plan a hit.</p>
             </Panel>
+          </Grid>
+
+          <Grid>
+            <PayoffPanel provs={provs} mine={kingdoms.find(k => k.own)?.provinces || []} />
           </Grid>
 
           <Grid>
