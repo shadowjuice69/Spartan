@@ -111,6 +111,7 @@ export function Styles() { return <style dangerouslySetInnerHTML={{ __html: CSS 
 
 const NAV_COMMAND: Array<[string, string]> = [['Command', '/'], ['Province', '/command/province'], ['Throne', '/command/throne'], ['Kingdom', '/command/kingdom'], ['War Room', '/command/war-room'], ['Build Lab', '/command/build-lab'], ['Draft Calc', '/command/draft-calc'], ['Wiki', '/command/wiki'], ['Tools', '/command/tools'], ['Scraper Generator', '/command/scraper']]
 const NAV_INTEL: Array<[string, string]> = [['Intel', '/command/intel'], ['Military', '/command/military'], ['Magic', '/command/magic'], ['Thievery', '/command/thievery'], ['Science', '/command/science'], ['Buildings', '/command/buildings'], ['Enemy Intel', '/command/enemy-intel']]
+const NAV_OWNER: Array<[string, string]> = [['Owner Console', '/owner/accounts']]
 
 export function Shell(props: {
   title: string; eyebrow: string; subtitle: string; accent: string
@@ -119,7 +120,16 @@ export function Shell(props: {
 }) {
   const router = useRouter()
   const path = usePathname() || ''
+  const [owner, setOwner] = useState(false)
   const [, tick] = useState(0)
+  useEffect(() => {
+    let live = true
+    fetch('/api/owner/check', { cache: 'no-store' })
+      .then(r => r.ok ? r.json() : null)
+      .then(body => { if (live) setOwner(body?.owner === true) })
+      .catch(() => { if (live) setOwner(false) })
+    return () => { live = false }
+  }, [])
   useEffect(() => { const t = setInterval(() => tick(n => n + 1), 15000); return () => clearInterval(t) }, [])
   const nav = (list: Array<[string, string]>) => list.map(([label, href]) => (
     <button key={label} className="sp-nav" data-on={href === path ? '1' : '0'} onClick={() => router.push(href)}>{label}</button>
@@ -133,6 +143,12 @@ export function Shell(props: {
         {nav(NAV_COMMAND)}
         <div className="sp-navhead">INTEL DATA</div>
         {nav(NAV_INTEL)}
+        {owner && (
+          <>
+            <div className="sp-navhead">OWNER</div>
+            {nav(NAV_OWNER)}
+          </>
+        )}
       </aside>
       <main className="sp-main">
         <header className="sp-head">
