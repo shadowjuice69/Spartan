@@ -84,7 +84,7 @@ function expandStructuredRules(input: string): string {
   // We translate those blocks into the same canonical 117 shape used below,
   // so the comparison engine has one parsing path and does not silently drop
   // structured Age-change data.
-  const lines = input.replace(/\\r/g, '').split('\\n')
+  const lines = input.replace(/\r/g, '').split('\n')
   const out: string[] = []
   let section: string | null = null
   let entity: { category: Category; name: string } | null = null
@@ -94,7 +94,7 @@ function expandStructuredRules(input: string): string {
     s.toLowerCase().split('_').map((x) => x ? x[0].toUpperCase() + x.slice(1) : x).join(' ')
 
   const value = (line: string): [string, string] | null => {
-    const m = line.match(/^\\s*([A-Za-z][A-Za-z0-9 _-]*?)\\s*(?:=|:)\\s*(.*?)\\s*$/)
+    const m = line.match(/^\s*([A-Za-z][A-Za-z0-9 _-]*?)\s*(?:=|:)\s*(.*?)\s*$/)
     return m ? [m[1].trim().toUpperCase().replace(/[- ]+/g, '_'), m[2].trim()] : null
   }
 
@@ -195,7 +195,7 @@ function expandStructuredRules(input: string): string {
     const line = raw.trim()
     if (!line) continue
 
-    const h = line.match(/^\\[([A-Za-z0-9_ -]+)\\]$/)
+    const h = line.match(/^\[([A-Za-z0-9_ -]+)\]$/)
     if (h) {
       const bracket = h[1].trim().toUpperCase()
       if (/^(BONUS|BONUSES)$/.test(bracket)) { pool = 'Bonuses'; continue }
@@ -217,7 +217,7 @@ function expandStructuredRules(input: string): string {
       if (rm || pm || rim || dm) {
         const category: Category = rm ? 'Race' : pm ? 'Personality' : rim ? 'Ritual' : 'Dragon'
         const rawName = (rm?.[1] ?? pm?.[1] ?? rim?.[1] ?? dm?.[1] ?? '').replace(/_/g, ' ')
-        const name = rawName.toLowerCase().replace(/\\b\\w/g, (m) => m.toUpperCase())
+        const name = rawName.toLowerCase().replace(/\b\w/g, (m) => m.toUpperCase())
         entity = { category, name }
         out.push(category === 'Race' || category === 'Personality' ? name + ' — Age 117' : name)
         if (category === 'Ritual' || category === 'Dragon') {
@@ -250,17 +250,17 @@ function expandStructuredRules(input: string): string {
     else out.push(line)
   }
 
-  return out.join('\\n')
+  return out.join('\n')
 }
 
 function prepare(input: string): string[] {
   const expanded = expandStructuredRules(input)
-  const source = /(^|\\n)\\s*\\[[A-Za-z0-9_ -]+\\]\\s*(?:$|\\n)/.test(input) ? expanded : input
+  const source = /(^|\n)\s*\[[A-Za-z0-9_ -]+\]\s*(?:$|\n)/.test(input) ? expanded : input
   return source
-    .replace(/\\r/g, '')
-    .replace(/\\[cite:[^\\]]*\\]/gi, '\\n') // every cite tag ends an item
-    .split('\\n')
-    .map((l) => l.replace(/[\\u00a0\\u200b]/g, ' ').replace(/\\u2212/g, '-').trim())
+    .replace(/\r/g, '')
+    .replace(/\[cite:[^\]]*\]/gi, '\n') // every cite tag ends an item
+    .split('\n')
+    .map((l) => l.replace(/[\u00a0\u200b]/g, ' ').replace(/\u2212/g, '-').trim())
 }
 
 // Removes list bullets, including the doubled "- - x" and mangled "-+20%" / "++15%" / "+Destroys" forms.
