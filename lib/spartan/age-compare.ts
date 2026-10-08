@@ -134,18 +134,27 @@ function expandStructuredRules(input: string): string {
     if (/^(ARCHETYPE|ROLE|TAGLINE)$/.test(k)) {
       // Entity header already carries the tagline. Do not turn this into a
       // stat row that could pollute the comparison.
-      if (entity && val) out.push(entity.name + ' — ' + val)
+      // Tagline/archetype is metadata only; the entity header already created
+      // the comparison record. Do not emit another entity heading.
       return
     }
 
     // Structured unit fields. Keep them in the Military grammar understood by
     // addUnits(), allowing individual key/value lines as well as a MILITARY row.
+    if (k === 'OSPEC' || k === 'OFFENSIVE_SPECIALISTS' || k === 'OFFSPEC') {
+      out.push('Military: Offensive specialists: ' + val)
+      return
+    }
     if (k === 'OSPEC_OFFENSE' || k === 'OFFSPEC_OFFENSE') {
       out.push('Military: Offensive specialists: ' + val + '/0')
       return
     }
     if (k === 'OSPEC_DEFENSE' || k === 'OFFSPEC_DEFENSE') {
       out.push('Military: Offensive specialists: 0/' + val)
+      return
+    }
+    if (k === 'DSPEC' || k === 'DEFENSIVE_SPECIALISTS' || k === 'DEFSPEC') {
+      out.push('Military: Defensive specialists: ' + val)
       return
     }
     if (k === 'DSPEC_OFFENSE' || k === 'DEFSPEC_OFFENSE') {
