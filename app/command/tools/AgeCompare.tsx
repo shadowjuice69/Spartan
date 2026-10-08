@@ -48,11 +48,12 @@ export default function AgeCompare() {
   const [query, setQuery] = useState("")
   const [expandAll, setExpandAll] = useState(false)
   const [version, setVersion] = useState(0)
+  const [uploading, setUploading] = useState<"old" | "new" | null>(null)
 
   function run() {
     setError("")
     if (!oldText.trim() || !newText.trim()) {
-      setError("Paste the text for both ages first.")
+      setError("Upload or paste the text for both ages first.")
       return
     }
     try {
@@ -60,6 +61,24 @@ export default function AgeCompare() {
     } catch (e) {
       setResult(null)
       setError("Could not read that text: " + (e instanceof Error ? e.message : String(e)))
+    }
+  }
+
+  async function uploadPdf(which: "old" | "new", file: File) {
+    setError("")
+    setUploading(which)
+    try {
+      const form = new FormData()
+      form.append("file", file)
+      const res = await fetch("/api/age-compare/pdf", { method: "POST", body: form })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || "PDF could not be read.")
+      if (which === "old") setOldText(data.text)
+      else setNewText(data.text)
+    } catch (e) {
+      setError("PDF upload failed: " + (e instanceof Error ? e.message : String(e)))
+    } finally {
+      setUploading(null)
     }
   }
 
@@ -98,6 +117,23 @@ export default function AgeCompare() {
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 5 }}>
               <label style={{ fontSize: 10, color: "#8993a1" }}>{b.label.toUpperCase()}</label>
               <input value={b.age} onChange={(e) => b.setAge(e.target.value)} inputMode="numeric" aria-label={b.label + " number"} style={{ ...input, width: 64, padding: "5px 8px" }} />
+            </div>
+            <div style={{ display: "flex", gap: 7, alignItems: "center", marginBottom: 7, flexWrap: "wrap" }}>
+              <label style={ghost}>
+                {uploading === (b.label === "Old age" ? "old" : "new") ? "Reading PDF…" : "Upload PDF"}
+                <input
+                  type="file"
+                  accept="application/pdf,.pdf"
+                  disabled={uploading !== null}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0]
+                    if (file) uploadPdf(b.label === "Old age" ? "old" : "new", file)
+                    e.currentTarget.value = ""
+                  }}
+                  style={{ display: "none" }}
+                />
+              </label>
+              <span style={{ fontSize: 10, color: "#718091" }}>PDF text is extracted automatically; paste still works too.</span>
             </div>
             <textarea
               value={b.text}
