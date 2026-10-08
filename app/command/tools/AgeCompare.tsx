@@ -64,7 +64,7 @@ export default function AgeCompare() {
     }
   }
 
-  async function uploadPdf(which: "old" | "new", file: File) {
+  async function uploadFile(which: "old" | "new", file: File) {
     setError("")
     setUploading(which)
     try {
@@ -72,11 +72,11 @@ export default function AgeCompare() {
       form.append("file", file)
       const res = await fetch("/api/age-compare/pdf", { method: "POST", body: form })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error || "PDF could not be read.")
+      if (!res.ok) throw new Error(data.error || "File could not be read.")
       if (which === "old") setOldText(data.text)
       else setNewText(data.text)
     } catch (e) {
-      setError("PDF upload failed: " + (e instanceof Error ? e.message : String(e)))
+      setError("File upload failed: " + (e instanceof Error ? e.message : String(e)))
     } finally {
       setUploading(null)
     }
@@ -120,20 +120,20 @@ export default function AgeCompare() {
             </div>
             <div style={{ display: "flex", gap: 7, alignItems: "center", marginBottom: 7, flexWrap: "wrap" }}>
               <label style={ghost}>
-                {uploading === (b.label === "Old age" ? "old" : "new") ? "Reading PDF…" : "Upload PDF"}
+                {uploading === (b.label === "Old age" ? "old" : "new") ? "Reading file…" : "Upload PDF / TXT"}
                 <input
                   type="file"
-                  accept="application/pdf,.pdf"
+                  accept="application/pdf,.pdf,text/plain,.txt"
                   disabled={uploading !== null}
                   onChange={(e) => {
                     const file = e.target.files?.[0]
-                    if (file) uploadPdf(b.label === "Old age" ? "old" : "new", file)
+                    if (file) uploadFile(b.label === "Old age" ? "old" : "new", file)
                     e.currentTarget.value = ""
                   }}
                   style={{ display: "none" }}
                 />
               </label>
-              <span style={{ fontSize: 10, color: "#718091" }}>PDF text is extracted automatically; paste still works too.</span>
+              <span style={{ fontSize: 10, color: "#718091" }}>PDF text is extracted automatically; TXT files are read directly; paste still works too.</span>
             </div>
             <textarea
               value={b.text}
