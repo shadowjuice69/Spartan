@@ -197,7 +197,16 @@ function expandStructuredRules(input: string): string {
 
     const h = line.match(/^\\[([A-Za-z0-9_ -]+)\\]$/)
     if (h) {
-      section = h[1].trim().toUpperCase()
+      const bracket = h[1].trim().toUpperCase()
+      if (/^(BONUS|BONUSES)$/.test(bracket)) { pool = 'Bonuses'; continue }
+      if (/^(PENALTY|PENALTIES)$/.test(bracket)) { pool = 'Penalties'; continue }
+      if (/^(SPELL|SPELLS|UNIQUE_SPELL|UNIQUE_SPELLS)$/.test(bracket)) { pool = 'Spells'; continue }
+      if (/^(DOCTRINE|DOCTRINES|WAR_DOCTRINE|WAR_DOCTRINES)$/.test(bracket)) { pool = 'Doctrine'; continue }
+      if (/^(ABILITY|ABILITIES|UNIQUE_ABILITY|UNIQUE_ABILITIES|PASSIVE)$/.test(bracket)) { pool = 'Ability'; continue }
+      if (/^(MILITARY|UNITS|STARTING_UNITS)$/.test(bracket)) { pool = 'Military'; continue }
+      if (/^(EFFECT|EFFECTS|DESCRIPTION)$/.test(bracket)) { pool = 'Effect'; continue }
+
+      section = bracket
       pool = null
 
       const rm = section.match(/^RACE_(.+)$/)
