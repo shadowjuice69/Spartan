@@ -1,3 +1,5 @@
+import { looksBoxed, boxedTo117 } from './age-boxed'
+
 // Age comparison: parse two Utopia age rule write-ups and diff them.
 //
 // Handles both text shapes seen so far:
@@ -254,6 +256,7 @@ function expandStructuredRules(input: string): string {
 }
 
 function prepare(input: string): string[] {
+  input = looksBoxed(input) ? boxedTo117(input) : input
   const expanded = expandStructuredRules(input)
   const source = /(^|\n)\s*\[[A-Za-z0-9_ -]+\]\s*(?:$|\n)/.test(input) ? expanded : input
   return source
