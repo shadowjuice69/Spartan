@@ -20,7 +20,7 @@ const INTEL = [
   ["Intel","/command/intel"],["Kingdom","/command/kingdom"],["Military","/command/military"],
   ["Magic","/command/magic"],["Thievery","/command/thievery"],["Science","/command/science"],
   ["Buildings","/command/buildings"],["Throne","/command/throne"],["News","/command/news"],
-  ["Aid & Logistics","/command/aid"],["Exploration","/command/exploration"],["Enemy Intel","/command/enemy-intel"]
+  ["Exploration","/command/exploration"],["Enemy Intel","/command/enemy-intel"]
 ]
 
 function scalar(v:any): string {
