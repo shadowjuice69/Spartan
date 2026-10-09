@@ -1,6 +1,8 @@
 'use strict';
 
-const RACE_NAMES = ['Avian','Dark Elf','Dwarf','Dryad','Elf','Faery','Halfling','Human','Orc','Undead'];
+const { looksLike117, parse117 } = require('./age117');
+
+const RACE_NAMES = ['Avian','Dark Elf','Gnome','Dwarf','Dryad','Elf','Faery','Halfling','Human','Orc','Undead'];
 const PERSONALITY_NAMES = ['The Artisan','The General','The Heretic','The Mystic','The Necromancer',
   'The Cleric','The Rogue','The Tactician','The Warrior','The War Hero','The Sage'];
 const DRAGON_NAMES = ['Amethyst Dragon','Emerald Dragon','Ruby Dragon','Topaz Dragon','Sapphire Dragons'];
@@ -148,12 +150,14 @@ function parseAgeFileChunked(rawText) {
     .replace(/\bEmerald\n+Dragon\b/g,'Emerald Dragon')
     .replace(/\bTopaz\n+Dragon\b/g,'Topaz Dragon');
   text = stripCite(text);
+  if (looksLike117(text)) return parse117(text);
   const lines = text.split('\n').map(l=>l.trim()).filter(Boolean);
   return isPdfFormat(lines) ? parsePdfFormat(lines, text) : parseStructuredFormat(lines);
 }
 
 function summarize(parsed) {
   const lines = [];
+  if (parsed.rituals && Object.keys(parsed.rituals).length) lines.push('🔮 ' + Object.keys(parsed.rituals).length + ' Rituals');
   if (Object.keys(parsed.races).length)        lines.push(`🏁 ${Object.keys(parsed.races).length} Races`);
   if (Object.keys(parsed.personalities).length) lines.push(`🎭 ${Object.keys(parsed.personalities).length} Personalities`);
   if (Object.keys(parsed.dragons).length)       lines.push(`🐉 ${Object.keys(parsed.dragons).length} Dragons`);
