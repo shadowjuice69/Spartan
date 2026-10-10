@@ -442,7 +442,7 @@ export async function GET(request: Request) {
 
     body.captures = captureLog(logRecords)
     CACHE.set(cacheKey, { at: Date.now(), body })
-    if (CACHE.size > 200) CACHE.clear()
+    while (CACHE.size > 40) { const oldest = CACHE.keys().next().value; if (oldest === undefined) break; CACHE.delete(oldest) }
     return NextResponse.json(body)
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Page data query failed' }, { status: 500 })
