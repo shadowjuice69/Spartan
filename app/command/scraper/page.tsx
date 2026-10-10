@@ -2,12 +2,12 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { NAV_COMMAND as nav, NAV_INTEL as intel } from '@/lib/spartan/nav'
 
 type Pairing = { code: string; expiresAt: string; provinceName: string | null; kingdomCode: string | null }
 
 const ACTIVE = 'Scraper Generator'
-const nav = [['Command', '/'], ['Province', '/command/province'], ['War Room', '/command/war-room'], ['Build Lab', '/command/build-lab'], ['Draft Calc', '/command/draft-calc'], ['Wiki', '/command/wiki'], ['Tools', '/command/tools'], ['Scraper Generator', '/command/scraper']]
-const intel = [['Kingdom', '/command/kingdom'], ['Military', '/command/military'], ['Magic', '/command/magic'], ['Thievery', '/command/thievery'], ['Science', '/command/science'], ['Buildings', '/command/buildings'], ['Throne', '/command/throne'], ['Enemy Intel', '/command/enemy-intel']]
+
 
 const side: React.CSSProperties = { width: 245, flexShrink: 0, minHeight: '100vh', background: '#071018', borderRight: '1px solid rgba(255,255,255,.08)', padding: 24, position: 'sticky', top: 0, height: '100vh', overflowY: 'auto' }
 const btn: React.CSSProperties = { background: 'rgba(255,255,255,.04)', border: '1px solid rgba(255,255,255,.1)', color: '#dce7ee', borderRadius: 8, padding: '10px 12px', fontSize: 11, cursor: 'pointer', width: '100%', textAlign: 'left', marginBottom: 4 }
