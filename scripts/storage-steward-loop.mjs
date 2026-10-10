@@ -1,7 +1,7 @@
 const baseUrl = String(process.env.SPARTAN_DASHBOARD_URL || 'https://sparta-west.onrender.com').replace(/\/$/, '')
 const key = process.env.SPARTAN_STEWARD_KEY
-const intervalMs = Math.max(Number(process.env.SPARTAN_STEWARD_INTERVAL_MS || 120000) || 120000, 30000)
-const limit = Math.min(Math.max(Number(process.env.SPARTAN_STEWARD_BATCH || 10) || 10, 1), 25)
+const intervalMs = Math.max(Number(process.env.SPARTAN_STORAGE_STEWARD_INTERVAL_MS || 300000) || 300000, 30000)
+const limit = Math.min(Math.max(Number(process.env.SPARTAN_STORAGE_STEWARD_BATCH || 3) || 3, 1), 25)
 
 if (!key) {
   console.error('[storage-steward] SPARTAN_STEWARD_KEY is not configured')
