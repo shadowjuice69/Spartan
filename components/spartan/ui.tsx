@@ -131,7 +131,7 @@ export function Shell(props: {
       .catch(() => { if (live) setOwner(false) })
     return () => { live = false }
   }, [])
-  useEffect(() => { const t = setInterval(() => tick(n => n + 1), 15000); return () => clearInterval(t) }, [])
+  useEffect(() => { const t = setInterval(() => { if (document.visibilityState === 'visible') tick(n => n + 1) }, 30000); return () => clearInterval(t) }, [])
   const nav = (list: Array<[string, string]>) => list.map(([label, href]) => (
     <button key={label} className="sp-nav" data-on={href === path ? '1' : '0'} onClick={() => router.push(href)}>{label}</button>
   ))
