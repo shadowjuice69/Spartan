@@ -138,7 +138,7 @@ export default function IntelPage() {
           </Grid>
 
           <Grid>
-            <PayoffPanel provs={provs} mine={kingdoms.find(k => k.own)?.provinces || []} />
+            <PayoffPanel provs={provs} mine={kingdoms.find(k => k.own)?.provinces || []} ownName={m?.ownName || null} />
           </Grid>
 
           <Grid>

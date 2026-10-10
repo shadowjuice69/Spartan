@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { C, DataTable, Empty, Panel, Tag, fmt } from '@/components/spartan/ui'
 
 type P = {
@@ -8,9 +8,8 @@ type P = {
   def: number | null; defHome: number | null; ages: { SOT: number | null }
 }
 
-// Same traditional-march math the Spartan bot uses (bot/services/attackCalculator):
-//   a = tNW/yNW - 0.05 (inverted if >= 1); magic = max(0.67, a<0.9 ? a+0.1 : a)
-//   GF = clamp(3*magic, 0.01, 1.35); gain = min(0.12 * targetAcres * GF * MAPf, 0.2 * yourAcres)
+// Mirrors the bot's traditional-march estimate without offensive modifiers.
+// GF = clamp(3 * magic, 0.01, 1.35); gain = min(12% target acres * GF * MAP factor, 20% own acres).
 function estimate(yNW: number, yAcres: number, tNW: number, tAcres: number, map: number, war: boolean) {
   let a = tNW / yNW - 0.05
   if (a >= 1) a = 1 / a
@@ -22,7 +21,7 @@ function estimate(yNW: number, yAcres: number, tNW: number, tAcres: number, map:
   return { gain: Math.min(raw, cap), capped: raw >= cap }
 }
 
-// Range rules from the bot: smaller target needs BOTH net worth and land in 85%-117.65%, larger needs either.
+// Smaller targets must meet both NW and land limits; larger targets may meet either.
 function inRange(yNW: number, yAcres: number, tNW: number, tAcres: number) {
   const nwIn = tNW / yNW >= 0.85 && tNW / yNW <= 1.1765
   const landIn = tAcres / yAcres >= 0.85 && tAcres / yAcres <= 1.1765
@@ -30,21 +29,50 @@ function inRange(yNW: number, yAcres: number, tNW: number, tAcres: number) {
   return smaller ? nwIn && landIn : nwIn || landIn
 }
 
+const KEY = 'spartan.payoff.v1'
 const box = { background: '#0a1118', border: '1px solid #1c2a36', color: '#e6eef6', borderRadius: 8, padding: '8px 10px', fontSize: 14, width: '100%', boxSizing: 'border-box' } as const
 const lab = { fontSize: 10, letterSpacing: '.14em', color: '#7d8fa0', marginBottom: 4 } as const
 const num = (s: string) => { const v = Number(String(s).replace(/,/g, '')); return Number.isFinite(v) ? v : 0 }
 const ageText = (h: number | null) => (h === null ? '—' : h < 1 ? Math.round(h * 60) + 'm' : h < 48 ? Math.round(h) + 'h' : Math.round(h / 24) + 'd')
 
-export default function PayoffPanel({ provs, mine }: { provs: P[]; mine: P[] }) {
+export default function PayoffPanel({ provs, mine, ownName }: { provs: P[]; mine: P[]; ownName?: string | null }) {
   const [pick, setPick] = useState('')
   const [nw, setNw] = useState('')
   const [acres, setAcres] = useState('')
   const [map, setMap] = useState('0')
   const [war, setWar] = useState(false)
   const [rangeOnly, setRangeOnly] = useState(true)
+  const [loaded, setLoaded] = useState(false)
 
-  const yNW = num(nw)
-  const yAcres = num(acres)
+  // Restore optional browser preferences; the calculator remains usable if storage is unavailable.
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(KEY)
+      if (raw) {
+        const s = JSON.parse(raw)
+        if (typeof s.map === 'string') setMap(s.map)
+        if (typeof s.war === 'boolean') setWar(s.war)
+        if (typeof s.rangeOnly === 'boolean') setRangeOnly(s.rangeOnly)
+        if (typeof s.pick === 'string') setPick(s.pick)
+        if (typeof s.nw === 'string') setNw(s.nw)
+        if (typeof s.acres === 'string') setAcres(s.acres)
+      }
+    } catch {}
+    setLoaded(true)
+  }, [])
+  useEffect(() => {
+    if (!loaded) return
+    try { window.localStorage.setItem(KEY, JSON.stringify({ map, war, rangeOnly, pick, nw, acres })) } catch {}
+  }, [loaded, map, war, rangeOnly, pick, nw, acres])
+
+  const own = ownName ? mine.find(x => x.name.trim().toLowerCase() === ownName.trim().toLowerCase()) || null : null
+  const sel = pick === 'manual' ? null : mine.find(x => x.key === pick) || own
+  const shownNW = sel ? (sel.nw ? String(sel.nw) : '') : nw
+  const shownAcres = sel ? (sel.acres ? String(sel.acres) : '') : acres
+  const selectValue = pick === 'manual' ? 'manual' : mine.some(x => x.key === pick) ? pick : ''
+
+  const yNW = num(shownNW)
+  const yAcres = num(shownAcres)
   const ready = yNW > 0 && yAcres > 0
 
   const rows = ready
@@ -60,31 +88,35 @@ export default function PayoffPanel({ provs, mine }: { provs: P[]; mine: P[] }) 
         .slice(0, 12)
     : []
 
-  const choose = (key: string) => {
-    setPick(key)
-    const m = mine.find(x => x.key === key)
-    if (m) { setNw(m.nw ? String(m.nw) : ''); setAcres(m.acres ? String(m.acres) : '') }
+  const choose = (v: string) => {
+    if (v === 'manual') { setNw(shownNW); setAcres(shownAcres) }
+    setPick(v)
+  }
+  const edit = (which: 'nw' | 'acres', v: string) => {
+    if (pick !== 'manual') { setNw(shownNW); setAcres(shownAcres); setPick('manual') }
+    if (which === 'nw') setNw(v)
+    else setAcres(v)
   }
 
   return (
     <Panel span={12} title="BIGGEST PAYOFFS" sub="Estimated acres from a traditional march, ranked by gain. Defense is shown as the cost to break them." delay={3}>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, marginBottom: 12 }}>
-        {mine.length > 0 && (
-          <div>
-            <div style={lab}>ATTACKING AS</div>
-            <select value={pick} onChange={(e: any) => choose(e.target.value)} style={box}>
-              <option value="">Enter manually</option>
-              {mine.map(m => <option key={m.key} value={m.key}>{m.name}</option>)}
-            </select>
-          </div>
-        )}
-        <div><div style={lab}>YOUR NETWORTH</div><input style={box} inputMode="numeric" value={nw} onChange={(e: any) => setNw(e.target.value)} placeholder="e.g. 865387" /></div>
-        <div><div style={lab}>YOUR ACRES</div><input style={box} inputMode="numeric" value={acres} onChange={(e: any) => setAcres(e.target.value)} placeholder="e.g. 4173" /></div>
+        <div>
+          <div style={lab}>ATTACKING AS</div>
+          <select value={selectValue} onChange={(e: any) => choose(e.target.value)} style={box}>
+            <option value="">{own ? `You: ${own.name}` : 'Select a province'}</option>
+            <option value="manual">Enter manually</option>
+            {mine.filter(m => !own || m.key !== own.key).map(m => <option key={m.key} value={m.key}>{m.name}</option>)}
+          </select>
+        </div>
+        <div><div style={lab}>YOUR NETWORTH</div><input style={box} inputMode="numeric" value={shownNW} onChange={(e: any) => edit('nw', e.target.value)} placeholder="e.g. 865387" /></div>
+        <div><div style={lab}>YOUR ACRES</div><input style={box} inputMode="numeric" value={shownAcres} onChange={(e: any) => edit('acres', e.target.value)} placeholder="e.g. 4173" /></div>
         <div><div style={lab}>YOUR MAP %</div><input style={box} inputMode="numeric" value={map} onChange={(e: any) => setMap(e.target.value)} /></div>
       </div>
       <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', fontSize: 12, color: '#8597a8', marginBottom: 12 }}>
         <label><input type="checkbox" checked={war} onChange={(e: any) => setWar(e.target.checked)} /> At war</label>
         <label><input type="checkbox" checked={rangeOnly} onChange={(e: any) => setRangeOnly(e.target.checked)} /> In range only</label>
+        {sel && <span>Using the latest captured numbers for {sel.name}.</span>}
       </div>
       {!ready ? (
         <Empty title="Add your networth and acres" hint="Pick your province above or type both numbers and the best hits appear here." />
