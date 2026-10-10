@@ -47,7 +47,9 @@ async function cycle() {
 }
 
 async function main() {
-  console.log('[storage-steward] starting', JSON.stringify({ baseUrl, intervalMs, limit }))
+  console.log('[storage-steward] starting', JSON.stringify({ baseUrl, intervalMs, limit, startupDelayMs: 30000 }))
+  // Let Next.js finish binding its port before the first internal API request.
+  await new Promise(resolve => setTimeout(resolve, 30_000))
   while (!stopping) {
     await cycle()
     if (stopping) break
