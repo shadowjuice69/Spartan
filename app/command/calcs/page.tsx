@@ -2,9 +2,10 @@
 
 import { useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
+import { NAV_COMMAND as nav, NAV_INTEL as intel } from '@/lib/spartan/nav'
 
-const nav = [["Command","/"],["Province","/command/province"],["War Room","/command/war-room"],["Build Lab","/command/build-lab"],["Draft Calc","/command/draft-calc"],["Calcs","/command/calcs"],["Tools","/command/tools"],["Scraper Generator","/command/scraper"],["Wiki","/command/wiki"]]
-const intel = [["Kingdom","/command/kingdom"],["Military","/command/military"],["Magic","/command/magic"],["Thievery","/command/thievery"],["Science","/command/science"],["Buildings","/command/buildings"],["Throne","/command/throne"]]
+
+
 const shell: React.CSSProperties={minHeight:"100vh",background:"#05080d",color:"#e7eef5",fontFamily:"Inter,system-ui,sans-serif",display:"flex"}
 const side: React.CSSProperties={width:245,flexShrink:0,minHeight:"100vh",background:"#071018",borderRight:"1px solid rgba(255,255,255,.08)",padding:24,position:"sticky",top:0,height:"100vh",overflowY:"auto"}
 const card: React.CSSProperties={padding:18,border:"1px solid rgba(255,255,255,.08)",borderRadius:10,background:"#081119"}
