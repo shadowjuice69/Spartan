@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import JeevesSummary from "@/components/spartan/JeevesSummary"
+import { NAV_COMMAND as NAV, NAV_INTEL as INTEL } from '@/lib/spartan/nav'
 
 type Row = {
   id?: string; capture_id?: string; page_kind?: string; source?: string
@@ -12,16 +13,6 @@ type Row = {
   visibility?: string; metrics?: Record<string, any>
 }
 
-const NAV = [
-  ["Command","/"],["Province","/command/province"],["War Room","/command/war-room"],
-  ["Build Lab","/command/build-lab"],["Calcs","/command/calcs"],["Wiki","/command/wiki"],["Tools","/command/tools"],["Scraper Generator","/command/scraper"]
-]
-const INTEL = [
-  ["Intel","/command/intel"],["Kingdom","/command/kingdom"],["Military","/command/military"],
-  ["Magic","/command/magic"],["Thievery","/command/thievery"],["Science","/command/science"],
-  ["Buildings","/command/buildings"],["Throne","/command/throne"],["News","/command/news"],
-  ["Exploration","/command/exploration"],["Enemy Intel","/command/enemy-intel"]
-]
 
 function scalar(v:any): string {
   if(v==null || v==="") return "—"
