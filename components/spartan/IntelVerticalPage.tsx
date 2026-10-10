@@ -296,7 +296,7 @@ export default function IntelVerticalPage() {
       finally{if(live)setLoading(false)}
     }
     load()
-    const t=setInterval(load,30000)
+    const t=setInterval(()=>{if(document.visibilityState==='visible')load()},60000)
     return()=>{live=false;clearInterval(t)}
   },[section])
 
