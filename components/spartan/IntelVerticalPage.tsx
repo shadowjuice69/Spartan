@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
+import { NAV_COMMAND as navCommand, NAV_INTEL as navIntel } from '@/lib/spartan/nav'
 
 type Vertical = {
   title: string
@@ -80,8 +81,7 @@ const verticals: Record<string, Vertical> = {
   },
 }
 
-const navCommand = [["Command","/"],["Province","/command/province"],["War Room","/command/war-room"],["Build Lab","/command/build-lab"],["Draft Calc","/command/draft-calc"],["Wiki","/command/wiki"],["Tools","/command/tools"],["Scraper Generator","/command/scraper"]]
-const navIntel = [["Intel","/command/intel"],["Kingdom","/command/kingdom"],["Military","/command/military"],["Magic","/command/magic"],["Thievery","/command/thievery"],["Science","/command/science"],["Buildings","/command/buildings"],["Throne","/command/throne"],["News","/command/news"],["Enemy Intel","/command/enemy-intel"]]
+
 
 function scalar(v:any) {
   if (v == null || v === "") return "—"
