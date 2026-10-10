@@ -29,12 +29,7 @@ function shutdown(code = 0) {
 process.on('SIGTERM', () => shutdown(0));
 process.on('SIGINT', () => shutdown(0));
 
-console.log('[START-ALL] Starting Spartan web + local Discord bot + storage steward');
+console.log('[START-ALL] Starting Spartan web + local Discord bot; storage steward runs once via Next.js instrumentation');
 launch(process.execPath, [require.resolve('next/dist/bin/next'), 'start', '-H', '0.0.0.0'], 'Next.js');
 launch(process.execPath, ['bot/bot.js'], 'Discord bot');
 
-if (process.env.SPARTAN_STEWARD_KEY) {
-  launch(process.execPath, ['scripts/storage-steward-loop.mjs'], 'Storage Steward');
-} else {
-  console.error('[START-ALL] SPARTAN_STEWARD_KEY is missing; Storage Steward is disabled until the server environment is configured.');
-}
