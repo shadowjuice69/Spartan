@@ -24,7 +24,7 @@ async function runStorageSteward() {
   }
 
   globalThis.__spartanStorageStewardRunning = true
-  const baseUrl = String(process.env.SPARTAN_DASHBOARD_URL || 'http://127.0.0.1:3000').replace(/\\/$/, '')
+  const baseUrl = String(process.env.SPARTAN_DASHBOARD_URL || 'http://127.0.0.1:3000').replace(/\/$/, '')
   const key = process.env.SPARTAN_STEWARD_KEY
   if (!key) {
     console.error('[storage-steward] SPARTAN_STEWARD_KEY is not configured')
