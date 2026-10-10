@@ -1,6 +1,6 @@
 require('dotenv').config();
 const http = require('http');
-const { Client, GatewayIntentBits, PermissionFlagsBits } = require('discord.js');
+const { Client, GatewayIntentBits, PermissionFlagsBits, Options } = require('discord.js');
 const discordJsVersion = require('discord.js').version || 'unknown';
 const logger = require('./services/logger');
 const directMusicAdapter = require('./services/directMusicAdapter');
@@ -17,6 +17,9 @@ const CLEANUP_CHANNEL_ID = '1546379989484830730';
 const CLEANUP_AUTHOR_ID = '1518122625354956820';
 const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.GuildVoiceStates, GatewayIntentBits.MessageContent],
+  // Bound retained message history; live message events still process normally.
+  makeCache: Options.cacheWithLimits({ MessageManager: 50 }),
+  sweepers: { messages: { interval: 300, lifetime: 900 } },
   ws: {
     handshakeTimeout: 60000,
     helloTimeout: 90000,
