@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient as createSupabaseAdmin } from '@supabase/supabase-js'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { describeRecord } from '@/lib/spartan/describe-record'
 
 export const dynamic = 'force-dynamic'
 
@@ -146,6 +147,7 @@ export async function GET(request: Request) {
         expires_at: row.expires_at,
         raw_text: row.raw_text,
         payload: parsed,
+        summary: describeRecord(row, parsed),
         raw_payload: row.raw_payload,
       }
     })
