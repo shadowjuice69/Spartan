@@ -6,6 +6,7 @@ import {
 } from '@/lib/spartan/page-models'
 import { mergeNews, findGameDate, realTimeOf, sideOf, dayIndex } from '@/lib/spartan/kingdom-news'
 import { parseThroneText } from '@/lib/spartan/throne-text'
+import { buildExplorationModel } from '@/lib/spartan/exploration-model'
 import { buildMagicModel } from '@/lib/spartan/magic-model'
 import { buildThieveryModel } from '@/lib/spartan/thievery-model'
 import { mergeGrids, armiesFrom, parseStats, type GridCapture } from '@/lib/spartan/intel-site'
@@ -28,6 +29,7 @@ const KINDS: Record<string, string[]> = {
   news: ['news'],
   throne: ['throne'],
   intel: ['intel'],
+  exploration: ['exploration'],
   magic: ['magic', 'ritual', 'council_spells'],
   thievery: ['thievery'],
   command: [], // built by buildCommandModel below, not by the generic query
@@ -379,6 +381,11 @@ export async function GET(request: Request) {
 
     if (page === 'thievery') {
       body.model = buildThieveryModel(records)
+      body.fields = []
+    }
+
+    if (page === 'exploration') {
+      body.model = buildExplorationModel(records)
       body.fields = []
     }
 
