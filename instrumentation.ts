@@ -1,5 +1,11 @@
-const WORKER_INTERVAL_MS = 2 * 60 * 1000
-const WORKER_BATCH_SIZE = 9
+const WORKER_INTERVAL_MS = Math.max(
+  30_000,
+  Number(process.env.SPARTAN_STORAGE_STEWARD_INTERVAL_MS || 300_000) || 300_000,
+)
+const WORKER_BATCH_SIZE = Math.min(
+  25,
+  Math.max(1, Number(process.env.SPARTAN_STORAGE_STEWARD_BATCH || 3) || 3),
+)
 
 declare global {
   // eslint-disable-next-line no-var
@@ -18,7 +24,7 @@ async function runStorageSteward() {
   }
 
   globalThis.__spartanStorageStewardRunning = true
-  const baseUrl = String(process.env.SPARTAN_DASHBOARD_URL || 'http://127.0.0.1:3000').replace(/\/$/, '')
+  const baseUrl = String(process.env.SPARTAN_DASHBOARD_URL || 'http://127.0.0.1:3000').replace(/\\/$/, '')
   const key = process.env.SPARTAN_STEWARD_KEY
   if (!key) {
     console.error('[storage-steward] SPARTAN_STEWARD_KEY is not configured')
@@ -46,6 +52,7 @@ async function runStorageSteward() {
     }
     console.log('[storage-steward] background cycle', JSON.stringify({
       batchSize: WORKER_BATCH_SIZE,
+      intervalMs: WORKER_INTERVAL_MS,
       staged: payload.staged ?? 0,
       processed: payload.processed ?? 0,
       failed: payload.failed ?? 0,
