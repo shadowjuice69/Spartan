@@ -40,7 +40,7 @@ export default function JeevesSummary({ compact = false }: JeevesSummaryProps) {
         if(live){const [h,k,e,i]=intel;setHistory(h);setKingdom(k);setEnemy(e);setLatestIntel(i);setError("")}
       }catch(e){if(live)setError(e instanceof Error?e.message:"Jeeves could not assemble the summary")}
     }
-    load();const timer=setInterval(load,20000);return()=>{live=false;clearInterval(timer)}
+    load();const timer=setInterval(()=>{if(document.visibilityState==='visible')load()},60000);return()=>{live=false;clearInterval(timer)}
   },[])
 
   const latest=history?.snapshots?.at(-1)
