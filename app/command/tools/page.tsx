@@ -4,9 +4,10 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import AgeCompare from "./AgeCompare"
 import ScienceCalc from "./ScienceCalc"
+import { NAV_COMMAND as nav, NAV_INTEL as intel } from '@/lib/spartan/nav'
 
-const nav=[["Command","/"],["Province","/command/province"],["War Room","/command/war-room"],["Build Lab","/command/build-lab"],["Draft Calc","/command/draft-calc"],["Calcs","/command/calcs"],["Tools","/command/tools"],["Scraper Generator","/command/scraper"],["Wiki","/command/wiki"]]
-const intel=[["Kingdom","/command/kingdom"],["Military","/command/military"],["Magic","/command/magic"],["Thievery","/command/thievery"],["Science","/command/science"],["Buildings","/command/buildings"],["Throne","/command/throne"]]
+
+
 const side:React.CSSProperties={width:245,flexShrink:0,minHeight:"100vh",background:"#071018",borderRight:"1px solid rgba(255,255,255,.08)",padding:24,position:"sticky",top:0,height:"100vh",overflowY:"auto"}
 const btn:React.CSSProperties={background:"rgba(255,255,255,.04)",border:"1px solid rgba(255,255,255,.1)",color:"#dce7ee",borderRadius:8,padding:"10px 12px",fontSize:11,cursor:"pointer",width:"100%",textAlign:"left",marginBottom:4}
 function Sidebar(){const r=useRouter();return <aside style={side}><b style={{letterSpacing:".18em",color:"#d8ff54"}}>SPARTAN</b><div style={{fontSize:9,color:"#718091",letterSpacing:".16em",marginTop:5}}>UTOPIA COMMAND</div><div style={{margin:"30px 0 10px",fontSize:9,color:"#5f6c7a"}}>COMMAND SYSTEMS</div>{nav.map(x=><button key={x[0]} onClick={()=>r.push(x[1])} style={{...btn,background:x[0]==="Tools"?"rgba(216,255,84,.08)":"transparent",color:x[0]==="Tools"?"#d8ff54":"#aeb9c5"}}>{x[0]}</button>)}<div style={{margin:"22px 0 10px",fontSize:9,color:"#5f6c7a"}}>INTEL DATA</div>{intel.map(x=><button key={x[0]} onClick={()=>r.push(x[1])} style={btn}>{x[0]}</button>)}</aside>}
