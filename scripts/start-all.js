@@ -1,6 +1,10 @@
 const { spawn } = require('node:child_process');
 const children = [];
 const env = { ...process.env, EMBEDDED_SPARTAN: 'true' };
+const storageStewardEnv = {
+  SPARTAN_STORAGE_STEWARD_INTERVAL_MS: process.env.SPARTAN_STORAGE_STEWARD_INTERVAL_MS || '300000',
+  SPARTAN_STORAGE_STEWARD_BATCH: process.env.SPARTAN_STORAGE_STEWARD_BATCH || '3',
+};
 let shuttingDown = false;
 
 function launch(command, args, label, extraEnv = {}) {
@@ -29,7 +33,8 @@ function shutdown(code = 0) {
 process.on('SIGTERM', () => shutdown(0));
 process.on('SIGINT', () => shutdown(0));
 
-console.log('[START-ALL] Starting Spartan web + local Discord bot; storage steward runs once via Next.js instrumentation');
+console.log('[START-ALL] Starting Spartan web + local Discord bot + single storage steward worker');
 launch(process.execPath, [require.resolve('next/dist/bin/next'), 'start', '-H', '0.0.0.0'], 'Next.js');
 launch(process.execPath, ['bot/bot.js'], 'Discord bot');
+launch(process.execPath, ['scripts/storage-steward-loop.mjs'], 'Storage steward', storageStewardEnv);
 
