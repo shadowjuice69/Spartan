@@ -18,7 +18,7 @@ const CLEANUP_AUTHOR_ID = '1518122625354956820';
 const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.GuildVoiceStates, GatewayIntentBits.MessageContent],
   // Bound retained message history; live message events still process normally.
-  makeCache: Options.cacheWithLimits({ MessageManager: 50 }),
+  makeCache: Options.cacheWithLimits({ MessageManager: 50, ReactionManager: 0, ReactionUserManager: 0, PresenceManager: 0, ThreadManager: 0, ThreadMemberManager: 0, GuildScheduledEventManager: 0, GuildInviteManager: 0, GuildEmojiManager: 0, GuildStickerManager: 0, StageInstanceManager: 0, AutoModerationRuleManager: 0 }),
   sweepers: { messages: { interval: 300, lifetime: 900 } },
   ws: {
     handshakeTimeout: 60000,
@@ -28,7 +28,7 @@ const client = new Client({
 });
 global.__SPARTAN_DISCORD_CLIENT = client;
 
-client.on('raw', packet => { if (packet?.t === 'MESSAGE_CREATE') logger.info(`[DISCORD RAW MESSAGE_CREATE] channel=${packet.d?.channel_id || 'unknown'} guild=${packet.d?.guild_id || 'DM'} author=${packet.d?.author?.username || 'unknown'} id=${packet.d?.id || 'unknown'}`); });
+if (process.env.DISCORD_RAW_LOG === 'true') client.on('raw', packet => { if (packet?.t === 'MESSAGE_CREATE') logger.info(`[DISCORD RAW MESSAGE_CREATE] channel=${packet.d?.channel_id || 'unknown'} guild=${packet.d?.guild_id || 'DM'} author=${packet.d?.author?.username || 'unknown'} id=${packet.d?.id || 'unknown'}`); });
 
 client.on('interactionCreate', interaction => {
   spartanBotBridge.inboundInteraction(interaction).catch(() => {});
@@ -74,7 +74,7 @@ client.on('messageCreate', async message => {
   }
 });
 
-client.on('debug', message => {
+if (process.env.DISCORD_DEBUG_LOG === 'true') client.on('debug', message => {
   if (/provided token/i.test(message)) return;
   if (!/heartbeat acknowledged|sending heartbeat/i.test(message)) logger.info(`[DISCORD DEBUG] ${message}`);
 });
