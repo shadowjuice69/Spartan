@@ -1,6 +1,6 @@
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
-import { extractDiscordId, isOwner } from '@/lib/spartan/security'
+import { extractDiscordId, isOwner, resolveDashboardIdentity } from '@/lib/spartan/security'
 
 export async function GET() {
   const cookieStore = await cookies()
@@ -10,7 +10,8 @@ export async function GET() {
     { cookies: { getAll: () => cookieStore.getAll(), setAll: () => {} } },
   )
   const { data: { user } } = await supabase.auth.getUser()
-  const discordId = extractDiscordId(user)
+  const identity = user ? await resolveDashboardIdentity(user.id, extractDiscordId(user)) : null
+  const discordId = identity?.discordUserId ?? extractDiscordId(user)
   return Response.json(
     { owner: isOwner(discordId) },
     { headers: { 'Cache-Control': 'private, no-store' } },
