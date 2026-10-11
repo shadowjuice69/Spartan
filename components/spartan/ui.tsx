@@ -144,12 +144,8 @@ export function Shell(props: {
         {nav(NAV_COMMAND)}
         <div className="sp-navhead">INTEL DATA</div>
         {nav(NAV_INTEL)}
-        {owner && (
-          <>
-            <div className="sp-navhead">OWNER</div>
-            {nav(NAV_OWNER)}
-          </>
-        )}
+        <div className="sp-navhead">OWNER</div>
+        {nav(NAV_OWNER)}
       </aside>
       <main className="sp-main">
         <header className="sp-head">
