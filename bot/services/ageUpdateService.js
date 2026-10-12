@@ -2,7 +2,6 @@ const supabaseService = require("./supabase");
 const logger = require("./logger");
 const { parseAgeFileChunked: parseAgeFile, summarize } = require("../parsers/ageParser");
 const { recalculateBuildLibrary } = require("./buildAgeRecalculator");
-const { syncWikiHtml } = require("./spartanWikiService");
 
 async function saveAgeUpdate(updateText, userId, filename) {
   const supabase = supabaseService.getClient();
@@ -24,7 +23,6 @@ async function saveAgeUpdate(updateText, userId, filename) {
       .from("age_updates")
       .select("id,status")
       .eq("age_number", ageNumber)
-      .eq("submitted_by", userId)
       .in("status", ["pending", "approved"])
       .limit(1);
 
@@ -35,15 +33,7 @@ async function saveAgeUpdate(updateText, userId, filename) {
     const parsed = parseAgeFile(updateText);
     const parsedSummary = summarize(parsed);
 
-    // If the submitted Age file is actually the complete authoritative Wiki,
-    // archive that full document too. This makes Age 117+ rollover automatic.
-    if (/<html[\s>]/i.test(updateText) && /<body[\s>]/i.test(updateText)) {
-      try {
-        await syncWikiHtml(updateText, "discord_age_update");
-      } catch (wikiError) {
-        logger.error(`[WIKI SYNC ERROR] ${wikiError.message}`);
-      }
-    }
+    // Pending uploads are staged only. Wiki sync occurs only through the approved update path.
 
     const { data, error } = await supabase.from("age_updates").insert({
       age_number: ageNumber,
@@ -71,15 +61,28 @@ async function approveAgeUpdate(id, adminId) {
   if (!supabase) return null;
 
   try {
-    const { data: update, error: fetchError } = await supabase.from("age_updates").select("*").eq("id", id).single();
+    const { data: update, error: fetchError } = await supabase.from("age_updates").select("*").eq("id", id).eq("status", "pending").single();
     if (fetchError) throw fetchError;
 
     const parsed = parseAgeFile(update.raw_text);
     const ageNumber = update.age_number;
 
-    await supabase.from("spartan_race_rules").delete().eq("age_number", ageNumber);
-    await supabase.from("spartan_personality_rules").delete().eq("age_number", ageNumber);
-    await supabase.from("spartan_game_rules").delete().eq("age_number", ageNumber);
+    // Never replace an age's active rules with a partial "proposed changes" document.
+    // Require a complete race/personality roster and at least some game-rule content first.
+    const parsedRaceCount = Object.keys(parsed.races || {}).length;
+    const parsedPersonalityCount = Object.keys(parsed.personalities || {}).length;
+    const parsedGameCount = [
+      parsed.spells, parsed.thievery, parsed.buildings, parsed.science, parsed.game_rules, parsed.dragons
+    ].reduce((total, section) => total + Object.keys(section || {}).length, 0);
+    if (parsedRaceCount < 10 || parsedPersonalityCount < 10 || parsedGameCount < 1) {
+      logger.warn(`[AGE APPROVE BLOCKED] ID ${id} AGE ${ageNumber}: incomplete ruleset races=${parsedRaceCount}, personalities=${parsedPersonalityCount}, game_sections=${parsedGameCount}`);
+      return null;
+    }
+
+    for (const table of ["spartan_race_rules", "spartan_personality_rules", "spartan_game_rules"]) {
+      const { error: deleteError } = await supabase.from(table).delete().eq("age_number", ageNumber);
+      if (deleteError) throw deleteError;
+    }
 
     const raceRows = Object.entries(parsed.races || {}).map(([race, data]) => ({
       age_number: ageNumber,
@@ -180,7 +183,8 @@ async function approveAgeUpdate(id, adminId) {
         gameRows: gameRows.length,
         summary: summarize(parsed),
         recalculation
-      }
+      },
+      parsed
     };
   } catch (err) {
     logger.error(`[AGE APPROVE ERROR] ${err.message}`);

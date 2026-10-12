@@ -10,6 +10,7 @@ const commands = require('./core/commands');
 const spartanQueueProcessor = require('./services/spartanQueueProcessor');
 const spartanBotBridge = require('./services/spartanBotBridge');
 const spartanAI = require('./services/spartanAI');
+const ageUpdateMessageHandler = require('./services/ageUpdateMessageHandler');
 const { syncWikiFile } = require('./services/spartanWikiService');
 
 if (!process.env.DISCORD_TOKEN) throw new Error('DISCORD_TOKEN is required');
@@ -41,6 +42,7 @@ client.on('interactionCreate', interaction => {
 client.on('messageCreate', async message => {
   spartanBotBridge.inboundMessage(message).catch(() => {});
   try {
+    if (await ageUpdateMessageHandler(message)) return;
     if (message.author?.bot && message.author.id === CLEANUP_AUTHOR_ID) return;
     if (!message.content?.trim().toLowerCase().startsWith('!clearbot')) return;
     if (!message.guild) return;

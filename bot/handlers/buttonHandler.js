@@ -8,7 +8,7 @@ const {
 } = require("discord.js");
 
 const { approveAgeUpdate, denyAgeUpdate } = require("../services/ageUpdateService");
-const { recalculateBuildLibrary } = require("../services/buildAgeRecalculator");
+const permissionService = require("../services/permissionService");
 
 module.exports = async function buttonHandler(interaction) {
   console.log(`Button pressed: ${interaction.customId}`);
@@ -39,6 +39,9 @@ module.exports = async function buttonHandler(interaction) {
   }
 
   if (interaction.customId.startsWith("age_apply_")) {
+    if (!permissionService.isAdmin(interaction.user.id)) {
+      return interaction.reply({ content: "⛔ Only Spartan administrators can apply an age update.", ephemeral: true });
+    }
     const id = interaction.customId.replace("age_apply_", "");
 
     if (!id || id === "undefined") {
@@ -59,13 +62,7 @@ module.exports = async function buttonHandler(interaction) {
       });
     }
 
-    let buildRefresh = { total: 0, updated: 0, unchanged: 0, failed: [] };
-    try {
-      buildRefresh = await recalculateBuildLibrary(result.age_number, result.id, result.parsed || {});
-    } catch (err) {
-      console.error("[BUILD AGE RECALC]", err);
-      buildRefresh = { total: 0, updated: 0, unchanged: 0, failed: [{ name: "Build Library", error: err.message }] };
-    }
+    const buildRefresh = result.stats.recalculation || { total: 0, updated: 0, unchanged: 0, failed: [] };
 
     await interaction.editReply({
       content: [
@@ -73,7 +70,7 @@ module.exports = async function buttonHandler(interaction) {
         ``,
         result.stats.summary,
         ``,
-        `📊 **Rows written:** ${result.stats.raceRows} race rules • ${result.stats.personalityRows} personality rules • ${result.stats.gameRows} game rules`,
+        `📊 **Rows written:** ${result.stats.races} race rules • ${result.stats.personalities} personality rules • ${result.stats.gameRows} game rules`,
         `🧠 **Build Library:** ${buildRefresh.updated} changed • ${buildRefresh.unchanged} validated • ${buildRefresh.failed.length} failed of ${buildRefresh.total}`,
         buildRefresh.failed.length ? `⚠️ Failed builds: ${buildRefresh.failed.map((b) => b.name).slice(0, 10).join(", ")}` : `✅ All active saved builds were processed for the new Age.`
       ].join("\n"),
@@ -109,6 +106,9 @@ module.exports = async function buttonHandler(interaction) {
   }
 
   if (interaction.customId.startsWith("age_revoke_")) {
+    if (!permissionService.isAdmin(interaction.user.id)) {
+      return interaction.reply({ content: "⛔ Only Spartan administrators can reject an age update.", ephemeral: true });
+    }
     const id = interaction.customId.replace("age_revoke_", "");
 
     const result = await denyAgeUpdate(id, interaction.user.id);
