@@ -16,6 +16,7 @@ function splitCommas(text) {
 }
 function unitLine(t) {
   let m;
+  if ((m = t.match(/^(Soldier|Mercenary|Prisoner)\\s+(\\d+)\\/(\\d+)\\s*\\(([\\d.]+)\\s*nw\\)/i))) return m[1] + ': ' + m[2] + '/' + m[3] + ' (' + m[4] + ' nw)';
   if ((m = t.match(/^(Offensive|Defensive) Specialist\s+(\d+)\/(\d+)/i))) return m[1] + ' Specialist: ' + m[2] + '/' + m[3];
   if ((m = t.match(/^Elite\s+(\d+)\/(\d+)\s+([\d,]+)\s*gc\s*,\s*([\d.]+)\s*nw/i))) return 'Elite Unit (' + m[1] + '/' + m[2] + ', ' + m[3] + 'gc, ' + m[4] + 'nw)';
   if ((m = t.match(/^War Horse\s+(\d+)\/(\d+)/i))) return 'War horse (' + m[1] + '/' + m[2] + ')';
@@ -123,6 +124,7 @@ function readPlain(text) {
         else if ((m = text1.match(/^defensive specialists?\s*:?\s*\(?\s*(\d+\s*\/\s*\d+)/i))) cur.units['Defensive Specialist'] = m[1].replace(/\s+/g, '');
         else if ((m = text1.match(/^elite unit\s*\(([^)]+)\)/i))) cur.units['Elite Unit'] = m[1].trim();
         else if ((m = text1.match(/^war horse\s*\(([^)]+)\)/i))) cur.units['War Horse'] = m[1].trim();
+        else if ((m = text1.match(/^(Soldier|Mercenary|Prisoner):\s*(\d+)\/(\d+)\s*\(([\d.]+)\s*nw\)/i))) cur.units[m[1]] = m[2] + '/' + m[3] + ' / ' + m[4] + ' nw';
         else if ((m = text1.match(/^horses?\s*:?\s*(\d+)/i))) cur.units['War Horse'] = m[1];
       } else if (label === 'ability') {
         if (!cur.unique_name && (m = text1.match(/^([A-Z][A-Za-z' ]{2,40}):\s*(.*)$/))) { cur.unique_name = m[1].trim(); cur.unique_passive = 'Unique Passive - ' + m[1].trim() + ': ' + m[2]; }
