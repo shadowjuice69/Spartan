@@ -199,7 +199,7 @@ function parseAge117Tables(text) {
     };
     for (let i=start+1; i<Math.min(lines.length,end); i++) {
       const line=lines[i];
-      if (kind === 'personality' && /^\\s*(?:Ritual\\s+Effect|Dragons?\\s+Effect)\\b/i.test(line)) break;
+      if (kind === 'personality' && /^\s*(?:Ritual\s+Effect|Dragons?\s+Effect)\b/i.test(line)) break;
       const first = clean(line.slice(0, starts[1] >= 0 ? starts[1] : 20));
       const name = nameSet.get(first.toLowerCase());
       if (name) {
