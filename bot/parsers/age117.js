@@ -144,7 +144,7 @@ function parseAge117Tables(text) {
   const lines = String(text).replace(/\r/g, '').split('\n');
   const result = { races:{}, personalities:{}, buildings:{}, spells:{}, thievery:{}, game_rules:{}, dragons:{}, science:{}, rituals:{} };
   const clean = s => s.replace(/\s+/g, ' ').trim();
-  const bullets = s => s.split(/\s{2,}|(?<=\.)\s+(?=[A-Z+%-])/).map(clean).filter(Boolean);
+  const bullets = s => s.split(/\n+|(?<=\.)\s+(?=[A-Z+%-])/).map(clean).filter(Boolean);
   let raceHeader = -1, personalityHeader = -1;
   for (let i=0;i<lines.length;i++) {
     if (raceHeader < 0 && /^\s*Race\s+Archetype\s+Bonuses\b/i.test(lines[i])) raceHeader=i;
@@ -166,7 +166,7 @@ function parseAge117Tables(text) {
     let current = null, cells = null;
     const flush = () => {
       if (!current || !cells) return;
-      const cell = i => clean(cells[i] || '');
+      const cell = i => String(cells[i] || '').replace(/[ \\t]+/g, ' ').trim();
       if (kind === 'race') {
         const bonuses = bullets(cell(2)).filter(x=>!/^[-+]?\d+\s*$/.test(x));
         const penalties = bullets(cell(3));
@@ -211,7 +211,7 @@ function parseAge117Tables(text) {
       }
       for (const [idx,value] of Object.entries(parts)) {
         const k=Number(idx);
-        cells[k]=cells[k] ? cells[k]+' '+value : value;
+        cells[k]=cells[k] ? cells[k]+'\\n'+value : value;
       }
     }
     flush();
