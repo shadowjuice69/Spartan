@@ -67,12 +67,41 @@ async function approveAgeUpdate(id, adminId) {
     const parsed = parseAgeFile(update.raw_text);
     const ageNumber = update.age_number;
 
-    // Never replace an age's active rules with a partial "proposed changes" document.
-    // Require a complete race/personality roster and at least some game-rule content first.
+    // Age 117's prefinal PDF is a change sheet: it lists all races but only the
+    // personalities with proposed edits. Preserve unchanged personalities from Age 116.
+    // This merge is only allowed for the recognizable Age 117 tabular document and
+    // only when the prior age has a full roster; arbitrary partial uploads remain blocked.
+    const isAge117ChangeSheet = ageNumber === 117 &&
+      /Race\\s+Archetype\\s+Bonuses/i.test(update.raw_text || "") &&
+      /Personality\\s+Archetype\\s+Bonuses/i.test(update.raw_text || "");
+    if (isAge117ChangeSheet && Object.keys(parsed.races || {}).length >= 10) {
+      const { data: baselinePersonalities, error: baselineError } = await supabase
+        .from("spartan_personality_rules")
+        .select("personality,emoji,unique_name,unique_desc,bonuses,start_bonus,spells")
+        .eq("age_number", 116);
+      if (baselineError) throw baselineError;
+      if (baselinePersonalities?.length >= 10) {
+        for (const row of baselinePersonalities) {
+          if (parsed.personalities[row.personality]) continue;
+          parsed.personalities[row.personality] = {
+            emoji: row.emoji || null,
+            unique_name: row.unique_name || null,
+            unique_passive: row.unique_desc || null,
+            bonuses: String(row.bonuses || "").split("\\n").filter(Boolean),
+            starts_with: String(row.start_bonus || "").split("\\n").filter(Boolean),
+            spells: String(row.spells || "").split(/,\\s*/).filter(Boolean),
+            inherited_from_age: 116
+          };
+        }
+        logger.info(`[AGE UPDATE MERGE] Age 117 change sheet inherited unchanged personalities from Age 116; roster=${Object.keys(parsed.personalities).length}`);
+      }
+    }
+
+    // Never replace an age's active rules with an incomplete roster.
     const parsedRaceCount = Object.keys(parsed.races || {}).length;
     const parsedPersonalityCount = Object.keys(parsed.personalities || {}).length;
     const parsedGameCount = [
-      parsed.spells, parsed.thievery, parsed.buildings, parsed.science, parsed.game_rules, parsed.dragons
+      parsed.spells, parsed.thievery, parsed.buildings, parsed.science, parsed.game_rules, parsed.dragons, parsed.rituals
     ].reduce((total, section) => total + Object.keys(section || {}).length, 0);
     if (parsedRaceCount < 10 || parsedPersonalityCount < 10 || parsedGameCount < 1) {
       const reason = `Parser found ${parsedRaceCount} races, ${parsedPersonalityCount} personalities and ${parsedGameCount} game-rule entries. A complete ruleset is required; proposed-change documents may omit unchanged entries.`;
@@ -113,6 +142,7 @@ async function approveAgeUpdate(id, adminId) {
     const gameRows = [];
     for (const [category, section] of Object.entries({
       spell: parsed.spells,
+      ritual: parsed.rituals,
       thievery: parsed.thievery,
       building: parsed.buildings,
       science: parsed.science,
