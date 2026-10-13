@@ -72,8 +72,8 @@ async function approveAgeUpdate(id, adminId) {
     // This merge is only allowed for the recognizable Age 117 tabular document and
     // only when the prior age has a full roster; arbitrary partial uploads remain blocked.
     const isAge117ChangeSheet = ageNumber === 117 &&
-      /Race\\s+Archetype\\s+Bonuses/i.test(update.raw_text || "") &&
-      /Personality\\s+Archetype\\s+Bonuses/i.test(update.raw_text || "");
+      /Race\s+Archetype\s+Bonuses/i.test(update.raw_text || "") &&
+      /Personality\s+Archetype\s+Bonuses/i.test(update.raw_text || "");
     if (isAge117ChangeSheet && Object.keys(parsed.races || {}).length >= 10) {
       const { data: baselinePersonalities, error: baselineError } = await supabase
         .from("spartan_personality_rules")
