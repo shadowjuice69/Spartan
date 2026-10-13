@@ -166,7 +166,7 @@ function parseAge117Tables(text) {
     let current = null, cells = null;
     const flush = () => {
       if (!current || !cells) return;
-      const cell = i => String(cells[i] || '').replace(/[ \\t]+/g, ' ').trim();
+      const cell = i => String(cells[i] || '').replace(/[ \t]+/g, ' ').trim();
       if (kind === 'race') {
         const bonuses = bullets(cell(2)).filter(x=>!/^[-+]?\d+\s*$/.test(x));
         const penalties = bullets(cell(3));
@@ -211,7 +211,7 @@ function parseAge117Tables(text) {
       }
       for (const [idx,value] of Object.entries(parts)) {
         const k=Number(idx);
-        cells[k]=cells[k] ? cells[k]+'\\n'+value : value;
+        cells[k]=cells[k] ? cells[k]+'\n'+value : value;
       }
     }
     flush();
