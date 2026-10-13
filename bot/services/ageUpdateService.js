@@ -87,9 +87,9 @@ async function approveAgeUpdate(id, adminId) {
             emoji: row.emoji || null,
             unique_name: row.unique_name || null,
             unique_passive: row.unique_desc || null,
-            bonuses: String(row.bonuses || "").split("\\n").filter(Boolean),
-            starts_with: String(row.start_bonus || "").split("\\n").filter(Boolean),
-            spells: String(row.spells || "").split(/,\\s*/).filter(Boolean),
+            bonuses: String(row.bonuses || "").split("\n").filter(Boolean),
+            starts_with: String(row.start_bonus || "").split("\n").filter(Boolean),
+            spells: String(row.spells || "").split(/,\s*/).filter(Boolean),
             inherited_from_age: 116
           };
         }
