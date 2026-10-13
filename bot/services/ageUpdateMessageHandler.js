@@ -105,7 +105,7 @@ module.exports = async function ageUpdateMessageHandler(message) {
     if (savedUpdate.error === "duplicate") {
       if (savedUpdate.status === "pending") {
         const summary = String(savedUpdate.parsedSummary || "").trim();
-        const ready = Boolean(summary);
+        const ready = Boolean(savedUpdate.parsedReady);
         const review = new EmbedBuilder()
           .setColor(ready ? 0xD6A84F : 0xD64545)
           .setTitle("📘 Age " + ageNumber + " — Existing Pending Review")
