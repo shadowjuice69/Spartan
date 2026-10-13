@@ -10,7 +10,7 @@ function splitCommas(text: string): string[] {
 }
 function unitLine(t: string): string | null {
   let m: RegExpMatchArray | null
-  if ((m = t.match(/^(Soldier|Mercenary|Prisoner)\s+(\d+)\/(\d+)\s*\(([\d.]+)\s*nw\)/i))) return m[1] + ': ' + m[2] + '/' + m[3] + ' (' + m[4] + ' nw)'
+  if ((m = t.match(/^(Soldier|Mercenary|Prisoner)\s+(\d+)\/(\d+)\s+\(?([\d.]+)\s*nw\)?/i))) return m[1] + ': ' + m[2] + '/' + m[3] + ' (' + m[4] + ' nw)'
   if ((m = t.match(/^(Offensive|Defensive) Specialist\s+(\d+)\/(\d+)/i))) return m[1] + ' Specialist: ' + m[2] + '/' + m[3]
   if ((m = t.match(/^Elite\s+(\d+)\/(\d+)\s+([\d,]+)\s*gc\s*,\s*([\d.]+)\s*nw/i))) return 'Elite Unit (' + m[1] + '/' + m[2] + ', ' + m[3] + 'gc, ' + m[4] + 'nw)'
   if ((m = t.match(/^War Horse\s+(\d+)\/(\d+)/i))) return 'War horse (' + m[1] + '/' + m[2] + ')'
