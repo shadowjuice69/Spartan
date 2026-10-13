@@ -65,19 +65,6 @@ async function saveAgeUpdate(updateText, userId, filename) {
     if (error) throw error;
     logger.info('[AGE UPDATE SAVED] ID ' + data.id + ' AGE ' + ageNumber);
     return { ...data, parsedSummary, parsedReady: Boolean(summarize(parsed)) };
-    // Pending uploads are staged only. Wiki sync occurs only through the approved update path.
-
-    const { data, error } = await supabase.from("age_updates").insert({
-      age_number: ageNumber,
-      raw_text: updateText,
-      source: "discord",
-      submitted_by: userId,
-      status: "pending"
-    }).select().single();
-
-    if (error) throw error;
-    logger.info(`[AGE UPDATE SAVED] ID ${data.id} AGE ${ageNumber}`);
-    return { ...data, parsedSummary, parsedReady: Boolean(summarize(parsed)) };
   } catch (err) {
     logger.error(`[AGE UPDATE ERROR] ${err.message}`);
     return null;
