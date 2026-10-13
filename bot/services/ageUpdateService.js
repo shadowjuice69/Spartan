@@ -1,6 +1,13 @@
 const supabaseService = require("./supabase");
 const logger = require("./logger");
 const { parseAgeFileChunked: parseAgeFile, summarize } = require("../parsers/ageParser");
+const { parse117 } = require("../parsers/age117");
+
+// Age 117 change sheets must go straight to the dedicated Age 117 parser.
+// Other ages retain the generic full-ruleset parser.
+function parseSubmittedAge(rawText, ageNumber) {
+  return Number(ageNumber) === 117 ? parse117(rawText) : parseAgeFile(rawText);
+}
 const { recalculateBuildLibrary } = require("./buildAgeRecalculator");
 
 async function saveAgeUpdate(updateText, userId, filename) {
@@ -35,7 +42,7 @@ async function saveAgeUpdate(updateText, userId, filename) {
       return { error: "duplicate", existingId: existing[0].id, status: existing[0].status };
     }
 
-    const parsed = parseAgeFile(updateText);
+    const parsed = parseSubmittedAge(updateText, ageNumber);
     const parsedSummary = summarize(parsed);
 
     // Pending uploads are staged only. Wiki sync occurs only through the approved update path.
@@ -69,7 +76,7 @@ async function approveAgeUpdate(id, adminId) {
     const { data: update, error: fetchError } = await supabase.from("age_updates").select("*").eq("id", id).eq("status", "pending").single();
     if (fetchError) throw fetchError;
 
-    const parsed = parseAgeFile(update.raw_text);
+    const parsed = parseSubmittedAge(update.raw_text, update.age_number);
     const ageNumber = update.age_number;
 
     // Age 117's prefinal PDF is a change sheet: it lists all races but only the
