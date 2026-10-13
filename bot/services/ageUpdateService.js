@@ -44,7 +44,8 @@ async function saveAgeUpdate(updateText, userId, filename) {
         error: "duplicate",
         existingId: existing[0].id,
         status: existing[0].status,
-        parsedSummary: buildReviewSummary(existingParsed)
+        parsedSummary: buildReviewSummary(existingParsed),
+        parsedReady: Boolean(summarize(existingParsed))
       };
     }
 
@@ -63,7 +64,7 @@ async function saveAgeUpdate(updateText, userId, filename) {
 
     if (error) throw error;
     logger.info(`[AGE UPDATE SAVED] ID ${data.id} AGE ${ageNumber}`);
-    return { ...data, parsedSummary };
+    return { ...data, parsedSummary, parsedReady: Boolean(summarize(parsed)) };
   } catch (err) {
     logger.error(`[AGE UPDATE ERROR] ${err.message}`);
     return null;
