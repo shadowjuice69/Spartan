@@ -12,10 +12,10 @@ function parseSubmittedAge(rawText, ageNumber) {
 function isAge117ChangeSheetText(rawText, ageNumber) {
   const text = String(rawText || "");
   return Number(ageNumber) === 117 &&
-    /Age\\s*117\\s+General Changes/i.test(text) &&
+    /Age\s*117\s+General Changes/i.test(text) &&
     /Unique Abilty Programming Changes from Existing/i.test(text) &&
-    /Race\\s+Archetype[\\s\\S]{0,160}?Bonuses/i.test(text) &&
-    /Personality\\s+Archetype[\\s\\S]{0,160}?Bonuses/i.test(text);
+    /Race\s+Archetype[\s\S]{0,160}?Bonuses/i.test(text) &&
+    /Personality\s+Archetype[\s\S]{0,160}?Bonuses/i.test(text);
 }
 
 async function mergeAge117Personalities(supabase, parsed) {
@@ -33,9 +33,9 @@ async function mergeAge117Personalities(supabase, parsed) {
       emoji: row.emoji || null,
       unique_name: row.unique_name || null,
       unique_passive: row.unique_desc || null,
-      bonuses: String(row.bonuses || "").split("\\n").filter(Boolean),
-      starts_with: String(row.start_bonus || "").split("\\n").filter(Boolean),
-      spells: String(row.spells || "").split(/,\\s*/).filter(Boolean),
+      bonuses: String(row.bonuses || "").split("\n").filter(Boolean),
+      starts_with: String(row.start_bonus || "").split("\n").filter(Boolean),
+      spells: String(row.spells || "").split(/,\s*/).filter(Boolean),
       inherited_from_age: 116
     };
   }
