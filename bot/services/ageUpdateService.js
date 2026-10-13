@@ -38,20 +38,33 @@ async function saveAgeUpdate(updateText, userId, filename) {
       .limit(1);
 
     if (existingError) throw existingError;
-    if (existing?.length) {
-      const existingParsed = parseSubmittedAge(existing[0].raw_text || "", ageNumber);
-      return {
-        error: "duplicate",
-        existingId: existing[0].id,
-        status: existing[0].status,
-        parsedSummary: buildReviewSummary(existingParsed),
-        parsedReady: Boolean(summarize(existingParsed))
-      };
-    }
-
     const parsed = parseSubmittedAge(updateText, ageNumber);
     const parsedSummary = buildReviewSummary(parsed);
+    if (existing?.length) {
+      const pending = existing[0];
+      // Refresh an older pending review when a newly uploaded PDF extracts to different text.
+      if (String(pending.raw_text || '') === updateText) {
+        return { error: 'duplicate', existingId: pending.id, status: pending.status, parsedSummary, parsedReady: Boolean(summarize(parsed)) };
+      }
+      const updated = await supabase.from('age_updates')
+        .update({ raw_text: updateText, source: 'discord', submitted_by: userId })
+        .eq('id', pending.id).eq('status', 'pending').select().single();
+      if (updated.error) throw updated.error;
+      logger.info('[AGE UPDATE REFRESHED] ID ' + updated.data.id + ' AGE ' + ageNumber);
+      return { ...updated.data, parsedSummary, parsedReady: Boolean(summarize(parsed)), refreshed: true };
+    }
 
+    const { data, error } = await supabase.from('age_updates').insert({
+      age_number: ageNumber,
+      raw_text: updateText,
+      source: 'discord',
+      submitted_by: userId,
+      status: 'pending'
+    }).select().single();
+
+    if (error) throw error;
+    logger.info('[AGE UPDATE SAVED] ID ' + data.id + ' AGE ' + ageNumber);
+    return { ...data, parsedSummary, parsedReady: Boolean(summarize(parsed)) };
     // Pending uploads are staged only. Wiki sync occurs only through the approved update path.
 
     const { data, error } = await supabase.from("age_updates").insert({
