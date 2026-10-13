@@ -1,6 +1,6 @@
 const axios = require("axios");
 const { PDFParse } = require("pdf-parse");
-const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require("discord.js");
+const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require("discord.js");
 const config = require("../config/config");
 const permissionService = require("./permissionService");
 const logger = require("./logger");
@@ -105,11 +105,11 @@ module.exports = async function ageUpdateMessageHandler(message) {
     if (savedUpdate.error === "duplicate") {
       if (savedUpdate.status === "pending") {
         const buttons = new ActionRowBuilder().addComponents(
-          new ButtonBuilder().setCustomId("age_apply_" + savedUpdate.existingId).setLabel("✅ Review / Apply").setStyle(ButtonStyle.Success),
-          new ButtonBuilder().setCustomId("age_revoke_" + savedUpdate.existingId).setLabel("❌ Reject").setStyle(ButtonStyle.Danger)
+          new ButtonBuilder().setCustomId("age_apply_" + savedUpdate.existingId).setLabel("🔎 Review / Apply").setStyle(ButtonStyle.Primary),
+          new ButtonBuilder().setCustomId("age_revoke_" + savedUpdate.existingId).setLabel("❌ Cancel Review").setStyle(ButtonStyle.Danger)
         );
         await message.reply({
-          content: "📘 **Age " + ageNumber + " is already Pending Review** (record #" + savedUpdate.existingId + "). I kept the existing record to avoid duplicates. Use these controls to review it with the current parser.",
+          content: "📘 **Age " + ageNumber + " — Existing Pending Review** (record #" + savedUpdate.existingId + "). I kept the staged record to avoid duplicates. The review controls refer to that saved upload; its parser summary is shown when available.",
           components: [buttons]
         });
       } else {
@@ -118,20 +118,34 @@ module.exports = async function ageUpdateMessageHandler(message) {
       return true;
     }
 
+    const summary = String(savedUpdate.parsedSummary || "").trim();
+    const ready = Boolean(summary);
+    const review = new EmbedBuilder()
+      .setColor(ready ? 0xD6A84F : 0xD64545)
+      .setTitle("📘 Age " + savedUpdate.age_number + " — Review Proposed Changes")
+      .setDescription([
+        "**Status:** Pending review — nothing has been applied.",
+        "",
+        "**Parser summary**",
+        summary || "🛑 **No structured rules detected. Do not apply this upload.** The PDF/text extraction or Age 117 parser needs repair first.",
+        "",
+        "**Before you apply**",
+        "• Check the detected sections and counts above.",
+        "• Proposed-change sheets can omit unchanged rules; unchanged entries must be merged from a verified baseline, not silently discarded.",
+        "• Apply is only safe when validation passes. A failed validation must leave the current rules and saved builds unchanged."
+      ].join("\n"))
+      .addFields(
+        { name: "Target age", value: String(savedUpdate.age_number), inline: true },
+        { name: "Review record", value: "#" + savedUpdate.id, inline: true },
+        { name: "Apply readiness", value: ready ? "Parser found structured entries; final validation still required" : "BLOCKED — empty parse", inline: false }
+      )
+      .setFooter({ text: "Review the summary before choosing Apply or Cancel Review." });
+
     const buttons = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId("age_apply_" + savedUpdate.id).setLabel("✅ Apply").setStyle(ButtonStyle.Success),
-      new ButtonBuilder().setCustomId("age_revoke_" + savedUpdate.id).setLabel("❌ Reject").setStyle(ButtonStyle.Danger)
+      new ButtonBuilder().setCustomId("age_apply_" + savedUpdate.id).setLabel("✅ Apply Changes").setStyle(ButtonStyle.Success).setDisabled(!ready),
+      new ButtonBuilder().setCustomId("age_revoke_" + savedUpdate.id).setLabel("❌ Cancel Review").setStyle(ButtonStyle.Danger)
     );
-    await message.reply({
-      content: [
-        "📘 **Age " + savedUpdate.age_number + " Update — Pending Review**",
-        "",
-        savedUpdate.parsedSummary || "No structured changes were detected.",
-        "",
-        "This upload is staged for review. Applying remains blocked unless the parser finds a sufficiently complete ruleset. Proposed-change documents should not replace active rules unless an administrator explicitly approves them."
-      ].join("\n"),
-      components: [buttons]
-    });
+    await message.reply({ embeds: [review], components: [buttons] });
     logger.info("[AGE UPDATE INTAKE] id=" + savedUpdate.id + " age=" + savedUpdate.age_number + " submitted_by=" + message.author.id);
   } catch (error) {
     logger.error("[AGE UPDATE INTAKE ERROR] " + (error.stack || error.message));
