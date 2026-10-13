@@ -119,14 +119,14 @@ async function approveAgeUpdate(id, adminId) {
       for (const name of expectedPersonalities) if (!parsed.personalities?.[name]) issues.push(`missing personality: ${name}`);
       for (const [name, race] of Object.entries(parsed.races || {})) {
         const fields = [race.archetype, race.war_doctrine, race.unique_name, race.unique_passive, ...(race.bonuses || []), ...(race.penalties || [])].filter(Boolean).join(" ");
-        if (/OR PAGE:|<PARSED TEXT|PAGE:\\s*\\d+\\s*\\//i.test(fields)) issues.push(`${name}: PDF page footer leaked into a rule`);
-        if (/\\b(?:Per|Acre|Efficiency|Damage Received|casualties when attacking and)$/i.test(String(race.penalties || ""))) issues.push(`${name}: truncated penalty`);
-        if (/\\b(?:and|with|from|of|Per)$/i.test(String(race.bonuses?.slice(-1)[0] || ""))) issues.push(`${name}: truncated bonus`);
+        if (/OR PAGE:|<PARSED TEXT|PAGE:\s*\d+\s*\//i.test(fields)) issues.push(`${name}: PDF page footer leaked into a rule`);
+        if (/\b(?:Per|Acre|Efficiency|Damage Received|casualties when attacking and)$/i.test(String(race.penalties || ""))) issues.push(`${name}: truncated penalty`);
+        if (/\b(?:and|with|from|of|Per)$/i.test(String(race.bonuses?.slice(-1)[0] || ""))) issues.push(`${name}: truncated bonus`);
         if (!race.unique_name || !race.unique_passive) issues.push(`${name}: missing unique ability or effect`);
       }
       for (const [name, p] of Object.entries(parsed.personalities || {})) {
         if (!p.unique_name || !p.unique_passive) issues.push(`${name}: missing unique ability or effect`);
-        if (/\\b(?:to the|by|for|of the|target's|effectiveness by)$/i.test(String(p.unique_passive || ""))) issues.push(`${name}: likely truncated unique effect`);
+        if (/\b(?:to the|by|for|of the|target's|effectiveness by)$/i.test(String(p.unique_passive || ""))) issues.push(`${name}: likely truncated unique effect`);
       }
       if (issues.length) {
         const reason = `Age 117 PDF validation failed (${issues.length} issue(s)): ${issues.slice(0, 12).join("; ")}. Nothing was applied. Fix the PDF parser and upload a fresh review.`;
