@@ -130,7 +130,7 @@ module.exports = async function ageUpdateMessageHandler(message) {
     }
 
     const summary = String(savedUpdate.parsedSummary || "").trim();
-    const ready = Boolean(summary);
+    const ready = Boolean(savedUpdate.parsedReady);
     const review = new EmbedBuilder()
       .setColor(ready ? 0xD6A84F : 0xD64545)
       .setTitle("📘 Age " + savedUpdate.age_number + " — Review Proposed Changes")
