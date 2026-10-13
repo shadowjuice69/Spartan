@@ -124,6 +124,65 @@ function safeArray(value) {
   return Array.isArray(value) ? value : [];
 }
 
+// Proposed Age 117 PDFs omit unchanged sections. Start with the verified Age 116
+// game-rule baseline, then overlay the parsed Age 117 entries by category/name.
+// This prevents the atomic replacement from deleting entire unchanged sections.
+async function mergeAge117GameBaseline(supabase, parsed) {
+  const { data: baselineRows, error } = await supabase
+    .from("spartan_game_rules")
+    .select("category,rule_name,value,description")
+    .eq("age_number", 116);
+  if (error) throw error;
+  if (!Array.isArray(baselineRows) || baselineRows.length < 20) {
+    throw new Error("Age 117 apply blocked: verified Age 116 game-rule baseline is missing or incomplete.");
+  }
+
+  const sectionFor = {
+    spell: "spells",
+    thievery: "thievery",
+    building: "buildings",
+    science: "science",
+    game: "game_rules"
+  };
+  for (const row of baselineRows) {
+    const category = String(row.category || "").toLowerCase();
+    const value = row.value ?? row.description ?? "";
+    if (category === "dragon") {
+      const rawName = String(row.rule_name || "");
+      const name = /sapphire/i.test(rawName) ? "Sapphire Dragons" :
+        /dragon/i.test(rawName) ? rawName : rawName + " Dragon";
+      if (!parsed.dragons[name]) {
+        parsed.dragons[name] = { effects: [String(value)].filter(Boolean), inherited_from_age: 116 };
+      }
+      continue;
+    }
+    if (category === "ritual") {
+      const name = String(row.rule_name || "");
+      if (!parsed.rituals[name]) {
+        parsed.rituals[name] = { effects: [String(value)].filter(Boolean), inherited_from_age: 116 };
+      }
+      continue;
+    }
+    const sectionName = sectionFor[category];
+    if (!sectionName) continue;
+    if (!parsed[sectionName] || typeof parsed[sectionName] !== "object") parsed[sectionName] = {};
+    if (!Object.prototype.hasOwnProperty.call(parsed[sectionName], row.rule_name)) {
+      parsed[sectionName][row.rule_name] = value;
+    }
+  }
+
+  logger.info(
+    "[AGE UPDATE MERGE] Age 117 merged verified Age 116 baseline; " +
+    "spells=" + Object.keys(parsed.spells || {}).length +
+    ", thievery=" + Object.keys(parsed.thievery || {}).length +
+    ", buildings=" + Object.keys(parsed.buildings || {}).length +
+    ", science=" + Object.keys(parsed.science || {}).length +
+    ", game=" + Object.keys(parsed.game_rules || {}).length +
+    ", rituals=" + Object.keys(parsed.rituals || {}).length +
+    ", dragons=" + Object.keys(parsed.dragons || {}).length
+  );
+}
+
 async function approveAgeUpdate(id, adminId) {
   const supabase = supabaseService.getClient();
   if (!supabase) return null;
@@ -164,6 +223,10 @@ async function approveAgeUpdate(id, adminId) {
         logger.info(`[AGE UPDATE MERGE] Age 117 change sheet inherited unchanged personalities from Age 116; roster=${Object.keys(parsed.personalities).length}`);
       }
     }
+
+    // Merge omitted unchanged Age 117 sections from the verified Age 116 baseline
+    // before validation and before the atomic replacement payload is built.
+    if (isAge117ChangeSheet) await mergeAge117GameBaseline(supabase, parsed);
 
     // Never replace an age's active rules with an incomplete roster.
     const parsedRaceCount = Object.keys(parsed.races || {}).length;
