@@ -115,7 +115,7 @@ module.exports = async function ageUpdateMessageHandler(message) {
             "",
             "**Parser summary**",
             summary || "🛑 **No structured rules detected. Do not apply this upload.**"
-          ].join("\\n"))
+          ].join("\n"))
           .addFields({ name: "Apply readiness", value: ready ? "Structured entries detected; final validation still required" : "BLOCKED — empty parse", inline: false })
           .setFooter({ text: "This is the already-staged upload; no duplicate was created." });
         const buttons = new ActionRowBuilder().addComponents(
