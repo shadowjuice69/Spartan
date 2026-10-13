@@ -5,8 +5,8 @@ function looksBoxed(s) { return /^\s*={20,}\s*$/m.test(s) && /^\s*\d+\.\s+(?:dra
 function looksPlain(s) { return /^races$/im.test(s) && /^[A-Z][A-Za-z' ]{1,28}\s+[\u2014\u2013]\s+\S/m.test(s) && /^bonuses$/im.test(s); }
 function looksLike117(s) {
   return looksBoxed(s) || looksPlain(s) ||
-    (/^\\s*Race\\s+Archetype\\s+Bonuses\\b/im.test(s) &&
-     /^\\s*Personality\\s+Archetype\\s+Bonuses\\b/im.test(s));
+    (/^\s*Race\s+Archetype\s+Bonuses\b/im.test(s) &&
+     /^\s*Personality\s+Archetype\s+Bonuses\b/im.test(s));
 }
 const titleCase = (s) => s.toLowerCase().replace(/(^|[\s'-])([a-z])/g, (_m, a, b) => a + b.toUpperCase());
 function splitCommas(text) {
