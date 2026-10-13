@@ -31,7 +31,7 @@ async function saveAgeUpdate(updateText, userId, filename) {
     // fresh pending record so administrators can inspect the newly uploaded source.
     const { data: existing, error: existingError } = await supabase
       .from("age_updates")
-      .select("id,status")
+      .select("id,status,raw_text")
       .eq("age_number", ageNumber)
       .eq("status", "pending")
       .order("id", { ascending: false })
@@ -39,7 +39,13 @@ async function saveAgeUpdate(updateText, userId, filename) {
 
     if (existingError) throw existingError;
     if (existing?.length) {
-      return { error: "duplicate", existingId: existing[0].id, status: existing[0].status };
+      const existingParsed = parseSubmittedAge(existing[0].raw_text || "", ageNumber);
+      return {
+        error: "duplicate",
+        existingId: existing[0].id,
+        status: existing[0].status,
+        parsedSummary: summarize(existingParsed)
+      };
     }
 
     const parsed = parseSubmittedAge(updateText, ageNumber);
