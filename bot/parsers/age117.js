@@ -288,7 +288,7 @@ function repairPrefinal117(result, rawText) {
 }
 
 function parse117(rawText) {
-  let text = String(rawText).replace(/^\uFEFF/, '').replace(/\u000C/g, '').replace(/<PARSED TEXT FOR PAGE:\\s*\\d+\\s*\\/\\s*\\d+>/gi, '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  let text = String(rawText).replace(/^\uFEFF/, '').replace(/\u000C/g, '').replace(/<PARSED TEXT FOR PAGE:\s*\d+\s*\/\s*\d+>/gi, '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
   if (/^\s*Race\s+Archetype\s+Bonuses\b/im.test(text) && /^\s*Personality\s+Archetype\s+Bonuses\b/im.test(text)) {
     return repairPrefinal117(parseAge117Tables(text), text);
   }
