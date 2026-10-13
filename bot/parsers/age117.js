@@ -264,7 +264,7 @@ function repairPrefinal117(result, rawText) {
   // general-changes + unique-ability sections identify this exact prefinal sheet;
   // do not make the reviewed row repair depend on the table header surviving intact.
   if (!/Age 117 General Changes/i.test(source) ||
-      !/Unique Abilty Programming Changes from Existing/i.test(source)) return result; return result;
+      !/Unique Abilty Programming Changes from Existing/i.test(source)) return result;
 
   const races = {
     'Avian': { archetype:'Speed and Birth Rates', war_doctrine:'-7.5% Attack Time (-0.75% each)', unique_name:'Opportunistic Raiders', unique_passive:'Learn and Plunder attacks return armies 1 tick faster (after modifiers).', bonuses:['-20% Attack Travel Time','+25% Birth Rate'], penalties:['No Horses'], spells:['Town Watch'], units:{'Offensive Specialist':'12','Defensive Specialist':'10','Elite Unit':'14 / 3 / 900 / 6.25 / horse 2'} },
@@ -296,7 +296,12 @@ function repairPrefinal117(result, rawText) {
 
 function parse117(rawText) {
   let text = String(rawText).replace(/^\uFEFF/, '').replace(/\u000C/g, '').replace(/<PARSED TEXT FOR PAGE:\s*\d+\s*\/\s*\d+>/gi, '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-  if (/^\s*Race\s+Archetype\s+Bonuses\b/im.test(text) && /^\s*Personality\s+Archetype\s+Bonuses\b/im.test(text)) {
+  const isPrefinal117 = /Age\s*117\s+General Changes/i.test(text) &&
+    /Unique Abilty Programming Changes from Existing/i.test(text);
+  const hasRaceAndPersonalityHeaders =
+    /\bRace\s+Archetype[\s\S]{0,160}?\bBonuses\b/i.test(text) &&
+    /\bPersonality\s+Archetype[\s\S]{0,160}?\bBonuses\b/i.test(text);
+  if (isPrefinal117 || hasRaceAndPersonalityHeaders) {
     return repairPrefinal117(parseAge117Tables(text), text);
   }
   if (looksBoxed(text)) text = boxedToPlain(text);
