@@ -75,8 +75,9 @@ async function approveAgeUpdate(id, adminId) {
       parsed.spells, parsed.thievery, parsed.buildings, parsed.science, parsed.game_rules, parsed.dragons
     ].reduce((total, section) => total + Object.keys(section || {}).length, 0);
     if (parsedRaceCount < 10 || parsedPersonalityCount < 10 || parsedGameCount < 1) {
+      const reason = `Parser found ${parsedRaceCount} races, ${parsedPersonalityCount} personalities and ${parsedGameCount} game-rule entries. A complete ruleset is required; proposed-change documents may omit unchanged entries.`;
       logger.warn(`[AGE APPROVE BLOCKED] ID ${id} AGE ${ageNumber}: incomplete ruleset races=${parsedRaceCount}, personalities=${parsedPersonalityCount}, game_sections=${parsedGameCount}`);
-      return null;
+      return { blocked: true, age_number: ageNumber, reason, stats: { races: parsedRaceCount, personalities: parsedPersonalityCount, gameRows: parsedGameCount } };
     }
 
     for (const table of ["spartan_race_rules", "spartan_personality_rules", "spartan_game_rules"]) {
