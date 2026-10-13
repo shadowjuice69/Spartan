@@ -42,7 +42,7 @@ module.exports = async function ageUpdateMessageHandler(message) {
 
   const attachments = message.attachments;
   // If multiple files are attached, parse the PDF before any companion TXT conversion.
-  const attachment = attachments?.find((item) => /\\.pdf$/i.test(String(item.name || ""))) || attachments?.first();
+  const attachment = attachments?.find((item) => /\.pdf$/i.test(String(item.name || ""))) || attachments?.first();
   let filename = String(attachment?.name || "");
   let extractedText = "";
   let parser;
