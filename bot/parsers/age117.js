@@ -222,6 +222,7 @@ function parseAge117Tables(text) {
   for (const line of lines) {
     const t=clean(line);
     if (/^Age\s+117\s+General Changes:?$/i.test(t)) { inGeneral=true; inRituals=inDragons=false; continue; }
+    if (/^Race\s+Archetype\s+Bonuses\b/i.test(t) || /^Personality\s+Archetype\s+Bonuses\b/i.test(t)) { inGeneral=inRituals=inDragons=false; continue; }
     if (/^Ritual\s+Effect$/i.test(t)) { inRituals=true; inGeneral=inDragons=false; continue; }
     if (/^Dragons?\s+Effect$/i.test(t)) { inDragons=true; inGeneral=inRituals=false; continue; }
     if (!t) continue;
