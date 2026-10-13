@@ -117,7 +117,7 @@ function buildReviewSummary(parsed) {
     }
     if (entries.length > 6) lines.push("• …and " + (entries.length - 6) + " more");
   }
-  return lines.join("\n").slice(0, 3000);
+  return lines.join("\n");
 }
 
 function safeArray(value) {
