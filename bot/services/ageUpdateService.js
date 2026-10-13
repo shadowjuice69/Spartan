@@ -19,13 +19,18 @@ async function saveAgeUpdate(updateText, userId, filename) {
       return { error: "no_age_number" };
     }
 
-    const { data: existing } = await supabase
+    // An approved record is historical/live state, not a reason to discard a newly
+    // uploaded revision. Only reuse an existing pending review; otherwise stage a
+    // fresh pending record so administrators can inspect the newly uploaded source.
+    const { data: existing, error: existingError } = await supabase
       .from("age_updates")
       .select("id,status")
       .eq("age_number", ageNumber)
-      .in("status", ["pending", "approved"])
+      .eq("status", "pending")
+      .order("id", { ascending: false })
       .limit(1);
 
+    if (existingError) throw existingError;
     if (existing?.length) {
       return { error: "duplicate", existingId: existing[0].id, status: existing[0].status };
     }
