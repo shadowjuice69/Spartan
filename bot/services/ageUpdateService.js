@@ -153,11 +153,8 @@ async function approveAgeUpdate(id, adminId) {
       }
     }
 
-    for (const table of ["spartan_race_rules", "spartan_personality_rules", "spartan_game_rules"]) {
-      const { error: deleteError } = await supabase.from(table).delete().eq("age_number", ageNumber);
-      if (deleteError) throw deleteError;
-    }
-
+    // Build and validate all rows before touching live rules. Replacement is performed
+    // by a single PostgreSQL RPC transaction below, so a failed insert rolls back deletes.
     const raceRows = Object.entries(parsed.races || {}).map(([race, data]) => ({
       age_number: ageNumber,
       race,
@@ -215,30 +212,23 @@ async function approveAgeUpdate(id, adminId) {
       }
     }
 
-    if (raceRows.length) {
-      const { error } = await supabase.from("spartan_race_rules").insert(raceRows);
-      if (error) throw error;
+    if (!raceRows.length || !personalityRows.length || !gameRows.length) {
+      throw new Error("Refusing to apply an age update with an empty rules section.");
     }
-    if (personalityRows.length) {
-      const { error } = await supabase.from("spartan_personality_rules").insert(personalityRows);
-      if (error) throw error;
-    }
-    if (gameRows.length) {
-      const { error } = await supabase.from("spartan_game_rules").insert(gameRows);
-      if (error) throw error;
-    }
+
+    const { error: atomicApplyError } = await supabase.rpc("spartan_apply_age_update_atomic", {
+      p_age_number: ageNumber,
+      p_update_id: id,
+      p_admin_id: String(adminId),
+      p_race_rows: raceRows,
+      p_personality_rows: personalityRows,
+      p_game_rows: gameRows
+    });
+    if (atomicApplyError) throw atomicApplyError;
 
     const { data, error } = await supabase.from("age_updates")
-      .update({ status: "approved", approved_by: adminId, approved_at: new Date().toISOString() })
-      .eq("id", id).select().single();
+      .select("*").eq("id", id).eq("status", "approved").single();
     if (error) throw error;
-
-    const { error: ageSettingError } = await supabase.from("bot_settings").upsert({
-      key: "current_age",
-      value: String(ageNumber),
-      updated_at: new Date().toISOString()
-    }, { onConflict: "key" });
-    if (ageSettingError) throw ageSettingError;
 
     let recalculation = null;
     try {
