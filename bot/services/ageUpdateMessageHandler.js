@@ -104,14 +104,25 @@ module.exports = async function ageUpdateMessageHandler(message) {
     }
     if (savedUpdate.error === "duplicate") {
       if (savedUpdate.status === "pending") {
+        const summary = String(savedUpdate.parsedSummary || "").trim();
+        const ready = Boolean(summary);
+        const review = new EmbedBuilder()
+          .setColor(ready ? 0xD6A84F : 0xD64545)
+          .setTitle("📘 Age " + ageNumber + " — Existing Pending Review")
+          .setDescription([
+            "**Record:** #" + savedUpdate.existingId,
+            "**Status:** Pending review — nothing has been applied.",
+            "",
+            "**Parser summary**",
+            summary || "🛑 **No structured rules detected. Do not apply this upload.**"
+          ].join("\\n"))
+          .addFields({ name: "Apply readiness", value: ready ? "Structured entries detected; final validation still required" : "BLOCKED — empty parse", inline: false })
+          .setFooter({ text: "This is the already-staged upload; no duplicate was created." });
         const buttons = new ActionRowBuilder().addComponents(
-          new ButtonBuilder().setCustomId("age_apply_" + savedUpdate.existingId).setLabel("🔎 Review / Apply").setStyle(ButtonStyle.Primary),
+          new ButtonBuilder().setCustomId("age_apply_" + savedUpdate.existingId).setLabel("✅ Review / Apply").setStyle(ButtonStyle.Success).setDisabled(!ready),
           new ButtonBuilder().setCustomId("age_revoke_" + savedUpdate.existingId).setLabel("❌ Cancel Review").setStyle(ButtonStyle.Danger)
         );
-        await message.reply({
-          content: "📘 **Age " + ageNumber + " — Existing Pending Review** (record #" + savedUpdate.existingId + "). I kept the staged record to avoid duplicates. The review controls refer to that saved upload; its parser summary is shown when available.",
-          components: [buttons]
-        });
+        await message.reply({ embeds: [review], components: [buttons] });
       } else {
         await message.reply("⚠️ An Age " + ageNumber + " record already exists and is **" + savedUpdate.status + "**. No duplicate was created.");
       }
