@@ -632,6 +632,13 @@ export function parseAge(input: string): ParsedAge {
       hit = true
       d.items.push(unitItem('horse', 'War horse offense', +m[1], '', 1, m[1]))
     }
+    if ((m = text.match(/^(Soldier|Mercenary|Prisoner):\s*(\d+)\s*\/\s*(\d+)\s*\(([\d.]+)\s*nw\)/i))) {
+      hit = true
+      const unit = m[1].toLowerCase()
+      d.items.push(unitItem(unit + '_off', m[1] + ' offense', +m[2], '', 1, m[2]))
+      d.items.push(unitItem(unit + '_def', m[1] + ' defense', +m[3], '', 1, m[3]))
+      d.items.push(unitItem(unit + '_nw', m[1] + ' networth', +m[4], '', 0, m[4] + ' NW'))
+    }
     if (!hit && !/^(soldier|mercenary|prisoner)/i.test(text)) unrec(`${d.name}: ${text}`)
   }
 
