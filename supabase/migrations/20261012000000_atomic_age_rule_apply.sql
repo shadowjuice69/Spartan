@@ -9,7 +9,7 @@ create or replace function public.spartan_apply_age_update_atomic(
   p_game_rows jsonb
 ) returns void
 language plpgsql
-security definer
+security invoker
 set search_path = public
 as $$
 begin
@@ -36,13 +36,19 @@ begin
   end if;
 
   insert into public.spartan_race_rules
-  select * from jsonb_populate_recordset(null::public.spartan_race_rules, coalesce(p_race_rows, '[]'::jsonb));
+    (age_number, race, emoji, archetype, war_doctrine, unique_name, unique_desc, bonuses, penalties, units, spells)
+  select age_number, race, emoji, archetype, war_doctrine, unique_name, unique_desc, bonuses, penalties, units, spells
+  from jsonb_populate_recordset(null::public.spartan_race_rules, coalesce(p_race_rows, '[]'::jsonb));
 
   insert into public.spartan_personality_rules
-  select * from jsonb_populate_recordset(null::public.spartan_personality_rules, coalesce(p_personality_rows, '[]'::jsonb));
+    (age_number, personality, emoji, unique_name, unique_desc, bonuses, start_bonus, spells)
+  select age_number, personality, emoji, unique_name, unique_desc, bonuses, start_bonus, spells
+  from jsonb_populate_recordset(null::public.spartan_personality_rules, coalesce(p_personality_rows, '[]'::jsonb));
 
   insert into public.spartan_game_rules
-  select * from jsonb_populate_recordset(null::public.spartan_game_rules, coalesce(p_game_rows, '[]'::jsonb));
+    (age_number, category, rule_name, value, description)
+  select age_number, category, rule_name, value, description
+  from jsonb_populate_recordset(null::public.spartan_game_rules, coalesce(p_game_rows, '[]'::jsonb));
 
   update public.age_updates
     set status = 'approved', approved_by = p_admin_id, approved_at = now()
