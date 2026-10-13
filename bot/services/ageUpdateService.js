@@ -44,12 +44,12 @@ async function saveAgeUpdate(updateText, userId, filename) {
         error: "duplicate",
         existingId: existing[0].id,
         status: existing[0].status,
-        parsedSummary: summarize(existingParsed)
+        parsedSummary: buildReviewSummary(existingParsed)
       };
     }
 
     const parsed = parseSubmittedAge(updateText, ageNumber);
-    const parsedSummary = summarize(parsed);
+    const parsedSummary = buildReviewSummary(parsed);
 
     // Pending uploads are staged only. Wiki sync occurs only through the approved update path.
 
@@ -68,6 +68,55 @@ async function saveAgeUpdate(updateText, userId, filename) {
     logger.error(`[AGE UPDATE ERROR] ${err.message}`);
     return null;
   }
+}
+
+function buildReviewSummary(parsed) {
+  const lines = [summarize(parsed) || "No structured changes detected."];
+  const races = Object.entries(parsed.races || {});
+  const personalities = Object.entries(parsed.personalities || {});
+  if (races.length) {
+    lines.push("", "**Race details**");
+    for (const [name, row] of races.slice(0, 11)) {
+      const details = [
+        row.archetype ? "Archetype: " + row.archetype : null,
+        row.war_doctrine ? "Doctrine: " + row.war_doctrine : null,
+        row.unique_name ? "Ability: " + row.unique_name : null,
+        row.unique_passive ? String(row.unique_passive).replace(/^Unique Passive\s*[-:]\s*/i, "") : null
+      ].filter(Boolean);
+      lines.push("• **" + name + "**" + (details.length ? " — " + details.join(" | ") : ""));
+    }
+  }
+  if (personalities.length) {
+    lines.push("", "**Personality details**");
+    for (const [name, row] of personalities.slice(0, 11)) {
+      const details = [
+        row.archetype ? "Archetype: " + row.archetype : null,
+        row.unique_name ? "Ability: " + row.unique_name : null,
+        row.unique_passive ? String(row.unique_passive).replace(/^Unique Passive\s*[-:]\s*/i, "") : null
+      ].filter(Boolean);
+      lines.push("• **" + name + "**" + (details.length ? " — " + details.join(" | ") : ""));
+    }
+  }
+  const otherSections = [
+    ["Game rules", parsed.game_rules],
+    ["Spells", parsed.spells],
+    ["Rituals", parsed.rituals],
+    ["Thievery", parsed.thievery],
+    ["Science", parsed.science],
+    ["Buildings", parsed.buildings],
+    ["Dragons", parsed.dragons]
+  ];
+  for (const [label, section] of otherSections) {
+    const entries = Object.entries(section || {});
+    if (!entries.length) continue;
+    lines.push("", "**" + label + " preview**");
+    for (const [name, value] of entries.slice(0, 6)) {
+      const text = typeof value === "string" ? value : JSON.stringify(value);
+      lines.push("• " + name + ": " + String(text || "").slice(0, 180));
+    }
+    if (entries.length > 6) lines.push("• …and " + (entries.length - 6) + " more");
+  }
+  return lines.join("\\n").slice(0, 3800);
 }
 
 function safeArray(value) {
