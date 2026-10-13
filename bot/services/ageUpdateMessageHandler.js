@@ -103,7 +103,18 @@ module.exports = async function ageUpdateMessageHandler(message) {
       return true;
     }
     if (savedUpdate.error === "duplicate") {
-      await message.reply("⚠️ An Age " + ageNumber + " record already exists and is **" + savedUpdate.status + "**. No duplicate was created.");
+      if (savedUpdate.status === "pending") {
+        const buttons = new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId("age_apply_" + savedUpdate.existingId).setLabel("✅ Review / Apply").setStyle(ButtonStyle.Success),
+          new ButtonBuilder().setCustomId("age_revoke_" + savedUpdate.existingId).setLabel("❌ Reject").setStyle(ButtonStyle.Danger)
+        );
+        await message.reply({
+          content: "📘 **Age " + ageNumber + " is already Pending Review** (record #" + savedUpdate.existingId + "). I kept the existing record to avoid duplicates. Use these controls to review it with the current parser.",
+          components: [buttons]
+        });
+      } else {
+        await message.reply("⚠️ An Age " + ageNumber + " record already exists and is **" + savedUpdate.status + "**. No duplicate was created.");
+      }
       return true;
     }
 
