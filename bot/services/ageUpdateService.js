@@ -109,6 +109,32 @@ async function approveAgeUpdate(id, adminId) {
       return { blocked: true, age_number: ageNumber, reason, stats: { races: parsedRaceCount, personalities: parsedPersonalityCount, gameRows: parsedGameCount } };
     }
 
+    // Strict quality gate for the Age 117 three-page PDF table. PDF text extraction
+    // can shift wrapped cells into adjacent columns; never activate obviously damaged rows.
+    if (isAge117ChangeSheet) {
+      const issues = [];
+      const expectedRaces = ["Avian","Dark Elf","Dryad","Dwarf","Elf","Faery","Gnome","Halfling","Human","Orc","Undead"];
+      const expectedPersonalities = ["The Artisan","The Cleric","The General","The Heretic","The Mystic","The Necromancer","The Rogue","The Sage","The Tactician","The War Hero","The Warrior"];
+      for (const name of expectedRaces) if (!parsed.races?.[name]) issues.push(`missing race: ${name}`);
+      for (const name of expectedPersonalities) if (!parsed.personalities?.[name]) issues.push(`missing personality: ${name}`);
+      for (const [name, race] of Object.entries(parsed.races || {})) {
+        const fields = [race.archetype, race.war_doctrine, race.unique_name, race.unique_passive, ...(race.bonuses || []), ...(race.penalties || [])].filter(Boolean).join(" ");
+        if (/OR PAGE:|<PARSED TEXT|PAGE:\\s*\\d+\\s*\\//i.test(fields)) issues.push(`${name}: PDF page footer leaked into a rule`);
+        if (/\\b(?:Per|Acre|Efficiency|Damage Received|casualties when attacking and)$/i.test(String(race.penalties || ""))) issues.push(`${name}: truncated penalty`);
+        if (/\\b(?:and|with|from|of|Per)$/i.test(String(race.bonuses?.slice(-1)[0] || ""))) issues.push(`${name}: truncated bonus`);
+        if (!race.unique_name || !race.unique_passive) issues.push(`${name}: missing unique ability or effect`);
+      }
+      for (const [name, p] of Object.entries(parsed.personalities || {})) {
+        if (!p.unique_name || !p.unique_passive) issues.push(`${name}: missing unique ability or effect`);
+        if (/\\b(?:to the|by|for|of the|target's|effectiveness by)$/i.test(String(p.unique_passive || ""))) issues.push(`${name}: likely truncated unique effect`);
+      }
+      if (issues.length) {
+        const reason = `Age 117 PDF validation failed (${issues.length} issue(s)): ${issues.slice(0, 12).join("; ")}. Nothing was applied. Fix the PDF parser and upload a fresh review.`;
+        logger.warn(`[AGE APPROVE BLOCKED] ID ${id} AGE 117: ${reason}`);
+        return { blocked: true, age_number: 117, reason, stats: { races: parsedRaceCount, personalities: parsedPersonalityCount, gameRows: parsedGameCount } };
+      }
+    }
+
     for (const table of ["spartan_race_rules", "spartan_personality_rules", "spartan_game_rules"]) {
       const { error: deleteError } = await supabase.from(table).delete().eq("age_number", ageNumber);
       if (deleteError) throw deleteError;
