@@ -42,7 +42,7 @@ function boxedToPlain(input) {
       const title = (lines[i + 1] || '').trim();
       if (title && i + 2 < lines.length && RULE.test(lines[i + 2])) {
         if (t[0] === '=') {
-          const name = title.replace(/^\d+\.\s*/, '').toLowerCase();
+          const name = title.replace(/^\d+\.\s*/, '').replace(/\s*\(\d+\)\s*$/, '').trim().toLowerCase();
           flushAbility(); inEntity = false; mode = '';
           if (/^core mechanics/.test(name)) sec = 'general';
           else if (name === 'dragons') { sec = 'dragons'; out.push('', 'Dragons'); }
