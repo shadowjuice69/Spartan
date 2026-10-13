@@ -8,6 +8,51 @@ const { parse117 } = require("../parsers/age117");
 function parseSubmittedAge(rawText, ageNumber) {
   return Number(ageNumber) === 117 ? parse117(rawText) : parseAgeFile(rawText);
 }
+
+function isAge117ChangeSheetText(rawText, ageNumber) {
+  const text = String(rawText || "");
+  return Number(ageNumber) === 117 &&
+    /Age\\s*117\\s+General Changes/i.test(text) &&
+    /Unique Abilty Programming Changes from Existing/i.test(text) &&
+    /Race\\s+Archetype[\\s\\S]{0,160}?Bonuses/i.test(text) &&
+    /Personality\\s+Archetype[\\s\\S]{0,160}?Bonuses/i.test(text);
+}
+
+async function mergeAge117Personalities(supabase, parsed) {
+  const { data, error } = await supabase
+    .from("spartan_personality_rules")
+    .select("personality,emoji,unique_name,unique_desc,bonuses,start_bonus,spells")
+    .eq("age_number", 116);
+  if (error) throw error;
+  if (!Array.isArray(data) || data.length < 10) {
+    throw new Error("Age 117 review blocked: verified Age 116 personality baseline is missing or incomplete.");
+  }
+  for (const row of data) {
+    if (parsed.personalities[row.personality]) continue;
+    parsed.personalities[row.personality] = {
+      emoji: row.emoji || null,
+      unique_name: row.unique_name || null,
+      unique_passive: row.unique_desc || null,
+      bonuses: String(row.bonuses || "").split("\\n").filter(Boolean),
+      starts_with: String(row.start_bonus || "").split("\\n").filter(Boolean),
+      spells: String(row.spells || "").split(/,\\s*/).filter(Boolean),
+      inherited_from_age: 116
+    };
+  }
+}
+
+function reviewIsReady(parsed, rawText, ageNumber) {
+  if (!summarize(parsed)) return false;
+  if (Number(ageNumber) !== 117) return true;
+  if (!isAge117ChangeSheetText(rawText, ageNumber)) return false;
+  const races = Object.keys(parsed.races || {}).length;
+  const personalities = Object.keys(parsed.personalities || {}).length;
+  const rituals = Object.keys(parsed.rituals || {}).length;
+  const dragons = Object.keys(parsed.dragons || {}).length;
+  const gameRows = [parsed.spells, parsed.thievery, parsed.buildings, parsed.science, parsed.game_rules]
+    .reduce((n, section) => n + Object.keys(section || {}).length, 0);
+  return races === 11 && personalities === 11 && rituals >= 6 && dragons >= 4 && gameRows >= 4;
+}
 const { recalculateBuildLibrary } = require("./buildAgeRecalculator");
 
 async function saveAgeUpdate(updateText, userId, filename) {
@@ -39,19 +84,25 @@ async function saveAgeUpdate(updateText, userId, filename) {
 
     if (existingError) throw existingError;
     const parsed = parseSubmittedAge(updateText, ageNumber);
+    const verifiedAge117Sheet = isAge117ChangeSheetText(updateText, ageNumber);
+    if (verifiedAge117Sheet) {
+      await mergeAge117Personalities(supabase, parsed);
+      await mergeAge117GameBaseline(supabase, parsed);
+    }
     const parsedSummary = buildReviewSummary(parsed);
+    const parsedReady = reviewIsReady(parsed, updateText, ageNumber);
     if (existing?.length) {
       const pending = existing[0];
       // Refresh an older pending review when a newly uploaded PDF extracts to different text.
       if (String(pending.raw_text || '') === updateText) {
-        return { error: 'duplicate', existingId: pending.id, status: pending.status, parsedSummary, parsedReady: Boolean(summarize(parsed)) };
+        return { error: 'duplicate', existingId: pending.id, status: pending.status, parsedSummary, parsedReady };
       }
       const updated = await supabase.from('age_updates')
         .update({ raw_text: updateText, source: 'discord', submitted_by: userId })
         .eq('id', pending.id).eq('status', 'pending').select().single();
       if (updated.error) throw updated.error;
       logger.info('[AGE UPDATE REFRESHED] ID ' + updated.data.id + ' AGE ' + ageNumber);
-      return { ...updated.data, parsedSummary, parsedReady: Boolean(summarize(parsed)), refreshed: true };
+      return { ...updated.data, parsedSummary, parsedReady, refreshed: true };
     }
 
     const { data, error } = await supabase.from('age_updates').insert({
@@ -64,7 +115,7 @@ async function saveAgeUpdate(updateText, userId, filename) {
 
     if (error) throw error;
     logger.info('[AGE UPDATE SAVED] ID ' + data.id + ' AGE ' + ageNumber);
-    return { ...data, parsedSummary, parsedReady: Boolean(summarize(parsed)) };
+    return { ...data, parsedSummary, parsedReady };
   } catch (err) {
     logger.error(`[AGE UPDATE ERROR] ${err.message}`);
     return null;
@@ -198,9 +249,7 @@ async function approveAgeUpdate(id, adminId) {
     // personalities with proposed edits. Preserve unchanged personalities from Age 116.
     // This merge is only allowed for the recognizable Age 117 tabular document and
     // only when the prior age has a full roster; arbitrary partial uploads remain blocked.
-    const isAge117ChangeSheet = ageNumber === 117 &&
-      /Race\s+Archetype\s+Bonuses/i.test(update.raw_text || "") &&
-      /Personality\s+Archetype\s+Bonuses/i.test(update.raw_text || "");
+    const isAge117ChangeSheet = isAge117ChangeSheetText(update.raw_text, ageNumber);
     if (isAge117ChangeSheet && Object.keys(parsed.races || {}).length >= 10) {
       const { data: baselinePersonalities, error: baselineError } = await supabase
         .from("spartan_personality_rules")
