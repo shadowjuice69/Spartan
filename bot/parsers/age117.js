@@ -255,8 +255,8 @@ function parseAge117Tables(text) {
 function repairPrefinal117(result, rawText) {
   const source = String(rawText || '');
   if (!/Age 117 General Changes/i.test(source) ||
-      !/Race\\s+Archetype\\s+Bonuses/i.test(source) ||
-      !/Personality\\s+Archetype\\s+Bonuses/i.test(source) ||
+      !/Race\s+Archetype\s+Bonuses/i.test(source) ||
+      !/Personality\s+Archetype\s+Bonuses/i.test(source) ||
       !/Unique Abilty Programming Changes from Existing/i.test(source)) return result;
 
   const races = {
