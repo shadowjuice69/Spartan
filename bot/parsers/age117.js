@@ -137,8 +137,112 @@ function readPlain(text) {
   for (const [name, r] of Object.entries(result.rituals)) result.game_rules['ritual_' + slug(name)] = name + ': ' + r.effects.join('; ');
   return result;
 }
+
+const RACE_TABLE_NAMES = ['Avian','Dark Elf','Dryad','Dwarf','Elf','Faery','Gnome','Halfling','Human','Orc','Undead'];
+const PERSONALITY_TABLE_NAMES = ['Cleric','General','Heretic','Mystic','Necromancer','Rogue','Sage','Tactician','Warrior','War Hero','Artisan'];
+function parseAge117Tables(text) {
+  const lines = String(text).replace(/\r/g, '').split('\n');
+  const result = { races:{}, personalities:{}, buildings:{}, spells:{}, thievery:{}, game_rules:{}, dragons:{}, science:{}, rituals:{} };
+  const clean = s => s.replace(/\s+/g, ' ').trim();
+  const bullets = s => s.split(/\s{2,}|(?<=\.)\s+(?=[A-Z+%-])/).map(clean).filter(Boolean);
+  let raceHeader = -1, personalityHeader = -1;
+  for (let i=0;i<lines.length;i++) {
+    if (raceHeader < 0 && /^\s*Race\s+Archetype\s+Bonuses\b/i.test(lines[i])) raceHeader=i;
+    if (personalityHeader < 0 && /^\s*Personality\s+Archetype\s+Bonuses\b/i.test(lines[i])) personalityHeader=i;
+  }
+  function readTable(start, names, kind, end) {
+    if (start < 0) return;
+    const header = lines[start];
+    const labels = kind === 'race'
+      ? ['Race','Archetype','Bonuses','Penalties','Unique Spells','Doctrine','Ospec','Dspec','Elite O','Elite D','Elite Cost','Elite NW','Horse','Unique Ability','Unqiue Effect']
+      : ['Personality','Archetype','Bonuses','Unique Spells','Starting Units/Credits','Unique Ability','Unqiue Effect'];
+    const starts = labels.map(label => {
+      const idx = header.toLowerCase().indexOf(label.toLowerCase());
+      return idx < 0 ? -1 : idx;
+    });
+    if (starts[0] < 0 || starts[1] < 0 || starts[2] < 0) return;
+    const cuts = starts.map((x,i)=>({x,i})).filter(v=>v.x>=0).sort((a,b)=>a.x-b.x);
+    const nameSet = new Map(names.map(n=>[n.toLowerCase(),n]));
+    let current = null, cells = null;
+    const flush = () => {
+      if (!current || !cells) return;
+      const cell = i => clean(cells[i] || '');
+      if (kind === 'race') {
+        const bonuses = bullets(cell(2)).filter(x=>!/^[-+]?\d+\s*$/.test(x));
+        const penalties = bullets(cell(3));
+        const spells = cell(4).split(/,\s*/).map(clean).filter(Boolean);
+        const units = {};
+        const unitSpecs = [
+          ['Offensive Specialist',6],['Defensive Specialist',7]
+        ];
+        for (const [name,idx] of unitSpecs) if (cell(idx)) units[name]=cell(idx);
+        const elite = [cell(8),cell(9),cell(10),cell(11)].filter(Boolean);
+        if (elite.length) units['Elite Unit']=elite.join(' / ') + (cell(12) ? ' / horse ' + cell(12) : '');
+        result.races[current] = {
+          emoji:null, archetype:cell(1)||null, bonuses, penalties, units, spells,
+          war_doctrine:cell(5)||null,
+          unique_name:cell(13)||null,
+          unique_passive:cell(14)||null
+        };
+      } else {
+        result.personalities['The ' + current] = {
+          emoji:null, archetype:cell(1)||null, bonuses:bullets(cell(2)),
+          spells:cell(3).split(/,\s*/).map(clean).filter(Boolean),
+          starts_with:cell(4)?[cell(4)]:[],
+          unique_name:cell(5)||null, unique_passive:cell(6)||null
+        };
+      }
+    };
+    for (let i=start+1; i<Math.min(lines.length,end); i++) {
+      const line=lines[i];
+      const first = clean(line.slice(0, starts[1] >= 0 ? starts[1] : 20));
+      const name = nameSet.get(first.toLowerCase());
+      if (name) {
+        flush(); current=name; cells={};
+      } else if (!current) continue;
+      if (!cells) continue;
+      const parts={};
+      for (let c=0;c<cuts.length;c++) {
+        const begin=cuts[c].x;
+        const finish=c+1<cuts.length?cuts[c+1].x:undefined;
+        const value=clean(line.slice(begin,finish));
+        const labelIndex=cuts[c].i;
+        if (value) parts[labelIndex]=value;
+      }
+      for (const [idx,value] of Object.entries(parts)) {
+        const k=Number(idx);
+        cells[k]=cells[k] ? cells[k]+' '+value : value;
+      }
+    }
+    flush();
+  }
+  readTable(raceHeader,RACE_TABLE_NAMES,'race',personalityHeader>=0?personalityHeader:lines.length);
+  readTable(personalityHeader,PERSONALITY_TABLE_NAMES,'personality',lines.length);
+  let inGeneral=false, inRituals=false, inDragons=false, n=0;
+  for (const line of lines) {
+    const t=clean(line);
+    if (/^Age\s+117\s+General Changes:?$/i.test(t)) { inGeneral=true; inRituals=inDragons=false; continue; }
+    if (/^Ritual\s+Effect$/i.test(t)) { inRituals=true; inGeneral=inDragons=false; continue; }
+    if (/^Dragons?\s+Effect$/i.test(t)) { inDragons=true; inGeneral=inRituals=false; continue; }
+    if (!t) continue;
+    if (inGeneral && !/^(Race|Personality)\s+Archetype\b/i.test(t)) {
+      result.game_rules['age117_general_'+(++n)] = t;
+    } else if (inRituals) {
+      const m=t.match(/^(Barrier|Benediction|Haste|Havoc|Onslaught|Stalwart)\s+(.+)$/i);
+      if (m) result.rituals[m[1]]={effects:[m[2]]};
+    } else if (inDragons) {
+      const m=t.match(/^(Amethyst|Emerald|Ruby|Sapphire|Topaz)\s+(.+)$/i);
+      if (m) result.dragons[m[1]==='Sapphire'?'Sapphire Dragons':m[1]+' Dragon']={effects:[m[2]]};
+    }
+  }
+  return result;
+}
+
 function parse117(rawText) {
   let text = String(rawText).replace(/^\uFEFF/, '').replace(/\u000C/g, '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  if (/^\s*Race\s+Archetype\s+Bonuses\b/im.test(text) && /^\s*Personality\s+Archetype\s+Bonuses\b/im.test(text)) {
+    return parseAge117Tables(text);
+  }
   if (looksBoxed(text)) text = boxedToPlain(text);
   return readPlain(text);
 }
