@@ -57,7 +57,20 @@ module.exports = async function buttonHandler(interaction) {
 
     if (!result) {
       return interaction.editReply({
-        content: "⚠️ Failed to apply age update.",
+        content: "⚠️ The age update could not be processed. Check the Render logs for the specific error; no success is being reported.",
+        components: []
+      });
+    }
+
+    if (result.blocked) {
+      return interaction.editReply({
+        content: [
+          `🛑 **Age ${result.age_number} was NOT applied**`,
+          "",
+          result.reason,
+          "",
+          "The active age and saved builds were left unchanged. If this is a proposed-changes document, Spartan must merge verified changes with the existing rules before activation."
+        ].join("\\n"),
         components: []
       });
     }
