@@ -63,7 +63,8 @@ test('blocks Age 117 reviews when PDF table columns leak numeric values into tex
   const issues = validateParsedShape({
     races: {
       Avian: {
-        archetype: 'Speed and Birth Rates',
+        archetype: 'Speed and Birth Rates -20% Attack Travel Time Town Watch -7.5% Attack time 10',
+        war_doctrine: '6.25',
         penalties: ['3'],
         spells: ['900'],
         unique_name: '2',
@@ -74,6 +75,8 @@ test('blocks Age 117 reviews when PDF table columns leak numeric values into tex
       'The Cleric': { archetype: 'Defensive', spells: ['Salvation'], unique_name: 'Architects Revenge' }
     }
   }, 117);
+  assert.ok(issues.some(issue => /archetype for Avian/.test(issue)));
+  assert.ok(issues.some(issue => /war doctrine for Avian/.test(issue)));
   assert.ok(issues.some(issue => /penalties for Avian/.test(issue)));
   assert.ok(issues.some(issue => /spells for Avian/.test(issue)));
   assert.ok(issues.some(issue => /ability name for Avian/.test(issue)));
