@@ -45,7 +45,7 @@ function extractRemovals(source) {
     }
     if (!inChangeLog) continue;
 
-    const entityChange = text.match(/^(.+?):\s*Removed\s+(.+)$/i);
+    const entityChange = text.match(/^(.+?):\s*Removed\s+([^,;]+)(?:[,;].*)?$/i);
     if (entityChange) {
       const entity = entityChange[1].trim();
       const item = entityChange[2].trim().replace(/[.;]+$/, '');
