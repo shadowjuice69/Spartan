@@ -216,7 +216,7 @@ function toRows(ageNumber, merged) {
   }
   return { races, personalities, game };
 }
-function validateMerged(merged, ageNumber, rawText, baseline) {
+function validateMerged(merged, ageNumber, rawText, baseline, parsed = null) {
   const issues = [];
   if (Object.keys(merged.races || {}).length < 10) issues.push('fewer than 10 race rules');
   if (Object.keys(merged.personalities || {}).length < 10) issues.push('fewer than 10 personality rules');
@@ -230,19 +230,22 @@ function validateMerged(merged, ageNumber, rawText, baseline) {
     if (/^\s*Race\s+Archetype[\s\S]{0,160}?\bBonuses\b/im.test(rawText)) {
       for (const name of ['Avian','Dark Elf','Dryad','Dwarf','Elf','Faery','Gnome','Halfling','Human','Orc','Undead']) {
         const race = merged.races[name];
-        if (!race?.archetype) issues.push('race table field missing: ' + name + ' archetype');
-        if (!Array.isArray(race?.bonuses) || !race.bonuses.length) issues.push('race table field missing: ' + name + ' bonuses');
-        if (!Array.isArray(race?.spells) || race.spells.some(value => /^\d+(?:\.\d+)?$/.test(String(value).trim()))) issues.push('race table field invalid: ' + name + ' spells');
-        if (!race?.units || !race.units['Offensive Specialist'] || !race.units['Defensive Specialist']) issues.push('race table field missing: ' + name + ' specialist stats');
+        const sourceRace = parsed?.races?.[name];
+        if (!sourceRace) { issues.push('race table row not parsed: ' + name); continue; }
+        if (!sourceRace.archetype) issues.push('race table field missing: ' + name + ' archetype');
+        if (!Array.isArray(sourceRace.bonuses) || !sourceRace.bonuses.length) issues.push('race table field missing: ' + name + ' bonuses');
+        if (!Array.isArray(sourceRace.spells) || sourceRace.spells.some(value => /^\d+(?:\.\d+)?$/.test(String(value).trim()))) issues.push('race table field invalid: ' + name + ' spells');
+        if (!sourceRace.units || !sourceRace.units['Offensive Specialist'] || !sourceRace.units['Defensive Specialist']) issues.push('race table field missing: ' + name + ' specialist stats');
       }
     }
     if (/^\s*Personality\s+Archetype[\s\S]{0,160}?\bBonuses\b/im.test(rawText)) {
       for (const shortName of ['Cleric','General','Heretic','Mystic','Necromancer','Rogue','Sage','Tactician','Warrior','War Hero','Artisan']) {
         if (!new RegExp('(?:^|\\n)\\s*' + shortName + '\\s*\\t', 'i').test(rawText)) continue;
         const name = 'The ' + shortName;
-        const personality = merged.personalities[name];
-        if (!personality?.unique_name) issues.push('personality table field missing: ' + name + ' unique ability');
-        if (!Array.isArray(personality?.bonuses) || !personality.bonuses.length) issues.push('personality table field missing: ' + name + ' bonuses');
+        const personality = parsed?.personalities?.[name];
+        if (!personality) { issues.push('personality table row not parsed: ' + name); continue; }
+        if (!personality.unique_name) issues.push('personality table field missing: ' + name + ' unique ability');
+        if (!Array.isArray(personality.bonuses) || !personality.bonuses.length) issues.push('personality table field missing: ' + name + ' bonuses');
       }
     }
     if (/^\s*Dragons?\s+Effect\s*$/im.test(rawText)) {
@@ -260,7 +263,7 @@ async function buildReview(supabase, rawText, ageNumber) {
   let baseline = null;
   if (needsBaseline) baseline = await loadBaseline(supabase, ageNumber);
   const merged = needsBaseline ? mergeRules(baseline.rules, parsed) : parsed;
-  const issues = validateMerged(merged, ageNumber, rawText, baseline);
+  const issues = validateMerged(merged, ageNumber, rawText, baseline, parsed);
   const summaryLines = [
     'Age ' + ageNumber + ' parsed with ' + parsed.source.parser,
     'Baseline: ' + (baseline ? 'Age ' + baseline.age + ' (' + baseline.source + ')' : 'not required'),
