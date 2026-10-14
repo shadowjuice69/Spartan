@@ -183,9 +183,24 @@ function parseAge117Tables(text) {
       tabStarts.every(index => index >= 0) &&
       new Set(tabStarts).size === labels.length
     );
+    const expandTabs = value => {
+      let out = '', column = 0;
+      for (const ch of String(value)) {
+        if (ch === '\\t') {
+          const spaces = 8 - (column % 8);
+          out += ' '.repeat(spaces);
+          column += spaces;
+        } else {
+          out += ch;
+          column += 1;
+        }
+      }
+      return out;
+    };
+    const layoutHeader = useTabs ? header : expandTabs(header);
     const starts = useTabs
       ? tabStarts
-      : labels.map(label => header.toLowerCase().indexOf(label.toLowerCase()));
+      : labels.map(label => layoutHeader.toLowerCase().indexOf(label.toLowerCase()));
     if (starts[0] < 0 || starts[1] < 0 || starts[2] < 0 || new Set(starts.filter(x => x >= 0)).size !== starts.filter(x => x >= 0).length) return;
     const cuts = starts.map((x,i)=>({x,i})).filter(v=>v.x>=0).sort((a,b)=>a.x-b.x);
     const nameSet = new Map(names.map(n=>[n.toLowerCase(),n]));
@@ -219,7 +234,8 @@ function parseAge117Tables(text) {
       const line=lines[i];
       if (kind === 'personality' && /^\s*(?:Ritual\s+Effect|Dragons?\s+Effect)\b/i.test(line)) break;
       const rowCells = useTabs ? line.split('\t').map(clean) : null;
-      const first = rowCells ? rowCells[0] : clean(line.slice(0, starts[1] >= 0 ? starts[1] : 20));
+      const layoutLine = useTabs ? line : expandTabs(line);
+      const first = rowCells ? rowCells[0] : clean(layoutLine.slice(0, starts[1] >= 0 ? starts[1] : 20));
       const name = nameSet.get(first.toLowerCase());
       if (name) { flush(); current=name; cells={}; }
       else if (!current) continue;
@@ -235,7 +251,7 @@ function parseAge117Tables(text) {
         for (let c=0;c<cuts.length;c++) {
           const begin=cuts[c].x;
           const finish=c+1<cuts.length?cuts[c+1].x:undefined;
-          const value=clean(line.slice(begin,finish));
+          const value=clean(layoutLine.slice(begin,finish));
           if (value) parts[cuts[c].i]=value;
         }
         for (const [idx,value] of Object.entries(parts)) {
