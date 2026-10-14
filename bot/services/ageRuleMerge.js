@@ -83,16 +83,34 @@ function categoryForRemoved(item) {
 function applyRemovals(merged, removed) {
   for (const item of removed || []) {
     const section = categoryForRemoved(item);
-    if (!section || !merged[section]) continue;
     const wanted = String(item.name || '').toLowerCase();
-    for (const key of Object.keys(merged[section])) {
-      const value = merged[section][key];
-      const comparable = String(key).toLowerCase();
-      if (comparable === wanted || comparable.startsWith(wanted + ' ') || comparable.startsWith(wanted + ':')) delete merged[section][key];
-      else if (typeof value === 'string' && value.toLowerCase().startsWith(wanted + ':')) delete merged[section][key];
+    if (section && merged[section]) {
+      for (const key of Object.keys(merged[section])) {
+        const value = merged[section][key];
+        const comparable = String(key).toLowerCase();
+        if (comparable === wanted || comparable.startsWith(wanted + ' ') || comparable.startsWith(wanted + ':')) delete merged[section][key];
+        else if (typeof value === 'string' && value.toLowerCase().startsWith(wanted + ':')) delete merged[section][key];
+      }
+      continue;
+    }
+
+    // Change logs can remove a value inside a race/personality rather than a whole rule row.
+    const entityName = String(item.entity || '').toLowerCase();
+    if (!entityName) continue;
+    for (const sectionName of ['races', 'personalities']) {
+      for (const [key, entity] of Object.entries(merged[sectionName] || {})) {
+        if (key.toLowerCase() !== entityName && key.replace(/^The\s+/i, '').toLowerCase() !== entityName) continue;
+        for (const field of ['bonuses', 'penalties', 'spells', 'starts_with']) {
+          if (Array.isArray(entity[field])) entity[field] = entity[field].filter((value) => !String(value).toLowerCase().includes(wanted));
+        }
+        for (const field of ['unique_name', 'unique_passive', 'archetype', 'war_doctrine']) {
+          if (typeof entity[field] === 'string' && entity[field].toLowerCase().includes(wanted)) entity[field] = null;
+        }
+      }
     }
   }
 }
+
 async function loadBaseline(supabase, ageNumber) {
   const baselineAge = Number(ageNumber) - 1;
   if (!Number.isInteger(baselineAge) || baselineAge < 1) throw new Error('Cannot determine the previous-age baseline');
