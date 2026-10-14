@@ -59,6 +59,29 @@ test('rejects empty text and returns normalized sections for parsed text', () =>
   }
 });
 
+test('full Age 117 tables replace empty cells instead of inheriting removed Age 116 values', () => {
+  const races = {}, personalities = {};
+  for (const name of ['Avian','Dark Elf','Dryad','Dwarf','Elf','Faery','Gnome','Halfling','Human','Orc','Undead']) {
+    races[name] = { bonuses: [], penalties: [], spells: [], units: {}, archetype: 'updated' };
+  }
+  for (const name of ['The Artisan','The General','The Heretic','The Mystic','The Necromancer','The Cleric','The Rogue','The Tactician','The Warrior','The War Hero','The Sage']) {
+    personalities[name] = { bonuses: [], spells: [], starts_with: [], unique_name: null, unique_passive: null };
+  }
+  const baseline = {
+    races: { ...races, Human: { bonuses: ['Greed Immunity'], penalties: [], spells: ['old spell'], units: {}, archetype: 'old' } },
+    personalities: { ...personalities, 'The Cleric': { bonuses: ['old bonus'], spells: ['old spell'], starts_with: ['old start'] } },
+    buildings: {}, spells: {}, thievery: {}, game_rules: {}, science: {},
+    rituals: {}, dragons: {}
+  };
+  const changes = { races, personalities, buildings: {}, spells: {}, thievery: {}, game_rules: {}, science: {}, rituals: {}, dragons: {} };
+  const merged = mergeRules(baseline, changes);
+  assert.deepEqual(merged.races.Human.bonuses, []);
+  assert.deepEqual(merged.races.Human.spells, []);
+  assert.equal(merged.races.Human.archetype, 'updated');
+  assert.deepEqual(merged.personalities['The Cleric'].bonuses, []);
+  assert.deepEqual(merged.personalities['The Cleric'].spells, []);
+});
+
 test('serializes merged rules into database row sections', () => {
   const rows = toRows(117, {
     races: { Human: { bonuses: ['+20% Battle Gains'], penalties: [], spells: ['Tree of Gold'], units: {} } },
