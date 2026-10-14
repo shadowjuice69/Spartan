@@ -194,6 +194,26 @@ function toRows(ageNumber, merged) {
   }
   return { races, personalities, game };
 }
+function validateParsedShape(parsed, ageNumber) {
+  const issues = [];
+  if (Number(ageNumber) !== 117) return issues;
+  const numberOnly = value => /^[-+]?\\d+(?:\\.\\d+)?%?$/.test(String(value || '').trim());
+  for (const [name, race] of Object.entries(parsed.races || {})) {
+    if (numberOnly(race.archetype)) issues.push('invalid Age 117 race archetype for ' + name + ': numeric table cell detected');
+    if (Array.isArray(race.penalties) && race.penalties.some(numberOnly)) issues.push('invalid Age 117 race penalties for ' + name + ': numeric table cell detected');
+    if (Array.isArray(race.spells) && race.spells.some(value => numberOnly(value) || /\\b(?:attack time|rune cost|military wage)\\b/i.test(value))) issues.push('invalid Age 117 race spells for ' + name + ': non-spell table cell detected');
+    if (numberOnly(race.unique_name)) issues.push('invalid Age 117 unique ability name for ' + name + ': numeric table cell detected');
+    if (numberOnly(race.unique_passive)) issues.push('invalid Age 117 unique ability effect for ' + name + ': numeric table cell detected');
+  }
+  for (const [name, personality] of Object.entries(parsed.personalities || {})) {
+    if (numberOnly(personality.archetype)) issues.push('invalid Age 117 personality archetype for ' + name + ': numeric table cell detected');
+    if (Array.isArray(personality.spells) && personality.spells.some(numberOnly)) issues.push('invalid Age 117 personality spells for ' + name + ': numeric table cell detected');
+    if (numberOnly(personality.unique_name)) issues.push('invalid Age 117 personality ability name for ' + name + ': numeric table cell detected');
+    if (numberOnly(personality.unique_passive)) issues.push('invalid Age 117 personality ability effect for ' + name + ': numeric table cell detected');
+  }
+  return issues;
+}
+
 function validateMerged(merged, ageNumber, rawText, baseline) {
   const issues = [];
   if (Object.keys(merged.races || {}).length < 10) issues.push('fewer than 10 race rules');
@@ -297,7 +317,7 @@ async function buildReview(supabase, rawText, ageNumber) {
   let baseline = null;
   if (needsBaseline) baseline = await loadBaseline(supabase, ageNumber);
   const merged = needsBaseline ? mergeRules(baseline.rules, parsed) : parsed;
-  const issues = validateMerged(merged, ageNumber, rawText, baseline);
+  const issues = [...validateParsedShape(parsed, ageNumber), ...validateMerged(merged, ageNumber, rawText, baseline)];
   const summaryLines = [
     'Age ' + ageNumber + ' parsed with ' + parsed.source.parser,
     'Baseline: ' + (baseline ? 'Age ' + baseline.age + ' (' + baseline.source + ')' : 'not required'),
@@ -317,4 +337,4 @@ async function buildReview(supabase, rawText, ageNumber) {
   return { parsed, merged, baseline: baseline || { source: 'not_required', age: null }, issues, ready: issues.length === 0, summary: summaryLines.join('\n') };
 }
 
-module.exports = { buildReview, toRows, parseObject, mergeRules, loadBaseline, validateMerged };
+module.exports = { buildReview, toRows, parseObject, mergeRules, loadBaseline, validateMerged, validateParsedShape };
