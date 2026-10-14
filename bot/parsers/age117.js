@@ -240,8 +240,14 @@ function parseAge117Tables(text) {
     if (/^Ritual\s+Effect$/i.test(t)) { inRituals=true; inGeneral=inDragons=false; continue; }
     if (/^Dragons?\s+Effect$/i.test(t)) { inDragons=true; inGeneral=inRituals=false; continue; }
     if (!t) continue;
-    if (inGeneral && !/^(Race|Personality)\s+Archetype\b/i.test(t)) {
-      result.game_rules['age117_general_'+(++n)] = t;
+    if (inGeneral && !/^(Race|Personality)\\s+Archetype\\b/i.test(t)) {
+      // Stable identities make global Age 117 changes visible and consistently updatable.
+      let key = null;
+      if (/^Fanaticism spell will only be available as a Racial Spell\\.?$/i.test(t)) key = 'Fanaticism Spell Availability';
+      else if (/^% Reduction Sciences Max Reductions Reduced from -?\\d+%? to -?\\d+%?/i.test(t)) key = 'Science Reduction Maximum';
+      else if (/^All Doctrines give double bonus for the first province/i.test(t)) key = 'War Doctrine Scaling';
+      else if (/^Dragon Hitpoints Reduced by 10%/i.test(t)) key = 'Dragon Hitpoints and Recurring Effects';
+      result.game_rules[key || ('age117_general_'+(++n))] = t;
     } else if (inRituals) {
       const m=t.match(/^(Barrier|Benediction|Haste|Havoc|Onslaught|Stalwart)\s+(.+)$/i);
       if (m) result.rituals[m[1]]={effects:[m[2]]};
