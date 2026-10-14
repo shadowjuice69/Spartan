@@ -186,7 +186,7 @@ function parseAge117Tables(text) {
     const expandTabs = value => {
       let out = '', column = 0;
       for (const ch of String(value)) {
-        if (ch === '\\t') {
+        if (ch === '\t') {
           const spaces = 8 - (column % 8);
           out += ' '.repeat(spaces);
           column += spaces;
