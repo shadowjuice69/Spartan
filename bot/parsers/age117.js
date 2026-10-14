@@ -166,10 +166,10 @@ function parseAge117Tables(text) {
     const labels = kind === 'race'
       ? ['Race','Archetype','Bonuses','Penalties','Unique Spells','Doctrine','Ospec','Dspec','Elite O','Elite D','Elite Cost','Elite NW','Horse','Unique Ability','Unqiue Effect']
       : ['Personality','Archetype','Bonuses','Unique Spells','Starting Units/Credits','Unique Ability','Unqiue Effect'];
-    const starts = labels.map(label => {
-      const idx = header.toLowerCase().indexOf(label.toLowerCase());
-      return idx < 0 ? -1 : idx;
-    });
+    const tabHeader = header.includes('\t') ? header.split('\t').map(clean) : null;
+    const starts = labels.map(label => tabHeader && tabHeader.length >= 5
+      ? tabHeader.findIndex(cell => cell.toLowerCase().includes(label.toLowerCase()))
+      : header.toLowerCase().indexOf(label.toLowerCase()));
     if (starts[0] < 0 || starts[1] < 0 || starts[2] < 0) return;
     const cuts = starts.map((x,i)=>({x,i})).filter(v=>v.x>=0).sort((a,b)=>a.x-b.x);
     const nameSet = new Map(names.map(n=>[n.toLowerCase(),n]));
@@ -182,17 +182,13 @@ function parseAge117Tables(text) {
         const penalties = bullets(cell(3));
         const spells = cell(4).split(/,\s*/).map(clean).filter(Boolean);
         const units = {};
-        const unitSpecs = [
-          ['Offensive Specialist',6],['Defensive Specialist',7]
-        ];
-        for (const [name,idx] of unitSpecs) if (cell(idx)) units[name]=cell(idx);
+        if (cell(6)) units['Offensive Specialist']=cell(6);
+        if (cell(7)) units['Defensive Specialist']=cell(7);
         const elite = [cell(8),cell(9),cell(10),cell(11)].filter(Boolean);
         if (elite.length) units['Elite Unit']=elite.join(' / ') + (cell(12) ? ' / horse ' + cell(12) : '');
         result.races[current] = {
           emoji:null, archetype:cell(1)||null, bonuses, penalties, units, spells,
-          war_doctrine:cell(5)||null,
-          unique_name:cell(13)||null,
-          unique_passive:cell(14)||null
+          war_doctrine:cell(5)||null, unique_name:cell(13)||null, unique_passive:cell(14)||null
         };
       } else {
         result.personalities['The ' + current] = {
@@ -206,23 +202,30 @@ function parseAge117Tables(text) {
     for (let i=start+1; i<Math.min(lines.length,end); i++) {
       const line=lines[i];
       if (kind === 'personality' && /^\s*(?:Ritual\s+Effect|Dragons?\s+Effect)\b/i.test(line)) break;
-      const first = clean(line.slice(0, starts[1] >= 0 ? starts[1] : 20));
+      const rowCells = tabHeader && tabHeader.length >= 5 ? line.split('\t').map(clean) : null;
+      const first = rowCells ? rowCells[0] : clean(line.slice(0, starts[1] >= 0 ? starts[1] : 20));
       const name = nameSet.get(first.toLowerCase());
-      if (name) {
-        flush(); current=name; cells={};
-      } else if (!current) continue;
+      if (name) { flush(); current=name; cells={}; }
+      else if (!current) continue;
       if (!cells) continue;
-      const parts={};
-      for (let c=0;c<cuts.length;c++) {
-        const begin=cuts[c].x;
-        const finish=c+1<cuts.length?cuts[c+1].x:undefined;
-        const value=clean(line.slice(begin,finish));
-        const labelIndex=cuts[c].i;
-        if (value) parts[labelIndex]=value;
-      }
-      for (const [idx,value] of Object.entries(parts)) {
-        const k=Number(idx);
-        cells[k]=cells[k] ? cells[k]+'\n'+value : value;
+
+      if (rowCells) {
+        for (const cut of cuts) {
+          const value = rowCells[cut.x] || '';
+          if (value) cells[cut.i] = cells[cut.i] ? cells[cut.i]+'\n'+value : value;
+        }
+      } else {
+        const parts={};
+        for (let c=0;c<cuts.length;c++) {
+          const begin=cuts[c].x;
+          const finish=c+1<cuts.length?cuts[c+1].x:undefined;
+          const value=clean(line.slice(begin,finish));
+          if (value) parts[cuts[c].i]=value;
+        }
+        for (const [idx,value] of Object.entries(parts)) {
+          const k=Number(idx);
+          cells[k]=cells[k] ? cells[k]+'\n'+value : value;
+        }
       }
     }
     flush();
@@ -251,49 +254,6 @@ function parseAge117Tables(text) {
 }
 
 
-/**
- * The supplied Age 117 prefinal PDF has wrapped cells that the PDF text extractor
- * moves to the left margin, so fixed-width column slicing corrupts neighboring fields.
- * For this recognizable source sheet, use the reviewed row-level values rather than
- * trusting the shifted extraction. Unchanged personalities are merged from Age 116
- * by ageUpdateService.
- */
-function repairPrefinal117(result, rawText) {
-  const source = String(rawText || '');
-  // PDF extractors can split or collapse table headings differently. The paired
-  // general-changes + unique-ability sections identify this exact prefinal sheet;
-  // do not make the reviewed row repair depend on the table header surviving intact.
-  if (!/Age 117 General Changes/i.test(source) ||
-      !/Unique Abilty Programming Changes from Existing/i.test(source)) return result;
-
-  const races = {
-    'Avian': { archetype:'Speed and Birth Rates', war_doctrine:'-7.5% Attack Time (-0.75% each)', unique_name:'Opportunistic Raiders', unique_passive:'Learn and Plunder attacks return armies 1 tick faster (after modifiers).', bonuses:['-20% Attack Travel Time','+25% Birth Rate'], penalties:['No Horses'], spells:['Town Watch'], units:{'Offensive Specialist':'12','Defensive Specialist':'10','Elite Unit':'14 / 3 / 900 / 6.25 / horse 2'} },
-    'Dark Elf': { archetype:'Magic / Attacker Hybrid', war_doctrine:'+10% Combat Instant Spell Damage (1% each)', unique_name:'Mystic Enthusiasts', unique_passive:'Successful offensive instant spells refund 30% of the rune cost.', bonuses:['+20% Combat Instant Spell Damage','-25% Spell Rune Costs (excluding ritual)','Immune to Sabotage Wizards'], penalties:['-20% Sabotage Damage'], spells:['Blizzard','Mind Focus'], units:{'Offensive Specialist':'11','Defensive Specialist':'11','Elite Unit':'13 / 4 / 900 / 6.25 / horse 2'} },
-    'Dryad': { archetype:'Top End Attack Power', war_doctrine:'+7.5% Offensive Military Efficiency (0.75% each)', unique_name:'Interdiction', unique_passive:'Successful attacks in War destroy 15% of enemy gold, 15% of enemy runes, and 15% of enemy food.', bonuses:['+10% Offensive Military Efficiency','+25% Increased Dragon Slaying Strength'], penalties:['-10% Building Efficiency'], spells:['Fanaticism'], units:{'Offensive Specialist':'10','Defensive Specialist':'9','Elite Unit':'15 / 3 / 925 / 6.75 / horse 2'} },
-    'Dwarf': { archetype:'Buildings', war_doctrine:'+10% Building Efficiency (1% each)', unique_name:'Construction Delays', unique_passive:'For 3 ticks after a successful attack, the target’s building efficiency is reduced by 10% (does not stack with multiple attacks).', bonuses:['+20% Building Efficiency','-50% Building Construction Cost','+25% Building Credits Gained from Combat','-20% Damage Taken from Raze Attacks','+25% Wizards Per Acre'], penalties:['+50% Food Consumption'], spells:['Miner’s Mystique'], units:{'Offensive Specialist':'10','Defensive Specialist':'10','Elite Unit':'13 / 5 / 950 / 6.5 / horse 2'} },
-    'Elf': { archetype:'Magic Focus TM', war_doctrine:'-20% Own Casualties When Defending (-2.0% each)', unique_name:'Arcane Respite', unique_passive:'Once activated, for the next 6 days, regenerate +2 mana per day.', bonuses:['+50% Rune Production','+1% Extra Mana Per Tick','+25% Offensive-Spell Duration'], penalties:['-20% Offensive Thievery Per Acre (TPA)'], spells:['Greater Protection','Pitfalls','Lightning Strike','Town Watch','Invisibility'], units:{'Offensive Specialist':'9','Defensive Specialist':'11','Elite Unit':'5 / 12 / 1000 / 7 / horse 2'} },
-    'Faery': { archetype:'Balanced TM', war_doctrine:'+7.5% Defensive Military Efficiency (0.75% each)', unique_name:'Arcane Overflow', unique_passive:'In War, every successful offensive spell also reduces enemy ritual effectiveness by 0.15%.', bonuses:['+1% Extra Mana Per Tick (in war)','-1% Mana Self Spell Cost','+10% Sabotage Damage','Can Train Thieves with Specialist Credits'], penalties:['-5% Max Population','+20% Combat Instant Spell Damage Received'], spells:['Ghost Workers','Miner’s Mystique'], units:{'Offensive Specialist':'9','Defensive Specialist':'10','Elite Unit':'4 / 13 / 1000 / 7.25 / horse 2'} },
-    'Gnome': { archetype:'Thief / Attacker Hybrid', war_doctrine:'+25% Birth Rate (2.5% each)', unique_name:'Cunning Assault', unique_passive:'Each successful attack provides one of the following thievery boosts for 6 days: +25% offensive thievery effectiveness, -25% thief losses, or +10% sabotage damage. All can be active at the same time.', bonuses:['+10% Sabotage Damage','Can Train Thieves with Specialist Credits','Immune to Expose Thieves','-25% Thief Losses','+1% Extra Stealth Per Tick (in war)'], penalties:['+20% Combat Instant Spell Damage Received'], spells:['Quick Feet'], units:{'Offensive Specialist':'11','Defensive Specialist':'11','Elite Unit':'13 / 3 / 850 / 6 / horse 2'} },
-    'Halfling': { archetype:'Thievery Focus TM', war_doctrine:'+5% Population (0.5% each)', unique_name:'Overgrowth', unique_passive:'Once activated, maximum population increases by +25% for 5 days.', bonuses:['+10% Max Population','+25% Thieves Per Acre','+25% Income','-20% Military Training Cost'], penalties:['-20% Offensive Wizards Per Acre (WPA)'], spells:['Invisibility'], units:{'Offensive Specialist':'9','Defensive Specialist':'10','Elite Unit':'6 / 11 / 1000 / 6.75 / horse 2'} },
-    'Human': { archetype:'Economy', war_doctrine:'+15% Income (1.5% each)', unique_name:'Civil Administration', unique_passive:'Prisoners generate an additional 2.0 gold coins per tick. Mercenary costs are reduced by 40%.', bonuses:['-20% Military Wages','Incite Riot Immunity','+20% Battle Gains'], penalties:['+1 mana self spell cost'], spells:['Tree of Gold'], units:{'Offensive Specialist':'10','Defensive Specialist':'10','Elite Unit':'13 / 4 / 900 / 6.25 / horse 2'} },
-    'Orc': { archetype:'Kills and Gains', war_doctrine:'+15% Enemy Casualties When Attacking (1.5% each)', unique_name:'Generals Authority', unique_passive:'When attacking with 2 or more generals, enemy military casualties are increased by +15%.', bonuses:['-50% Draft Cost','-100% Food Consumption','-40% Own Casualties When Attacking and Defending'], penalties:['-5% Defensive Military Efficiency'], spells:['Bloodlust'], units:{'Offensive Specialist':'11','Defensive Specialist':'10','Elite Unit':'14 / 3 / 900 / 6.25 / horse 2'} },
-    'Undead': { archetype:'Sustain and Plague', war_doctrine:'-20% Own Casualties When Attacking (-2.0% each)', unique_name:'Plaguebearers', unique_passive:'All successful attacks have a 33% chance to spread plague to the target province.', bonuses:['Immune to the Plague'], penalties:['-15% Birth Rate'], spells:['Ghost Workers'], units:{'Offensive Specialist':'10','Defensive Specialist':'10','Elite Unit':'13 / 4 / 900 / 6.25 / horse 2'} }
-  };
-  for (const [name, row] of Object.entries(races)) result.races[name] = { ...(result.races[name] || {}), emoji:null, ...row };
-  const personalities = {
-    'The Cleric': { unique_name:"Architect’s Revenge", unique_passive:'Incoming Raze damage is reduced by 15%. Your Raze attacks destroy 20% additional buildings.', bonuses:['+15% Defensive Military Efficiency','-15% Battle (Resource) Losses','-15% Sabotage Damage Received','-15% Spell Damage Received','-15% Damage Taken From Massacre Attacks'], starts_with:['+800 Soldiers','+800 Training Credits'], spells:['Salvation'] },
-    'The General': { unique_name:'Undermining Assault', unique_passive:'Your next successful attack applies Coordinated Strike to the target for 4 days, reducing their Watch Tower effectiveness by 15%.', bonuses:['+1 Army generals','Offensive specialist gets +1 strength','Elite gets +1 offensive strength','+50% Land Effect - Guilds'], starts_with:['+800 Soldiers','+800 Training Credits'], spells:['Righteous Aggressor'] },
-    'The Heretic': { unique_name:'Silent Assault', unique_passive:'50% fewer thievery losses when performing sabotage operations.', bonuses:['+50% Land Effect - Guilds','+10% Combat Instant Spell Damage','+10% Sabotage Damage','No Thieves lost on Failed Espionage Operations','+100% Land Effect - Guilds'], starts_with:['+400 Wizards','+400 Thieves'], spells:['Nightmares','Fools Gold','Mages Fury'] },
-    'The Mystic': { unique_name:'Black Magic', unique_passive:'Successful offensive instant spells also kill 1% of the target’s peasant population.', bonuses:['+25% Offensive Wizards Per Acre (WPA)','+1% Extra Mana Per Tick'], starts_with:['+800 Wizards'], spells:['Pitfalls','Chastity'] },
-    'The Rogue': { unique_name:'Shadow Persistence', unique_passive:'You may perform thievery operations even while overpopulated.', bonuses:['+25% Offensive Thievery Per Acre (TPA)','+75% Thieves’ Den Effectiveness','+1% Extra Stealth Per Tick','Access all Thievery Operations','-50% Losses on Learn Attacks'], starts_with:['+800 Thieves'], spells:['Mystic Aura','Scientific Insight'] },
-    'The Sage': { unique_name:'Holy Inquisition', unique_passive:'Successful attacks in War or Hostile temporarily suppress 15% of the target’s Science Effectiveness and reduce Book Generation by 20% for 6-8 ticks.', bonuses:['-50% Losses on Learn Attacks','+10 Starting Scientists'], starts_with:['+800 Soldiers','+800 Training Credits'], spells:['Fountain of Knowledge'] },
-    'The Tactician': { unique_name:'Dragon’s Wrath', unique_passive:'When attacking with a dragon, 3% of your raw offense from units will also deal damage to the dragon.', bonuses:['-15% Attack Travel Time','+25% Specialist Training Credits','100% successful espionage operations at 2x stealth'], starts_with:['+800 Soldiers','+800 Training Credits'], spells:['Illuminate Shadows'] },
-    'The Warrior': { unique_name:'Indomitable Spirit', unique_passive:'Once activated Warriors gain 5% Offensive Military Efficiency for 6 days.', bonuses:['+15% Offensive Military Efficiency','+15% Damage Dealt with Massacre Attacks'], starts_with:['+800 Soldiers','+800 Training Credits'], spells:['Heroes Inspiration'] }
-  };
-  for (const [name, row] of Object.entries(personalities)) result.personalities[name] = { ...(result.personalities[name] || {}), emoji:null, ...row };
-  return result;
-}
-
 function parse117(rawText) {
   let text = String(rawText).replace(/^\uFEFF/, '').replace(/\u000C/g, '').replace(/<PARSED TEXT FOR PAGE:\s*\d+\s*\/\s*\d+>/gi, '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
   const isPrefinal117 = /Age\s*117\s+General Changes/i.test(text) &&
@@ -302,7 +262,7 @@ function parse117(rawText) {
     /\bRace\s+Archetype[\s\S]{0,160}?\bBonuses\b/i.test(text) &&
     /\bPersonality\s+Archetype[\s\S]{0,160}?\bBonuses\b/i.test(text);
   if (isPrefinal117 || hasRaceAndPersonalityHeaders) {
-    return repairPrefinal117(parseAge117Tables(text), text);
+    return parseAge117Tables(text);
   }
   if (looksBoxed(text)) text = boxedToPlain(text);
   return readPlain(text);
