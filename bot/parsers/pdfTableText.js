@@ -36,12 +36,19 @@ async function extractPdfTableText(buffer) {
 
   const parser = new PDFParse({ data: buffer });
   try {
-    const result = await parser.getText();
+    const result = await parser.getText({ cellSeparator: '\t', cellThreshold: 7, lineEnforce: true });
     const pageText = Array.isArray(result?.pages)
       ? result.pages.map((page) => page?.text || '').filter(Boolean).join('\n')
       : '';
     const text = normalizePdfText(result?.text || pageText);
-    return { text, tableCount: countTables(text), pages: Array.isArray(result?.pages) ? result.pages.length : null };
+    let detectedTables = 0;
+    if (typeof parser.getTable === 'function') {
+      try {
+        const tableResult = await parser.getTable();
+        detectedTables = (tableResult?.pages || []).reduce((total, page) => total + (Array.isArray(page?.tables) ? page.tables.length : 0), 0);
+      } catch { /* Text extraction remains the fallback when vector table detection finds none. */ }
+    }
+    return { text, tableCount: Math.max(countTables(text), detectedTables), detectedTables, pages: Array.isArray(result?.pages) ? result.pages.length : null };
   } finally {
     try { await parser.destroy(); } catch {}
   }
