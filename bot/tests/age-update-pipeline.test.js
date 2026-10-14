@@ -75,6 +75,31 @@ test('serializes merged rules into database row sections', () => {
   assert.ok(rows.game.some((row) => row.category === 'dragon'));
 });
 
+test('parses fixed-width PDF layout extracted from the submitted Age 117 document', () => {
+  const { parse117 } = require('../parsers/age117');
+  const input = [
+    'Age 117 General Changes:',
+    'Fanaticism spell will only be available as a Racial Spell',
+    'Race          Archetype                 Bonuses                                      Penalties                      Unique Spells         Doctrine                       Ospec Dspec Elite O Elite D Elite Cost Elite NW Horse Unique Ability         Unqiue Effect',
+    'Avian         Speed and Birth Rates                                                  No Horses                      Town Watch                                            12      10     14      3      900      6.25      2    Opportunistic Raiders',
+    '                                        -20% Attack Travel Time                                                                           -7.5% Attack time                                                                                           Learn and Plunder attacks return armies 1 tick faster (after',
+    '                                        +25% Birth Rate                                                                                   (-0.75% each)                                                                                               modifiers).',
+    'Personality   Archetype                Bonuses                                      Unique Spells                Starting Units/Credits Unique Ability         Unqiue Effect',
+    'Cleric        Defensive                +15% Defensive Military Efficiency          Salvation                    +800 Soldiers           Architects Revenge      Incoming Raze damage is reduced by 15%.',
+    'Ritual        Effect',
+    'Barrier       -20% Damage from Enemy Instant Magic & Thievery Operations, -20% Battle (Resource) Losses, -20% Massacre Damage',
+    'Dragons       Effect',
+    'Emerald       +25% Military Casualties, -25% Combat Gains, destroys 1% of all troops on arrival'
+  ].join('\n');
+  const parsed = parse117(input);
+  assert.deepEqual(parsed.races.Avian.bonuses, ['-20% Attack Travel Time', '+25% Birth Rate']);
+  assert.equal(parsed.races.Avian.unique_name, 'Opportunistic Raiders');
+  assert.match(parsed.races.Avian.unique_passive, /Learn and Plunder attacks return armies 1 tick faster/);
+  assert.deepEqual(parsed.personalities['The Cleric'].bonuses, ['+15% Defensive Military Efficiency']);
+  assert.ok(parsed.rituals.Barrier);
+  assert.ok(parsed.dragons['Emerald Dragon']);
+});
+
 test('parses tab-separated PDF table cells by column rather than fixed character offsets', () => {
   const { parse117 } = require('../parsers/age117');
   const input = [
