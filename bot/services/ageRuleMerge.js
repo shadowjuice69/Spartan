@@ -129,14 +129,22 @@ async function loadBaseline(supabase, ageNumber) {
   for (const row of personalitiesResult.data) baseline.personalities[row.personality] = entityFromPersonality(row);
   for (const row of gameResult.data) {
     const category = String(row.category || '').toLowerCase();
-    const value = row.value ?? row.description ?? '';
+    let value = row.value ?? row.description ?? '';
+    if (typeof value === 'string') {
+      try {
+        const decoded = JSON.parse(value);
+        if (decoded && typeof decoded === 'object') value = decoded;
+      } catch {}
+    }
     if (category === 'dragon') {
       const name = /sapphire/i.test(row.rule_name) ? 'Sapphire Dragons' : /dragon/i.test(row.rule_name) ? row.rule_name : row.rule_name + ' Dragon';
       const existing = baseline.dragons[name] || (baseline.dragons[name] = { effects: [] });
-      existing.effects.push(String(value));
+      const effects = value && typeof value === 'object' && Array.isArray(value.effects) ? value.effects : [value];
+      existing.effects.push(...effects.filter((effect) => effect != null && effect !== '').map(String));
     } else if (category === 'ritual') {
       const name = String(row.rule_name || '');
-      baseline.rituals[name] = { effects: [String(value)] };
+      const effects = value && typeof value === 'object' && Array.isArray(value.effects) ? value.effects : [value];
+      baseline.rituals[name] = { effects: effects.filter((effect) => effect != null && effect !== '').map(String) };
     } else if (RULE_SECTIONS[category]) {
       baseline[RULE_SECTIONS[category]][row.rule_name] = value;
     }
