@@ -187,7 +187,15 @@ function mergeRules(baseline, changes) {
   }
   for (const section of ['buildings','spells','thievery','game_rules','science']) merged[section] = overlayGameSection(merged[section], changes[section]);
   for (const [name, value] of Object.entries(changes.rituals || {})) merged.rituals[name] = value;
-  for (const [name, value] of Object.entries(changes.dragons || {})) merged.dragons[name] = value;
+  const age117DragonTable = ['Emerald Dragon', 'Ruby Dragon', 'Sapphire Dragons', 'Topaz Dragon'];
+  // When the source explicitly supplies all four Age 117 dragon rows, treat that
+  // section as authoritative so an omitted Age 116 dragon cannot leak forward.
+  if (age117DragonTable.every(name => Object.prototype.hasOwnProperty.call(changes.dragons || {}, name)) &&
+      !Object.prototype.hasOwnProperty.call(changes.dragons || {}, 'Amethyst Dragon')) {
+    merged.dragons = { ...changes.dragons };
+  } else {
+    for (const [name, value] of Object.entries(changes.dragons || {})) merged.dragons[name] = value;
+  }
   applyRemovals(merged, changes.removed);
   return merged;
 }
@@ -208,7 +216,7 @@ function toRows(ageNumber, merged) {
   }
   return { races, personalities, game };
 }
-function validateMerged(merged, ageNumber, rawText, baseline) {
+function validateMerged(merged, ageNumber, rawText, baseline, parsed = null) {
   const issues = [];
   if (Object.keys(merged.races || {}).length < 10) issues.push('fewer than 10 race rules');
   if (Object.keys(merged.personalities || {}).length < 10) issues.push('fewer than 10 personality rules');
@@ -219,6 +227,31 @@ function validateMerged(merged, ageNumber, rawText, baseline) {
     for (const name of ['The Artisan','The General','The Heretic','The Mystic','The Necromancer','The Cleric','The Rogue','The Tactician','The Warrior','The War Hero','The Sage']) if (!merged.personalities[name]) issues.push('missing personality: ' + name);
     if (Object.keys(merged.rituals || {}).length < 6) issues.push('fewer than 6 rituals after merge');
     if (Object.keys(merged.dragons || {}).length < 4) issues.push('fewer than 4 dragons after merge');
+    if (/^\s*Race\s+Archetype[\s\S]{0,160}?\bBonuses\b/im.test(rawText)) {
+      for (const name of ['Avian','Dark Elf','Dryad','Dwarf','Elf','Faery','Gnome','Halfling','Human','Orc','Undead']) {
+        const race = merged.races[name];
+        const sourceRace = parsed?.races?.[name];
+        if (!sourceRace) { issues.push('race table row not parsed: ' + name); continue; }
+        if (!sourceRace.archetype) issues.push('race table field missing: ' + name + ' archetype');
+        if (!Array.isArray(sourceRace.bonuses) || !sourceRace.bonuses.length) issues.push('race table field missing: ' + name + ' bonuses');
+        if (!Array.isArray(sourceRace.spells) || sourceRace.spells.some(value => /^\d+(?:\.\d+)?$/.test(String(value).trim()))) issues.push('race table field invalid: ' + name + ' spells');
+        if (!sourceRace.units || !sourceRace.units['Offensive Specialist'] || !sourceRace.units['Defensive Specialist']) issues.push('race table field missing: ' + name + ' specialist stats');
+      }
+    }
+    if (/^\s*Personality\s+Archetype[\s\S]{0,160}?\bBonuses\b/im.test(rawText)) {
+      for (const shortName of ['Cleric','General','Heretic','Mystic','Necromancer','Rogue','Sage','Tactician','Warrior','War Hero','Artisan']) {
+        if (!new RegExp('(?:^|\\n)\\s*' + shortName + '\\s*\\t', 'i').test(rawText)) continue;
+        const name = 'The ' + shortName;
+        const personality = parsed?.personalities?.[name];
+        if (!personality) { issues.push('personality table row not parsed: ' + name); continue; }
+        if (!personality.unique_name) issues.push('personality table field missing: ' + name + ' unique ability');
+        if (!Array.isArray(personality.bonuses) || !personality.bonuses.length) issues.push('personality table field missing: ' + name + ' bonuses');
+      }
+    }
+    if (/^\s*Dragons?\s+Effect\s*$/im.test(rawText)) {
+      for (const name of ['Emerald Dragon','Ruby Dragon','Sapphire Dragons','Topaz Dragon']) if (!merged.dragons[name]) issues.push('missing Age 117 dragon: ' + name);
+      if (merged.dragons['Amethyst Dragon']) issues.push('obsolete Age 116 dragon still present: Amethyst Dragon');
+    }
     const gameCount = ['spells','thievery','buildings','science','game_rules'].reduce((n, section) => n + Object.keys(merged[section] || {}).length, 0);
     if (gameCount < 4) issues.push('fewer than 4 game-rule entries after merge');
   }
@@ -230,7 +263,7 @@ async function buildReview(supabase, rawText, ageNumber) {
   let baseline = null;
   if (needsBaseline) baseline = await loadBaseline(supabase, ageNumber);
   const merged = needsBaseline ? mergeRules(baseline.rules, parsed) : parsed;
-  const issues = validateMerged(merged, ageNumber, rawText, baseline);
+  const issues = validateMerged(merged, ageNumber, rawText, baseline, parsed);
   const summaryLines = [
     'Age ' + ageNumber + ' parsed with ' + parsed.source.parser,
     'Baseline: ' + (baseline ? 'Age ' + baseline.age + ' (' + baseline.source + ')' : 'not required'),

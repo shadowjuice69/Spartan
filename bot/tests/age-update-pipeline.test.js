@@ -3,7 +3,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { extractRemovals, parseAgeChangeText } = require('../parsers/ageChangeParser');
-const { mergeRules, toRows } = require('../services/ageRuleMerge');
+const { mergeRules, toRows, validateMerged } = require('../services/ageRuleMerge');
 
 test('parses removal entries from the revised change log', () => {
   const removed = extractRemovals([
@@ -146,4 +146,45 @@ test('parses tab-separated PDF table cells by column rather than fixed character
   assert.equal(parsed.personalities['The Cleric'].unique_name, 'Architects Revenge');
   assert.ok(parsed.rituals.Barrier);
   assert.ok(parsed.dragons['Emerald Dragon']);
+});
+
+test('replaces the previous-age dragon list when all four Age 117 dragons are supplied', () => {
+  const baseline = {
+    races: {}, personalities: {}, buildings: {}, spells: {}, thievery: {}, game_rules: {}, science: {}, rituals: {},
+    dragons: { 'Amethyst Dragon': { effects: ['obsolete recurring effect'] }, 'Emerald Dragon': { effects: ['old'] } }
+  };
+  const changes = {
+    races: {}, personalities: {}, buildings: {}, spells: {}, thievery: {}, game_rules: {}, science: {}, rituals: {},
+    dragons: {
+      'Emerald Dragon': { effects: ['emerald'] },
+      'Ruby Dragon': { effects: ['ruby'] },
+      'Sapphire Dragons': { effects: ['sapphire'] },
+      'Topaz Dragon': { effects: ['topaz'] }
+    }
+  };
+  const merged = mergeRules(baseline, changes);
+  assert.deepEqual(Object.keys(merged.dragons).sort(), [
+    'Emerald Dragon', 'Ruby Dragon', 'Sapphire Dragons', 'Topaz Dragon'
+  ].sort());
+  assert.equal(merged.dragons['Amethyst Dragon'], undefined);
+});
+
+test('blocks Age 117 PDFs when table rows were not actually parsed', () => {
+  const rawText = [
+    'Age 117 General Changes:',
+    'Race Archetype Bonuses',
+    'Personality Archetype Bonuses',
+    'Ritual Effect',
+    'Dragons Effect'
+  ].join('\n');
+  const merged = {
+    races: Object.fromEntries(['Avian','Dark Elf','Dryad','Dwarf','Elf','Faery','Gnome','Halfling','Human','Orc','Undead'].map(name => [name, { archetype: 'baseline', bonuses: ['baseline'], spells: ['spell'], units: { 'Offensive Specialist': '1/1', 'Defensive Specialist': '1/1' } }])),
+    personalities: Object.fromEntries(['The Artisan','The General','The Heretic','The Mystic','The Necromancer','The Cleric','The Rogue','The Tactician','The Warrior','The War Hero','The Sage'].map(name => [name, { bonuses: ['baseline'], unique_name: 'baseline' }])),
+    rituals: Object.fromEntries(['Barrier','Benediction','Haste','Havoc','Onslaught','Stalwart'].map(name => [name, { effects: ['effect'] }])),
+    dragons: Object.fromEntries(['Emerald Dragon','Ruby Dragon','Sapphire Dragons','Topaz Dragon'].map(name => [name, { effects: ['effect'] }])),
+    game_rules: { one: 'a', two: 'b', three: 'c', four: 'd' }, spells: {}, thievery: {}, buildings: {}, science: {}
+  };
+  const parsed = { races: {}, personalities: {}, rituals: merged.rituals, dragons: merged.dragons, game_rules: merged.game_rules };
+  const issues = validateMerged(merged, 117, rawText, { age: 116 }, parsed);
+  assert.ok(issues.some(issue => issue.includes('race table row not parsed')));
 });
