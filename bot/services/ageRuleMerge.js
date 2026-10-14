@@ -210,6 +210,87 @@ function validateMerged(merged, ageNumber, rawText, baseline) {
   }
   return issues;
 }
+
+function displayValue(value) {
+  if (value === undefined) return '(missing)';
+  if (value === null || value === '') return '(empty)';
+  if (Array.isArray(value)) return value.length ? value.map(String).join('; ') : '(empty)';
+  if (typeof value === 'object') return Object.entries(value).map(([k, v]) => k + ': ' + displayValue(v)).join(' | ') || '(empty)';
+  return String(value);
+}
+function equivalent(a, b) {
+  return JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+}
+function keyFor(section, key, baselineSection) {
+  if (Object.prototype.hasOwnProperty.call(baselineSection || {}, key)) return key;
+  const found = Object.keys(baselineSection || {}).find((candidate) => candidate.toLowerCase() === key.toLowerCase());
+  if (found) return found;
+  if (section === 'personalities') {
+    const normalized = key.replace(/^The\s+/i, '').toLowerCase();
+    return Object.keys(baselineSection || {}).find((candidate) => candidate.replace(/^The\s+/i, '').toLowerCase() === normalized) || null;
+  }
+  return null;
+}
+function buildChangeDetails(parsed, baseline, merged) {
+  const lines = ['CHANGE-BY-CHANGE REVIEW', 'Legend: + added | ~ changed | - removed | = inherited unchanged', ''];
+  const sections = [
+    ['races', 'Races'], ['personalities', 'Personalities'], ['rituals', 'Rituals'],
+    ['dragons', 'Dragons'], ['spells', 'Spells'], ['thievery', 'Thievery'],
+    ['buildings', 'Buildings'], ['science', 'Science'], ['game_rules', 'General/game rules']
+  ];
+  const baseRules = baseline?.rules || {};
+  for (const [section, title] of sections) {
+    const base = baseRules[section] || {};
+    const changed = parsed?.[section] || {};
+    const finalRules = merged?.[section] || {};
+    const details = [];
+    for (const [name, value] of Object.entries(changed)) {
+      const priorKey = keyFor(section, name, base);
+      const prior = priorKey ? base[priorKey] : undefined;
+      if (section === 'races' || section === 'personalities') {
+        const fields = [];
+        for (const field of Object.keys(value || {})) {
+          const next = value[field];
+          const isEmptyArray = Array.isArray(next) && next.length === 0;
+          const isEmptyObject = next && typeof next === 'object' && !Array.isArray(next) && Object.keys(next).length === 0;
+          if (next === undefined || next === null || next === '' || isEmptyArray || isEmptyObject) continue;
+          const old = prior?.[field];
+          if (!priorKey || !equivalent(old, next)) fields.push('  • ' + field + ': ' + displayValue(old) + ' → ' + displayValue(next));
+        }
+        if (fields.length) details.push((priorKey ? '~ CHANGED ' : '+ ADDED ') + name + '\n' + fields.join('\n'));
+      } else {
+        const next = value;
+        if (!priorKey) details.push('+ ADDED ' + name + ': ' + displayValue(next));
+        else if (!equivalent(prior, next)) details.push('~ CHANGED ' + name + '\n  • before: ' + displayValue(prior) + '\n  • after:  ' + displayValue(next));
+      }
+    }
+    for (const item of parsed?.removed || []) {
+      const cat = String(item.category || '').toLowerCase();
+      const expected = cat === 'race' ? 'races' : cat === 'personality' ? 'personalities' :
+        cat === 'spell' ? 'spells' : cat === 'ritual' ? 'rituals' : cat === 'dragon' ? 'dragons' :
+        cat === 'thievery' ? 'thievery' : cat === 'building' ? 'buildings' :
+        cat === 'science' ? 'science' : cat === 'game_rule' ? 'game_rules' : '';
+      if (expected === section || (!expected && item.entity && (section === 'races' || section === 'personalities'))) {
+        details.push('- REMOVED ' + (item.entity ? item.entity + ' → ' : '') + item.name);
+      }
+    }
+    const inherited = Object.keys(finalRules).filter((key) => {
+      if (Object.prototype.hasOwnProperty.call(changed, key)) return false;
+      const priorKey = keyFor(section, key, base);
+      return Boolean(priorKey) && equivalent(finalRules[key], base[priorKey]);
+    }).length;
+    lines.push(title + ' (' + details.length + ' detected change entries; ' + inherited + ' unchanged inherited entries)');
+    lines.push(details.length ? details.join('\n') : '  No explicit differences detected in this section.');
+    lines.push('');
+  }
+  if (parsed?.removed?.length) {
+    lines.push('REMOVAL RECORDS');
+    for (const item of parsed.removed) lines.push('- ' + (item.category || 'unspecified') + ': ' + item.name + (item.entity ? ' (entity: ' + item.entity + ')' : ''));
+    lines.push('');
+  }
+  return lines.join('\n');
+}
+
 async function buildReview(supabase, rawText, ageNumber) {
   const parsed = parseAgeChangeText(rawText, ageNumber);
   const needsBaseline = isChangeSheet(rawText, ageNumber);
@@ -228,7 +309,9 @@ async function buildReview(supabase, rawText, ageNumber) {
     'Thievery: ' + Object.keys(merged.thievery || {}).length,
     'Buildings: ' + Object.keys(merged.buildings || {}).length,
     'Science: ' + Object.keys(merged.science || {}).length,
-    'Game rules: ' + Object.keys(merged.game_rules || {}).length
+    'Game rules: ' + Object.keys(merged.game_rules || {}).length,
+    '',
+    buildChangeDetails(parsed, baseline, merged)
   ];
   if (issues.length) summaryLines.push('', 'BLOCKED:', ...issues.map((x) => '- ' + x));
   return { parsed, merged, baseline: baseline || { source: 'not_required', age: null }, issues, ready: issues.length === 0, summary: summaryLines.join('\n') };
