@@ -10,6 +10,7 @@ on:
       - "bot/services/ageUpdateMessageHandler.js"
       - "bot/tests/**"
       - "bot/package.json"
+      - ".github/workflows/age-update-pipeline.yml"
   pull_request:
     paths:
       - "bot/parsers/**"
@@ -18,6 +19,7 @@ on:
       - "bot/services/ageUpdateMessageHandler.js"
       - "bot/tests/**"
       - "bot/package.json"
+      - ".github/workflows/age-update-pipeline.yml"
   workflow_dispatch:
 
 jobs:
