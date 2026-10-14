@@ -36,7 +36,7 @@ async function extractPdfTableText(buffer) {
 
   const parser = new PDFParse({ data: buffer });
   try {
-    const result = await parser.getText({ cellSeparator: '\t', cellThreshold: 1, lineEnforce: true });
+    const result = await parser.getText({ cellSeparator: '\t', cellThreshold: 7, lineEnforce: true });
     const pageText = Array.isArray(result?.pages)
       ? result.pages.map((page) => page?.text || '').filter(Boolean).join('\n')
       : '';
