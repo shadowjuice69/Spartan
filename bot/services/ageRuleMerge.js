@@ -227,22 +227,25 @@ function validateMerged(merged, ageNumber, rawText, baseline) {
     for (const name of ['The Artisan','The General','The Heretic','The Mystic','The Necromancer','The Cleric','The Rogue','The Tactician','The Warrior','The War Hero','The Sage']) if (!merged.personalities[name]) issues.push('missing personality: ' + name);
     if (Object.keys(merged.rituals || {}).length < 6) issues.push('fewer than 6 rituals after merge');
     if (Object.keys(merged.dragons || {}).length < 4) issues.push('fewer than 4 dragons after merge');
-    if (/^\\s*Race\\s+Archetype[\\s\\S]{0,160}?\\bBonuses\\b/im.test(rawText)) {
+    if (/^\s*Race\s+Archetype[\s\S]{0,160}?\bBonuses\b/im.test(rawText)) {
       for (const name of ['Avian','Dark Elf','Dryad','Dwarf','Elf','Faery','Gnome','Halfling','Human','Orc','Undead']) {
         const race = merged.races[name];
         if (!race?.archetype) issues.push('race table field missing: ' + name + ' archetype');
         if (!Array.isArray(race?.bonuses) || !race.bonuses.length) issues.push('race table field missing: ' + name + ' bonuses');
-        if (!Array.isArray(race?.spells) || race.spells.some(value => /^\\d+(?:\\.\\d+)?$/.test(String(value).trim()))) issues.push('race table field invalid: ' + name + ' spells');
+        if (!Array.isArray(race?.spells) || race.spells.some(value => /^\d+(?:\.\d+)?$/.test(String(value).trim()))) issues.push('race table field invalid: ' + name + ' spells');
         if (!race?.units || !race.units['Offensive Specialist'] || !race.units['Defensive Specialist']) issues.push('race table field missing: ' + name + ' specialist stats');
       }
     }
-    if (/^\\s*Personality\\s+Archetype[\\s\\S]{0,160}?\\bBonuses\\b/im.test(rawText)) {
-      for (const [name, personality] of Object.entries(merged.personalities || {}).filter(([name]) => new RegExp('(?:^|\\\\n)\\\\s*' + name.replace(/^The\\s+/i, '').replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\for (const [name, personality] of Object.entries(parsedPersonalitiesForValidation(merged, rawText))) {') + '\\\\s+\\\\t', 'i').test(rawText))) {
-        if (!personality.unique_name) issues.push('personality table field missing: ' + name + ' unique ability');
-        if (!Array.isArray(personality.bonuses) || !personality.bonuses.length) issues.push('personality table field missing: ' + name + ' bonuses');
+    if (/^\s*Personality\s+Archetype[\s\S]{0,160}?\bBonuses\b/im.test(rawText)) {
+      for (const shortName of ['Cleric','General','Heretic','Mystic','Necromancer','Rogue','Sage','Tactician','Warrior','War Hero','Artisan']) {
+        if (!new RegExp('(?:^|\\n)\\s*' + shortName + '\\s*\\t', 'i').test(rawText)) continue;
+        const name = 'The ' + shortName;
+        const personality = merged.personalities[name];
+        if (!personality?.unique_name) issues.push('personality table field missing: ' + name + ' unique ability');
+        if (!Array.isArray(personality?.bonuses) || !personality.bonuses.length) issues.push('personality table field missing: ' + name + ' bonuses');
       }
     }
-    if (/^\\s*Dragons?\\s+Effect\\s*$/im.test(rawText)) {
+    if (/^\s*Dragons?\s+Effect\s*$/im.test(rawText)) {
       for (const name of ['Emerald Dragon','Ruby Dragon','Sapphire Dragons','Topaz Dragon']) if (!merged.dragons[name]) issues.push('missing Age 117 dragon: ' + name);
       if (merged.dragons['Amethyst Dragon']) issues.push('obsolete Age 116 dragon still present: Amethyst Dragon');
     }
