@@ -5,6 +5,16 @@ const assert = require('node:assert/strict');
 const { extractRemovals, parseAgeChangeText } = require('../parsers/ageChangeParser');
 const { mergeRules, toRows, validateParsedShape } = require('../services/ageRuleMerge');
 
+test('preserves fixed-width indentation in extracted PDF tables', () => {
+  const { normalizePdfText } = require('../parsers/pdfTableText');
+  const input = 'Race          Archetype                 Bonuses\\n' +
+    '                                        -20% Attack Travel Time\\n' +
+    'Avian         Speed and Birth Rates';
+  const normalized = normalizePdfText(input);
+  assert.ok(normalized.includes('\\n                                        -20% Attack Travel Time'));
+  assert.ok(normalized.includes('\\nAvian         Speed and Birth Rates'));
+});
+
 test('parses removal entries from the revised change log', () => {
   const removed = extractRemovals([
     'Change Log from Revised:',
