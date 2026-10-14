@@ -17,6 +17,8 @@ test('parses removal entries from the revised change log', () => {
     { category: 'ritual', name: 'Ascendancy', entity: null },
     { category: '', name: 'Greed Immunity', entity: 'Human' }
   ]);
+  const compound = extractRemovals('Change Log from Revised:\\nHuman: Removed Greed Immunity, Unique Ability changed to Civil Administration');
+  assert.deepEqual(compound, [{ category: '', name: 'Greed Immunity', entity: 'Human' }]);
 });
 
 test('merges sparse proposed changes over baseline without erasing omitted fields', () => {
