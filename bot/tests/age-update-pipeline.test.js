@@ -72,3 +72,28 @@ test('serializes merged rules into database row sections', () => {
   assert.ok(rows.game.some((row) => row.category === 'ritual'));
   assert.ok(rows.game.some((row) => row.category === 'dragon'));
 });
+
+test('parses tab-separated PDF table cells by column rather than fixed character offsets', () => {
+  const { parse117 } = require('../parsers/age117');
+  const input = [
+    'Age 117 General Changes:',
+    'General change note',
+    'Race\tArchetype\tBonuses\tPenalties\tUnique Spells\tDoctrine\tOspec\tDspec\tElite O\tElite D\tElite Cost\tElite NW\tHorse\tUnique Ability\tUnqiue Effect',
+    'Avian\tSpeed and Birth Rates\t+25% Birth Rate\tNo Horses\tTown Watch\t-7.5% Attack Time\t12\t10\t14\t3\t900\t6.25\t2\tOpportunistic Raiders\tLearn and Plunder returns armies 1 tick faster.',
+    'Personality\tArchetype\tBonuses\tUnique Spells\tStarting Units/Credits\tUnique Ability\tUnqiue Effect',
+    'Cleric\tDefensive\t+15% Defensive Military Efficiency\tSalvation\t+800 Soldiers\tArchitects Revenge\tIncoming Raze damage is reduced by 15%.',
+    'Ritual Effect',
+    'Barrier\t-20% Damage from Enemy Instant Magic',
+    'Dragons Effect',
+    'Emerald\t+25% Military Casualties'
+  ].join('\n');
+  const parsed = parse117(input);
+  assert.deepEqual(parsed.races.Avian.bonuses, ['+25% Birth Rate']);
+  assert.deepEqual(parsed.races.Avian.penalties, ['No Horses']);
+  assert.equal(parsed.races.Avian.war_doctrine, '-7.5% Attack Time');
+  assert.equal(parsed.races.Avian.unique_name, 'Opportunistic Raiders');
+  assert.deepEqual(parsed.personalities['The Cleric'].bonuses, ['+15% Defensive Military Efficiency']);
+  assert.equal(parsed.personalities['The Cleric'].unique_name, 'Architects Revenge');
+  assert.ok(parsed.rituals.Barrier);
+  assert.ok(parsed.dragons['Emerald Dragon']);
+});
