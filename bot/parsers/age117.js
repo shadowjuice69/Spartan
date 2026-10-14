@@ -166,10 +166,10 @@ function parseAge117Tables(text) {
     const labels = kind === 'race'
       ? ['Race','Archetype','Bonuses','Penalties','Unique Spells','Doctrine','Ospec','Dspec','Elite O','Elite D','Elite Cost','Elite NW','Horse','Unique Ability','Unqiue Effect']
       : ['Personality','Archetype','Bonuses','Unique Spells','Starting Units/Credits','Unique Ability','Unqiue Effect'];
-    const starts = labels.map(label => {
-      const idx = header.toLowerCase().indexOf(label.toLowerCase());
-      return idx < 0 ? -1 : idx;
-    });
+    const tabHeader = header.includes('\t') ? header.split('\t').map(clean) : null;
+    const starts = labels.map(label => tabHeader && tabHeader.length >= 5
+      ? tabHeader.findIndex(cell => cell.toLowerCase().includes(label.toLowerCase()))
+      : header.toLowerCase().indexOf(label.toLowerCase()));
     if (starts[0] < 0 || starts[1] < 0 || starts[2] < 0) return;
     const cuts = starts.map((x,i)=>({x,i})).filter(v=>v.x>=0).sort((a,b)=>a.x-b.x);
     const nameSet = new Map(names.map(n=>[n.toLowerCase(),n]));
@@ -182,17 +182,13 @@ function parseAge117Tables(text) {
         const penalties = bullets(cell(3));
         const spells = cell(4).split(/,\s*/).map(clean).filter(Boolean);
         const units = {};
-        const unitSpecs = [
-          ['Offensive Specialist',6],['Defensive Specialist',7]
-        ];
-        for (const [name,idx] of unitSpecs) if (cell(idx)) units[name]=cell(idx);
+        if (cell(6)) units['Offensive Specialist']=cell(6);
+        if (cell(7)) units['Defensive Specialist']=cell(7);
         const elite = [cell(8),cell(9),cell(10),cell(11)].filter(Boolean);
         if (elite.length) units['Elite Unit']=elite.join(' / ') + (cell(12) ? ' / horse ' + cell(12) : '');
         result.races[current] = {
           emoji:null, archetype:cell(1)||null, bonuses, penalties, units, spells,
-          war_doctrine:cell(5)||null,
-          unique_name:cell(13)||null,
-          unique_passive:cell(14)||null
+          war_doctrine:cell(5)||null, unique_name:cell(13)||null, unique_passive:cell(14)||null
         };
       } else {
         result.personalities['The ' + current] = {
@@ -206,23 +202,30 @@ function parseAge117Tables(text) {
     for (let i=start+1; i<Math.min(lines.length,end); i++) {
       const line=lines[i];
       if (kind === 'personality' && /^\s*(?:Ritual\s+Effect|Dragons?\s+Effect)\b/i.test(line)) break;
-      const first = clean(line.slice(0, starts[1] >= 0 ? starts[1] : 20));
+      const rowCells = tabHeader && tabHeader.length >= 5 ? line.split('\t').map(clean) : null;
+      const first = rowCells ? rowCells[0] : clean(line.slice(0, starts[1] >= 0 ? starts[1] : 20));
       const name = nameSet.get(first.toLowerCase());
-      if (name) {
-        flush(); current=name; cells={};
-      } else if (!current) continue;
+      if (name) { flush(); current=name; cells={}; }
+      else if (!current) continue;
       if (!cells) continue;
-      const parts={};
-      for (let c=0;c<cuts.length;c++) {
-        const begin=cuts[c].x;
-        const finish=c+1<cuts.length?cuts[c+1].x:undefined;
-        const value=clean(line.slice(begin,finish));
-        const labelIndex=cuts[c].i;
-        if (value) parts[labelIndex]=value;
-      }
-      for (const [idx,value] of Object.entries(parts)) {
-        const k=Number(idx);
-        cells[k]=cells[k] ? cells[k]+'\n'+value : value;
+
+      if (rowCells) {
+        for (const cut of cuts) {
+          const value = rowCells[cut.x] || '';
+          if (value) cells[cut.i] = cells[cut.i] ? cells[cut.i]+'\n'+value : value;
+        }
+      } else {
+        const parts={};
+        for (let c=0;c<cuts.length;c++) {
+          const begin=cuts[c].x;
+          const finish=c+1<cuts.length?cuts[c+1].x:undefined;
+          const value=clean(line.slice(begin,finish));
+          if (value) parts[cuts[c].i]=value;
+        }
+        for (const [idx,value] of Object.entries(parts)) {
+          const k=Number(idx);
+          cells[k]=cells[k] ? cells[k]+'\n'+value : value;
+        }
       }
     }
     flush();
