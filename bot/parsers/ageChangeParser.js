@@ -170,11 +170,23 @@ function parseAge117Tables(text) {
     const labels = kind === 'race'
       ? ['Race','Archetype','Bonuses','Penalties','Unique Spells','Doctrine','Ospec','Dspec','Elite O','Elite D','Elite Cost','Elite NW','Horse','Unique Ability','Unqiue Effect']
       : ['Personality','Archetype','Bonuses','Unique Spells','Starting Units/Credits','Unique Ability','Unqiue Effect'];
+    // PDF text extractors sometimes insert a few tabs without preserving every table
+    // column. Treat tabs as true columns only when every expected header maps to a
+    // distinct cell; otherwise use the document's fixed-width header positions.
     const tabHeader = header.includes('\t') ? header.split('\t').map(clean) : null;
-    const starts = labels.map(label => tabHeader && tabHeader.length >= 5
-      ? tabHeader.findIndex(cell => cell.toLowerCase().includes(label.toLowerCase()))
-      : header.toLowerCase().indexOf(label.toLowerCase()));
-    if (starts[0] < 0 || starts[1] < 0 || starts[2] < 0) return;
+    const tabStarts = tabHeader
+      ? labels.map(label => tabHeader.findIndex(cell => cell.toLowerCase().includes(label.toLowerCase())))
+      : [];
+    const useTabs = Boolean(
+      tabHeader &&
+      tabHeader.length >= labels.length &&
+      tabStarts.every(index => index >= 0) &&
+      new Set(tabStarts).size === labels.length
+    );
+    const starts = useTabs
+      ? tabStarts
+      : labels.map(label => header.toLowerCase().indexOf(label.toLowerCase()));
+    if (starts[0] < 0 || starts[1] < 0 || starts[2] < 0 || new Set(starts.filter(x => x >= 0)).size !== starts.filter(x => x >= 0).length) return;
     const cuts = starts.map((x,i)=>({x,i})).filter(v=>v.x>=0).sort((a,b)=>a.x-b.x);
     const nameSet = new Map(names.map(n=>[n.toLowerCase(),n]));
     let current = null, cells = null;
@@ -206,7 +218,7 @@ function parseAge117Tables(text) {
     for (let i=start+1; i<Math.min(lines.length,end); i++) {
       const line=lines[i];
       if (kind === 'personality' && /^\s*(?:Ritual\s+Effect|Dragons?\s+Effect)\b/i.test(line)) break;
-      const rowCells = tabHeader && tabHeader.length >= 5 ? line.split('\t').map(clean) : null;
+      const rowCells = useTabs ? line.split('\t').map(clean) : null;
       const first = rowCells ? rowCells[0] : clean(line.slice(0, starts[1] >= 0 ? starts[1] : 20));
       const name = nameSet.get(first.toLowerCase());
       if (name) { flush(); current=name; cells={}; }
