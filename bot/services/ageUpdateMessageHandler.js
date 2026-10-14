@@ -5,9 +5,39 @@ const config = require("../config/config");
 const permissionService = require("./permissionService");
 const logger = require("./logger");
 const { saveAgeUpdate } = require("./ageUpdateService");
+const { buildDetailedAgeChangeReport } = require("./ageChangeReport");
 const { extractPdfTableText } = require("../parsers/pdfTableText");
 
 const MAX_FILE_BYTES = 15 * 1024 * 1024;
+
+function splitReportPages(text, maxChars = 3300) {
+  const pages = [];
+  let page = "";
+  for (const line of String(text || "").split(/\r?\n/)) {
+    const pieces = line.length > maxChars
+      ? line.match(new RegExp(".{1," + maxChars + "}", "g")) || [line]
+      : [line];
+    for (const piece of pieces) {
+      const next = page ? page + "\n" + piece : piece;
+      if (next.length > maxChars && page) {
+        pages.push(page);
+        page = piece;
+      } else page = next;
+    }
+  }
+  if (page || !pages.length) pages.push(page || "No detailed report was generated.");
+  return pages;
+}
+
+async function sendRemainingReportPages(channel, ageNumber, recordId, pages) {
+  for (let index = 1; index < pages.length; index++) {
+    const embed = new EmbedBuilder()
+      .setColor(0x5865F2)
+      .setTitle("📘 Age " + ageNumber + " — Full Change Report (" + (index + 1) + "/" + pages.length + ")")
+      .setDescription(pages[index]);
+    await channel.send({ embeds: [embed] });
+  }
+}
 
 function extractAge(text) {
   const match = String(text || "").match(/\bage\s*[-_:]?\s*(\d{2,3})\b/i);
@@ -102,11 +132,12 @@ module.exports = async function ageUpdateMessageHandler(message) {
     }
     if (savedUpdate.error === "duplicate") {
       if (savedUpdate.status === "pending") {
-        const summary = String(savedUpdate.parsedSummary || "").trim();
-        const preview = summary.length > 2600 ? summary.slice(0, 2600) + "\n…Full parser preview is attached." : summary;
+        const summary = buildDetailedAgeChangeReport(updateText, ageNumber, savedUpdate.parsedSummary);
+        const summaryPages = splitReportPages(summary);
+        const preview = summaryPages[0];
         const ready = Boolean(savedUpdate.parsedReady);
         const review = new EmbedBuilder().setColor(ready ? 0xD6A84F : 0xD64545)
-          .setTitle("📘 Age " + ageNumber + " — Existing Pending Review")
+          .setTitle("📘 Age " + ageNumber + " — Existing Pending Review (Page 1/" + summaryPages.length + ")")
           .setDescription(["**Record:** #" + savedUpdate.existingId,
             "**Status:** Pending review — nothing has been applied.", "", "**Parser summary**",
             preview || "🛑 **No structured rules detected. Do not apply this upload.**"].join("\n"))
@@ -117,15 +148,17 @@ module.exports = async function ageUpdateMessageHandler(message) {
           new ButtonBuilder().setCustomId("age_revoke_" + savedUpdate.existingId).setLabel("❌ Cancel Review").setStyle(ButtonStyle.Danger));
         const files = summary ? [new AttachmentBuilder(Buffer.from(summary, "utf8"), { name: "age-" + ageNumber + "-review-" + savedUpdate.existingId + ".txt" })] : [];
         await message.reply({ embeds: [review], components: [buttons], files });
+        await sendRemainingReportPages(message.channel, ageNumber, savedUpdate.existingId, summaryPages);
       } else await message.reply("⚠️ An Age " + ageNumber + " record already exists and is **" + savedUpdate.status + "**. No duplicate was created.");
       return true;
     }
 
-    const summary = String(savedUpdate.parsedSummary || "").trim();
-    const preview = summary.length > 2600 ? summary.slice(0, 2600) + "\n…Full parser preview is attached." : summary;
+    const summary = buildDetailedAgeChangeReport(updateText, ageNumber, savedUpdate.parsedSummary);
+    const summaryPages = splitReportPages(summary);
+    const preview = summaryPages[0];
     const ready = Boolean(savedUpdate.parsedReady);
     const review = new EmbedBuilder().setColor(ready ? 0xD6A84F : 0xD64545)
-      .setTitle("📘 Age " + savedUpdate.age_number + " — Review Proposed Changes")
+      .setTitle("📘 Age " + savedUpdate.age_number + " — Review Proposed Changes (Page 1/" + summaryPages.length + ")")
       .setDescription(["**Status:** Pending review — nothing has been applied.", "",
         "**Parser summary**", preview || "🛑 **No structured rules detected. Do not apply this upload.**",
         "", "**Before you apply**",
@@ -142,6 +175,7 @@ module.exports = async function ageUpdateMessageHandler(message) {
       new ButtonBuilder().setCustomId("age_revoke_" + savedUpdate.id).setLabel("❌ Cancel Review").setStyle(ButtonStyle.Danger));
     const files = summary ? [new AttachmentBuilder(Buffer.from(summary, "utf8"), { name: "age-" + savedUpdate.age_number + "-review-" + savedUpdate.id + ".txt" })] : [];
     await message.reply({ embeds: [review], components: [buttons], files });
+    await sendRemainingReportPages(message.channel, savedUpdate.age_number, savedUpdate.id, summaryPages);
     logger.info("[AGE UPDATE INTAKE] id=" + savedUpdate.id + " age=" + savedUpdate.age_number + " submitted_by=" + message.author.id);
   } catch (error) {
     logger.error("[AGE UPDATE INTAKE ERROR] " + (error.stack || error.message));
