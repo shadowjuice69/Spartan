@@ -252,17 +252,17 @@ function validateMerged(merged, ageNumber, rawText, baseline) {
     const requiredSourceSections = [
       [/Age\\s*117\\s+General Changes/i, 'general changes'],
       [/Change Log from Revised/i, 'revision change log'],
-      [/Unique Abilit(?:y|i) Programming Changes from Existing/i, 'unique-ability programming changes'],
+      [/Unique Abil(?:i)?ty Programming Changes from Existing/i, 'unique-ability programming changes'],
       [/Ritual\\s+Effect/i, 'ritual effects'],
       [/Dragons?\\s+Effect/i, 'dragon effects'],
       [/Race\\s+Archetype\\s+Bonuses/i, 'race table'],
       [/Personality\\s+Archetype\\s+Bonuses/i, 'personality table']
     ];
     for (const [pattern, label] of requiredSourceSections) if (!pattern.test(source)) issues.push('source document section missing: ' + label);
-    const revisionBlock = source.split(/Change Log from Revised\\s*:?/i)[1]?.split(/Unique Abilit(?:y|i) Programming Changes from Existing/i)[0] || '';
+    const revisionBlock = source.split(/Change Log from Revised\\s*:?/i)[1]?.split(/Unique Abil(?:i)?ty Programming Changes from Existing/i)[0] || '';
     const revisionItems = revisionBlock.split(/\\r?\\n/).map(line => line.trim()).filter(line => /^(?:Ascendancy Ritual|Heretic|Dark Elf|Elf|Faery|Halfling|Human|Sage|Tactician|Warrior|Orc)\\s*:/i.test(line));
     if (revisionItems.length !== 11) issues.push('revision change log incomplete: expected 11 items, found ' + revisionItems.length);
-    const abilityBlock = source.split(/Unique Abilit(?:y|i) Programming Changes from Existing\\s*:?/i)[1] || '';
+    const abilityBlock = source.split(/Unique Abil(?:i)?ty Programming Changes from Existing\\s*:?/i)[1] || '';
     const abilityItems = abilityBlock.split(/\\r?\\n/).map(line => line.trim()).filter(line => /^(?:Overgrowth|Cunning Assault|Indomitable Spirit|Arcane Respite|Arcane Overflow)\\s*:/i.test(line));
     if (abilityItems.length !== 5) issues.push('unique-ability programming changes incomplete: expected 5 items, found ' + abilityItems.length);
     const generalBlock = source.split(/Age\\s*117\\s+General Changes\\s*:?/i)[1]?.split(/Race\\s+Archetype\\s+Bonuses/i)[0] || '';
