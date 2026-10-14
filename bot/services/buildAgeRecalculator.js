@@ -1,6 +1,6 @@
 const supabaseService = require("./supabase");
 const { askOpenRouter } = require("./openrouterService");
-const { parseAgeFileChunked: parseAgeFile } = require("../parsers/ageParser");
+const { parseAgeFileChunked: parseAgeFile } = require("../parsers/ageChangeParser");
 const logger = require("./logger");
 
 function extractJson(text) {
