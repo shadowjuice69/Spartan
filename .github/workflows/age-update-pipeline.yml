@@ -28,7 +28,6 @@ jobs:
       - run: |
           node --check parsers/pdfTableText.js
           node --check parsers/ageChangeParser.js
-          node --check parsers/age117.js
           node --check services/ageRuleMerge.js
           node --check services/ageUpdateService.js
           node --check services/ageUpdateMessageHandler.js

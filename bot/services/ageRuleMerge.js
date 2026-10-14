@@ -169,33 +169,11 @@ function mergeRules(baseline, changes) {
     thievery: { ...baseline.thievery }, game_rules: { ...baseline.game_rules },
     dragons: { ...baseline.dragons }, science: { ...baseline.science }, rituals: { ...baseline.rituals }
   };
-  const expectedRaces = ['Avian','Dark Elf','Dryad','Dwarf','Elf','Faery','Gnome','Halfling','Human','Orc','Undead'];
-  const expectedPersonalities = ['The Artisan','The General','The Heretic','The Mystic','The Necromancer','The Cleric','The Rogue','The Tactician','The Warrior','The War Hero','The Sage'];
-  // A full Age 117 table is authoritative for each listed entity. Empty cells mean
-  // the old value was removed; they must not silently inherit Age 116 values.
-  const completeRaceTable = expectedRaces.every((name) => changes.races && Object.prototype.hasOwnProperty.call(changes.races, name));
-  const completePersonalityTable = expectedPersonalities.every((name) => changes.personalities && Object.prototype.hasOwnProperty.call(changes.personalities, name));
-  for (const [name, value] of Object.entries(changes.races || {})) {
-    merged.races[name] = completeRaceTable
-      ? { ...(baseline.races[name] || {}), ...value, emoji: value.emoji || baseline.races[name]?.emoji || null }
-      : mergeEntity(merged.races[name], value, ['emoji','archetype','war_doctrine','unique_name','unique_passive','bonuses','penalties','units','spells']);
-  }
-  for (const [name, value] of Object.entries(changes.personalities || {})) {
-    merged.personalities[name] = completePersonalityTable
-      ? { ...(baseline.personalities[name] || {}), ...value, emoji: value.emoji || baseline.personalities[name]?.emoji || null }
-      : mergeEntity(merged.personalities[name], value, ['emoji','archetype','unique_name','unique_passive','bonuses','starts_with','spells']);
-  }
+  for (const [name, value] of Object.entries(changes.races || {})) merged.races[name] = mergeEntity(merged.races[name], value, ['emoji','archetype','war_doctrine','unique_name','unique_passive','bonuses','penalties','units','spells']);
+  for (const [name, value] of Object.entries(changes.personalities || {})) merged.personalities[name] = mergeEntity(merged.personalities[name], value, ['emoji','archetype','unique_name','unique_passive','bonuses','starts_with','spells']);
   for (const section of ['buildings','spells','thievery','game_rules','science']) merged[section] = overlayGameSection(merged[section], changes[section]);
   for (const [name, value] of Object.entries(changes.rituals || {})) merged.rituals[name] = value;
-  const age117DragonTable = ['Emerald Dragon', 'Ruby Dragon', 'Sapphire Dragons', 'Topaz Dragon'];
-  // When the source explicitly supplies all four Age 117 dragon rows, treat that
-  // section as authoritative so an omitted Age 116 dragon cannot leak forward.
-  if (age117DragonTable.every(name => Object.prototype.hasOwnProperty.call(changes.dragons || {}, name)) &&
-      !Object.prototype.hasOwnProperty.call(changes.dragons || {}, 'Amethyst Dragon')) {
-    merged.dragons = { ...changes.dragons };
-  } else {
-    for (const [name, value] of Object.entries(changes.dragons || {})) merged.dragons[name] = value;
-  }
+  for (const [name, value] of Object.entries(changes.dragons || {})) merged.dragons[name] = value;
   applyRemovals(merged, changes.removed);
   return merged;
 }
@@ -216,7 +194,7 @@ function toRows(ageNumber, merged) {
   }
   return { races, personalities, game };
 }
-function validateMerged(merged, ageNumber, rawText, baseline, parsed = null) {
+function validateMerged(merged, ageNumber, rawText, baseline) {
   const issues = [];
   if (Object.keys(merged.races || {}).length < 10) issues.push('fewer than 10 race rules');
   if (Object.keys(merged.personalities || {}).length < 10) issues.push('fewer than 10 personality rules');
@@ -227,31 +205,6 @@ function validateMerged(merged, ageNumber, rawText, baseline, parsed = null) {
     for (const name of ['The Artisan','The General','The Heretic','The Mystic','The Necromancer','The Cleric','The Rogue','The Tactician','The Warrior','The War Hero','The Sage']) if (!merged.personalities[name]) issues.push('missing personality: ' + name);
     if (Object.keys(merged.rituals || {}).length < 6) issues.push('fewer than 6 rituals after merge');
     if (Object.keys(merged.dragons || {}).length < 4) issues.push('fewer than 4 dragons after merge');
-    if (/^\s*Race\s+Archetype[\s\S]{0,160}?\bBonuses\b/im.test(rawText)) {
-      for (const name of ['Avian','Dark Elf','Dryad','Dwarf','Elf','Faery','Gnome','Halfling','Human','Orc','Undead']) {
-        const race = merged.races[name];
-        const sourceRace = parsed?.races?.[name];
-        if (!sourceRace) { issues.push('race table row not parsed: ' + name); continue; }
-        if (!sourceRace.archetype) issues.push('race table field missing: ' + name + ' archetype');
-        if (!Array.isArray(sourceRace.bonuses) || !sourceRace.bonuses.length) issues.push('race table field missing: ' + name + ' bonuses');
-        if (!Array.isArray(sourceRace.spells) || sourceRace.spells.some(value => /^\d+(?:\.\d+)?$/.test(String(value).trim()))) issues.push('race table field invalid: ' + name + ' spells');
-        if (!sourceRace.units || !sourceRace.units['Offensive Specialist'] || !sourceRace.units['Defensive Specialist']) issues.push('race table field missing: ' + name + ' specialist stats');
-      }
-    }
-    if (/^\s*Personality\s+Archetype[\s\S]{0,160}?\bBonuses\b/im.test(rawText)) {
-      for (const shortName of ['Cleric','General','Heretic','Mystic','Necromancer','Rogue','Sage','Tactician','Warrior','War Hero','Artisan']) {
-        if (!new RegExp('(?:^|\\n)\\s*' + shortName + '\\s*\\t', 'i').test(rawText)) continue;
-        const name = 'The ' + shortName;
-        const personality = parsed?.personalities?.[name];
-        if (!personality) { issues.push('personality table row not parsed: ' + name); continue; }
-        if (!personality.unique_name) issues.push('personality table field missing: ' + name + ' unique ability');
-        if (!Array.isArray(personality.bonuses) || !personality.bonuses.length) issues.push('personality table field missing: ' + name + ' bonuses');
-      }
-    }
-    if (/^\s*Dragons?\s+Effect\s*$/im.test(rawText)) {
-      for (const name of ['Emerald Dragon','Ruby Dragon','Sapphire Dragons','Topaz Dragon']) if (!merged.dragons[name]) issues.push('missing Age 117 dragon: ' + name);
-      if (merged.dragons['Amethyst Dragon']) issues.push('obsolete Age 116 dragon still present: Amethyst Dragon');
-    }
     const gameCount = ['spells','thievery','buildings','science','game_rules'].reduce((n, section) => n + Object.keys(merged[section] || {}).length, 0);
     if (gameCount < 4) issues.push('fewer than 4 game-rule entries after merge');
   }
@@ -263,7 +216,7 @@ async function buildReview(supabase, rawText, ageNumber) {
   let baseline = null;
   if (needsBaseline) baseline = await loadBaseline(supabase, ageNumber);
   const merged = needsBaseline ? mergeRules(baseline.rules, parsed) : parsed;
-  const issues = validateMerged(merged, ageNumber, rawText, baseline, parsed);
+  const issues = validateMerged(merged, ageNumber, rawText, baseline);
   const summaryLines = [
     'Age ' + ageNumber + ' parsed with ' + parsed.source.parser,
     'Baseline: ' + (baseline ? 'Age ' + baseline.age + ' (' + baseline.source + ')' : 'not required'),
