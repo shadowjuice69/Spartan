@@ -85,7 +85,7 @@ test('parses fixed-width PDF layout extracted from the submitted Age 117 documen
     '                                        -20% Attack Travel Time                                                                           -7.5% Attack time                                                                                           Learn and Plunder attacks return armies 1 tick faster (after',
     '                                        +25% Birth Rate                                                                                   (-0.75% each)                                                                                               modifiers).',
     'Personality   Archetype                Bonuses                                      Unique Spells                Starting Units/Credits Unique Ability         Unqiue Effect',
-    'Cleric        Defensive                +15% Defensive Military Efficiency          Salvation                    +800 Soldiers           Architects Revenge      Incoming Raze damage is reduced by 15%.',
+    'Cleric        Defensive                +15% Defensive Military Efficiency           Salvation                    +800 Soldiers           Architects Revenge      Incoming Raze damage is reduced by 15%.',
     'Ritual        Effect',
     'Barrier       -20% Damage from Enemy Instant Magic & Thievery Operations, -20% Battle (Resource) Losses, -20% Massacre Damage',
     'Dragons       Effect',
