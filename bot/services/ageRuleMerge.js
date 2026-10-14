@@ -213,6 +213,25 @@ function validateParsedShape(parsed, ageNumber) {
     if (numberOnly(personality.unique_name)) issues.push('invalid Age 117 personality ability name for ' + name + ': numeric table cell detected');
     if (numberOnly(personality.unique_passive)) issues.push('invalid Age 117 personality ability effect for ' + name + ': numeric table cell detected');
   }
+
+  // Regression guards for the sparse-column corruption seen in the Age 117 PDF.
+  const avian = parsed.races?.Avian;
+  if (!avian) issues.push('Avian row missing from Age 117 source regression checks');
+  else {
+    if (!/Speed and Birth Rates/i.test(String(avian.archetype || ''))) issues.push('Avian archetype failed source regression check');
+    if (!(avian.penalties || []).some(value => /No Horses/i.test(String(value)))) issues.push('Avian No Horses penalty failed source regression check');
+    if (!(avian.spells || []).some(value => /Town Watch/i.test(String(value)))) issues.push('Avian Town Watch spell failed source regression check');
+    if (!/7\\.5% Attack time/i.test(String(avian.war_doctrine || ''))) issues.push('Avian doctrine failed source regression check');
+    if (!/Opportunistic Raiders/i.test(String(avian.unique_name || ''))) issues.push('Avian unique ability name failed source regression check');
+    if (!/Learn and Plunder attacks return armies 1 tick faster/i.test(String(avian.unique_passive || ''))) issues.push('Avian unique ability effect failed source regression check');
+  }
+  const darkElf = parsed.races?.['Dark Elf'];
+  if (!darkElf) issues.push('Dark Elf row missing from Age 117 source regression checks');
+  else {
+    if (!/Mystic Enthusiasts/i.test(String(darkElf.unique_name || ''))) issues.push('Dark Elf unique ability name failed source regression check');
+    if (!/30% of the rune cost/i.test(String(darkElf.unique_passive || ''))) issues.push('Dark Elf unique ability effect failed source regression check');
+    if (!(darkElf.spells || []).some(value => /Blizzard/i.test(String(value))) || !(darkElf.spells || []).some(value => /Mind Focus/i.test(String(value)))) issues.push('Dark Elf Blizzard/Mind Focus spells failed source regression check');
+  }
   return issues;
 }
 
@@ -229,6 +248,27 @@ function validateMerged(merged, ageNumber, rawText, baseline) {
     if (Object.keys(merged.dragons || {}).length < 4) issues.push('fewer than 4 dragons after merge');
     const gameCount = ['spells','thievery','buildings','science','game_rules'].reduce((n, section) => n + Object.keys(merged[section] || {}).length, 0);
     if (gameCount < 4) issues.push('fewer than 4 game-rule entries after merge');
+    const source = String(rawText || '');
+    const requiredSourceSections = [
+      [/Age\\s*117\\s+General Changes/i, 'general changes'],
+      [/Change Log from Revised/i, 'revision change log'],
+      [/Unique Abilit(?:y|i) Programming Changes from Existing/i, 'unique-ability programming changes'],
+      [/Ritual\\s+Effect/i, 'ritual effects'],
+      [/Dragons?\\s+Effect/i, 'dragon effects'],
+      [/Race\\s+Archetype\\s+Bonuses/i, 'race table'],
+      [/Personality\\s+Archetype\\s+Bonuses/i, 'personality table']
+    ];
+    for (const [pattern, label] of requiredSourceSections) if (!pattern.test(source)) issues.push('source document section missing: ' + label);
+    const revisionBlock = source.split(/Change Log from Revised\\s*:?/i)[1]?.split(/Unique Abilit(?:y|i) Programming Changes from Existing/i)[0] || '';
+    const revisionItems = revisionBlock.split(/\\r?\\n/).map(line => line.trim()).filter(line => /^(?:Ascendancy Ritual|Heretic|Dark Elf|Elf|Faery|Halfling|Human|Sage|Tactician|Warrior|Orc)\\s*:/i.test(line));
+    if (revisionItems.length !== 11) issues.push('revision change log incomplete: expected 11 items, found ' + revisionItems.length);
+    const abilityBlock = source.split(/Unique Abilit(?:y|i) Programming Changes from Existing\\s*:?/i)[1] || '';
+    const abilityItems = abilityBlock.split(/\\r?\\n/).map(line => line.trim()).filter(line => /^(?:Overgrowth|Cunning Assault|Indomitable Spirit|Arcane Respite|Arcane Overflow)\\s*:/i.test(line));
+    if (abilityItems.length !== 5) issues.push('unique-ability programming changes incomplete: expected 5 items, found ' + abilityItems.length);
+    const generalBlock = source.split(/Age\\s*117\\s+General Changes\\s*:?/i)[1]?.split(/Race\\s+Archetype\\s+Bonuses/i)[0] || '';
+    const generalItems = generalBlock.split(/\\r?\\n/).map(line => line.trim()).filter(Boolean);
+    if (generalItems.length !== 4) issues.push('general changes incomplete: expected 4 items, found ' + generalItems.length);
+
   }
   return issues;
 }
@@ -253,7 +293,7 @@ function keyFor(section, key, baselineSection) {
   }
   return null;
 }
-function buildChangeDetails(parsed, baseline, merged) {
+function buildChangeDetails(parsed, baseline, merged, rawText) {
   const lines = ['CHANGE-BY-CHANGE REVIEW', 'Legend: + added | ~ changed | - removed | = inherited unchanged', ''];
   const sections = [
     ['races', 'Races'], ['personalities', 'Personalities'], ['rituals', 'Rituals'],
@@ -310,6 +350,7 @@ function buildChangeDetails(parsed, baseline, merged) {
     for (const item of parsed.removed) lines.push('- ' + (item.category || 'unspecified') + ': ' + item.name + (item.entity ? ' (entity: ' + item.entity + ')' : ''));
     lines.push('');
   }
+  lines.push('COMPLETE SOURCE DOCUMENT — ALL SECTIONS', 'The complete extracted source follows so no proposed change is omitted from the review.', '', String(rawText || '').trim(), '');
   return lines.join('\n');
 }
 
@@ -333,7 +374,7 @@ async function buildReview(supabase, rawText, ageNumber) {
     'Science: ' + Object.keys(merged.science || {}).length,
     'Game rules: ' + Object.keys(merged.game_rules || {}).length,
     '',
-    buildChangeDetails(parsed, baseline, merged)
+    buildChangeDetails(parsed, baseline, merged, rawText)
   ];
   if (issues.length) summaryLines.push('', 'BLOCKED:', ...issues.map((x) => '- ' + x));
   return { parsed, merged, baseline: baseline || { source: 'not_required', age: null }, issues, ready: issues.length === 0, summary: summaryLines.join('\n') };
