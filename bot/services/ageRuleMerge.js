@@ -169,8 +169,22 @@ function mergeRules(baseline, changes) {
     thievery: { ...baseline.thievery }, game_rules: { ...baseline.game_rules },
     dragons: { ...baseline.dragons }, science: { ...baseline.science }, rituals: { ...baseline.rituals }
   };
-  for (const [name, value] of Object.entries(changes.races || {})) merged.races[name] = mergeEntity(merged.races[name], value, ['emoji','archetype','war_doctrine','unique_name','unique_passive','bonuses','penalties','units','spells']);
-  for (const [name, value] of Object.entries(changes.personalities || {})) merged.personalities[name] = mergeEntity(merged.personalities[name], value, ['emoji','archetype','unique_name','unique_passive','bonuses','starts_with','spells']);
+  const expectedRaces = ['Avian','Dark Elf','Dryad','Dwarf','Elf','Faery','Gnome','Halfling','Human','Orc','Undead'];
+  const expectedPersonalities = ['The Artisan','The General','The Heretic','The Mystic','The Necromancer','The Cleric','The Rogue','The Tactician','The Warrior','The War Hero','The Sage'];
+  // A full Age 117 table is authoritative for each listed entity. Empty cells mean
+  // the old value was removed; they must not silently inherit Age 116 values.
+  const completeRaceTable = expectedRaces.every((name) => changes.races && Object.prototype.hasOwnProperty.call(changes.races, name));
+  const completePersonalityTable = expectedPersonalities.every((name) => changes.personalities && Object.prototype.hasOwnProperty.call(changes.personalities, name));
+  for (const [name, value] of Object.entries(changes.races || {})) {
+    merged.races[name] = completeRaceTable
+      ? { ...(baseline.races[name] || {}), ...value, emoji: value.emoji || baseline.races[name]?.emoji || null }
+      : mergeEntity(merged.races[name], value, ['emoji','archetype','war_doctrine','unique_name','unique_passive','bonuses','penalties','units','spells']);
+  }
+  for (const [name, value] of Object.entries(changes.personalities || {})) {
+    merged.personalities[name] = completePersonalityTable
+      ? { ...(baseline.personalities[name] || {}), ...value, emoji: value.emoji || baseline.personalities[name]?.emoji || null }
+      : mergeEntity(merged.personalities[name], value, ['emoji','archetype','unique_name','unique_passive','bonuses','starts_with','spells']);
+  }
   for (const section of ['buildings','spells','thievery','game_rules','science']) merged[section] = overlayGameSection(merged[section], changes[section]);
   for (const [name, value] of Object.entries(changes.rituals || {})) merged.rituals[name] = value;
   for (const [name, value] of Object.entries(changes.dragons || {})) merged.dragons[name] = value;
