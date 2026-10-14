@@ -1,6 +1,15 @@
 name: Age update pipeline checks
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - "bot/parsers/**"
+      - "bot/services/ageRuleMerge.js"
+      - "bot/services/ageUpdateService.js"
+      - "bot/services/ageUpdateMessageHandler.js"
+      - "bot/tests/**"
+      - "bot/package.json"
   pull_request:
     paths:
       - "bot/parsers/**"
