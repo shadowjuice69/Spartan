@@ -197,11 +197,11 @@ function toRows(ageNumber, merged) {
 function validateParsedShape(parsed, ageNumber) {
   const issues = [];
   if (Number(ageNumber) !== 117) return issues;
-  const numberOnly = value => /^[-+]?\\d+(?:\\.\\d+)?%?$/.test(String(value || '').trim());
+  const numberOnly = value => /^[-+]?\d+(?:\.\d+)?%?$/.test(String(value || '').trim());
   for (const [name, race] of Object.entries(parsed.races || {})) {
     if (numberOnly(race.archetype)) issues.push('invalid Age 117 race archetype for ' + name + ': numeric table cell detected');
     if (Array.isArray(race.penalties) && race.penalties.some(numberOnly)) issues.push('invalid Age 117 race penalties for ' + name + ': numeric table cell detected');
-    if (Array.isArray(race.spells) && race.spells.some(value => numberOnly(value) || /\\b(?:attack time|rune cost|military wage)\\b/i.test(value))) issues.push('invalid Age 117 race spells for ' + name + ': non-spell table cell detected');
+    if (Array.isArray(race.spells) && race.spells.some(value => numberOnly(value) || /\b(?:attack time|rune cost|military wage)\b/i.test(value))) issues.push('invalid Age 117 race spells for ' + name + ': non-spell table cell detected');
     if (numberOnly(race.unique_name)) issues.push('invalid Age 117 unique ability name for ' + name + ': numeric table cell detected');
     if (numberOnly(race.unique_passive)) issues.push('invalid Age 117 unique ability effect for ' + name + ': numeric table cell detected');
   }
