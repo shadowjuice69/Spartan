@@ -63,8 +63,11 @@ module.exports = async function ageUpdateMessageHandler(message) {
         }
         try {
           const layout = await extractPdfTableText(buffer);
-          if (layout.tableCount > 0) extractedText = layout.text;
-          else logger.warn("[AGE UPDATE] PDF had no detectable tables; falling back to plain text extraction.");
+          // Do not treat a header-shaped line as proof that a PDF table was reconstructed.
+          // Sparse tab separators can shift values into the wrong columns; use this path only
+          // when pdf-parse's structural table detector actually returned table objects.
+          if (layout.detectedTables > 0) extractedText = layout.text;
+          else logger.warn("[AGE UPDATE] No structural PDF tables detected; using full text extraction to preserve all source sections.");
         } catch (layoutError) {
           logger.warn("[AGE UPDATE] PDF layout extraction failed: " + layoutError.message);
         }
