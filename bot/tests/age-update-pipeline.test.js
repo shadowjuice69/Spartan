@@ -176,7 +176,7 @@ test('blocks Age 117 PDFs when table rows were not actually parsed', () => {
     'Personality Archetype Bonuses',
     'Ritual Effect',
     'Dragons Effect'
-  ].join('\\n');
+  ].join('\n');
   const merged = {
     races: Object.fromEntries(['Avian','Dark Elf','Dryad','Dwarf','Elf','Faery','Gnome','Halfling','Human','Orc','Undead'].map(name => [name, { archetype: 'baseline', bonuses: ['baseline'], spells: ['spell'], units: { 'Offensive Specialist': '1/1', 'Defensive Specialist': '1/1' } }])),
     personalities: Object.fromEntries(['The Artisan','The General','The Heretic','The Mystic','The Necromancer','The Cleric','The Rogue','The Tactician','The Warrior','The War Hero','The Sage'].map(name => [name, { bonuses: ['baseline'], unique_name: 'baseline' }])),
