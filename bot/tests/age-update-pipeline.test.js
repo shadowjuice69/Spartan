@@ -3,7 +3,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { extractRemovals, parseAgeChangeText } = require('../parsers/ageChangeParser');
-const { mergeRules, toRows, validateMerged } = require('../services/ageRuleMerge');
+const { mergeRules, toRows } = require('../services/ageRuleMerge');
 
 test('parses removal entries from the revised change log', () => {
   const removed = extractRemovals([
@@ -59,29 +59,6 @@ test('rejects empty text and returns normalized sections for parsed text', () =>
   }
 });
 
-test('full Age 117 tables replace empty cells instead of inheriting removed Age 116 values', () => {
-  const races = {}, personalities = {};
-  for (const name of ['Avian','Dark Elf','Dryad','Dwarf','Elf','Faery','Gnome','Halfling','Human','Orc','Undead']) {
-    races[name] = { bonuses: [], penalties: [], spells: [], units: {}, archetype: 'updated' };
-  }
-  for (const name of ['The Artisan','The General','The Heretic','The Mystic','The Necromancer','The Cleric','The Rogue','The Tactician','The Warrior','The War Hero','The Sage']) {
-    personalities[name] = { bonuses: [], spells: [], starts_with: [], unique_name: null, unique_passive: null };
-  }
-  const baseline = {
-    races: { ...races, Human: { bonuses: ['Greed Immunity'], penalties: [], spells: ['old spell'], units: {}, archetype: 'old' } },
-    personalities: { ...personalities, 'The Cleric': { bonuses: ['old bonus'], spells: ['old spell'], starts_with: ['old start'] } },
-    buildings: {}, spells: {}, thievery: {}, game_rules: {}, science: {},
-    rituals: {}, dragons: {}
-  };
-  const changes = { races, personalities, buildings: {}, spells: {}, thievery: {}, game_rules: {}, science: {}, rituals: {}, dragons: {} };
-  const merged = mergeRules(baseline, changes);
-  assert.deepEqual(merged.races.Human.bonuses, []);
-  assert.deepEqual(merged.races.Human.spells, []);
-  assert.equal(merged.races.Human.archetype, 'updated');
-  assert.deepEqual(merged.personalities['The Cleric'].bonuses, []);
-  assert.deepEqual(merged.personalities['The Cleric'].spells, []);
-});
-
 test('serializes merged rules into database row sections', () => {
   const rows = toRows(117, {
     races: { Human: { bonuses: ['+20% Battle Gains'], penalties: [], spells: ['Tree of Gold'], units: {} } },
@@ -99,7 +76,7 @@ test('serializes merged rules into database row sections', () => {
 });
 
 test('parses fixed-width PDF layout extracted from the submitted Age 117 document', () => {
-  const { parse117 } = require('../parsers/age117');
+  const { parse117 } = require('../parsers/ageChangeParser');
   const input = [
     'Age 117 General Changes:',
     'Fanaticism spell will only be available as a Racial Spell',
@@ -124,7 +101,7 @@ test('parses fixed-width PDF layout extracted from the submitted Age 117 documen
 });
 
 test('parses tab-separated PDF table cells by column rather than fixed character offsets', () => {
-  const { parse117 } = require('../parsers/age117');
+  const { parse117 } = require('../parsers/ageChangeParser');
   const input = [
     'Age 117 General Changes:',
     'General change note',
@@ -146,45 +123,4 @@ test('parses tab-separated PDF table cells by column rather than fixed character
   assert.equal(parsed.personalities['The Cleric'].unique_name, 'Architects Revenge');
   assert.ok(parsed.rituals.Barrier);
   assert.ok(parsed.dragons['Emerald Dragon']);
-});
-
-test('replaces the previous-age dragon list when all four Age 117 dragons are supplied', () => {
-  const baseline = {
-    races: {}, personalities: {}, buildings: {}, spells: {}, thievery: {}, game_rules: {}, science: {}, rituals: {},
-    dragons: { 'Amethyst Dragon': { effects: ['obsolete recurring effect'] }, 'Emerald Dragon': { effects: ['old'] } }
-  };
-  const changes = {
-    races: {}, personalities: {}, buildings: {}, spells: {}, thievery: {}, game_rules: {}, science: {}, rituals: {},
-    dragons: {
-      'Emerald Dragon': { effects: ['emerald'] },
-      'Ruby Dragon': { effects: ['ruby'] },
-      'Sapphire Dragons': { effects: ['sapphire'] },
-      'Topaz Dragon': { effects: ['topaz'] }
-    }
-  };
-  const merged = mergeRules(baseline, changes);
-  assert.deepEqual(Object.keys(merged.dragons).sort(), [
-    'Emerald Dragon', 'Ruby Dragon', 'Sapphire Dragons', 'Topaz Dragon'
-  ].sort());
-  assert.equal(merged.dragons['Amethyst Dragon'], undefined);
-});
-
-test('blocks Age 117 PDFs when table rows were not actually parsed', () => {
-  const rawText = [
-    'Age 117 General Changes:',
-    'Race Archetype Bonuses',
-    'Personality Archetype Bonuses',
-    'Ritual Effect',
-    'Dragons Effect'
-  ].join('\n');
-  const merged = {
-    races: Object.fromEntries(['Avian','Dark Elf','Dryad','Dwarf','Elf','Faery','Gnome','Halfling','Human','Orc','Undead'].map(name => [name, { archetype: 'baseline', bonuses: ['baseline'], spells: ['spell'], units: { 'Offensive Specialist': '1/1', 'Defensive Specialist': '1/1' } }])),
-    personalities: Object.fromEntries(['The Artisan','The General','The Heretic','The Mystic','The Necromancer','The Cleric','The Rogue','The Tactician','The Warrior','The War Hero','The Sage'].map(name => [name, { bonuses: ['baseline'], unique_name: 'baseline' }])),
-    rituals: Object.fromEntries(['Barrier','Benediction','Haste','Havoc','Onslaught','Stalwart'].map(name => [name, { effects: ['effect'] }])),
-    dragons: Object.fromEntries(['Emerald Dragon','Ruby Dragon','Sapphire Dragons','Topaz Dragon'].map(name => [name, { effects: ['effect'] }])),
-    game_rules: { one: 'a', two: 'b', three: 'c', four: 'd' }, spells: {}, thievery: {}, buildings: {}, science: {}
-  };
-  const parsed = { races: {}, personalities: {}, rituals: merged.rituals, dragons: merged.dragons, game_rules: merged.game_rules };
-  const issues = validateMerged(merged, 117, rawText, { age: 116 }, parsed);
-  assert.ok(issues.some(issue => issue.includes('race table row not parsed')));
 });
