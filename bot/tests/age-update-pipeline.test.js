@@ -76,7 +76,7 @@ test('serializes merged rules into database row sections', () => {
 });
 
 test('parses fixed-width PDF layout extracted from the submitted Age 117 document', () => {
-  const { parse117 } = require('../parsers/age117');
+  const { parse117 } = require('../parsers/ageChangeParser');
   const input = [
     'Age 117 General Changes:',
     'Fanaticism spell will only be available as a Racial Spell',
@@ -101,7 +101,7 @@ test('parses fixed-width PDF layout extracted from the submitted Age 117 documen
 });
 
 test('parses tab-separated PDF table cells by column rather than fixed character offsets', () => {
-  const { parse117 } = require('../parsers/age117');
+  const { parse117 } = require('../parsers/ageChangeParser');
   const input = [
     'Age 117 General Changes:',
     'General change note',
