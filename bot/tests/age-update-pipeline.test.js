@@ -3,7 +3,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { extractRemovals, parseAgeChangeText } = require('../parsers/ageChangeParser');
-const { mergeRules, toRows } = require('../services/ageRuleMerge');
+const { mergeRules, toRows, validateParsedShape } = require('../services/ageRuleMerge');
 
 test('parses removal entries from the revised change log', () => {
   const removed = extractRemovals([
@@ -57,6 +57,27 @@ test('rejects empty text and returns normalized sections for parsed text', () =>
   for (const key of ['races','personalities','buildings','spells','thievery','game_rules','dragons','science','rituals']) {
     assert.ok(parsed[key] && typeof parsed[key] === 'object');
   }
+});
+
+test('blocks Age 117 reviews when PDF table columns leak numeric values into text fields', () => {
+  const issues = validateParsedShape({
+    races: {
+      Avian: {
+        archetype: 'Speed and Birth Rates',
+        penalties: ['3'],
+        spells: ['900'],
+        unique_name: '2',
+        unique_passive: '6.25'
+      }
+    },
+    personalities: {
+      'The Cleric': { archetype: 'Defensive', spells: ['Salvation'], unique_name: 'Architects Revenge' }
+    }
+  }, 117);
+  assert.ok(issues.some(issue => /penalties for Avian/.test(issue)));
+  assert.ok(issues.some(issue => /spells for Avian/.test(issue)));
+  assert.ok(issues.some(issue => /ability name for Avian/.test(issue)));
+  assert.ok(issues.some(issue => /ability effect for Avian/.test(issue)));
 });
 
 test('serializes merged rules into database row sections', () => {
