@@ -8,8 +8,9 @@ function normalizePdfText(value) {
     .replace(/\u0000/g, '')
     .replace(/\u000C/g, '\n')
     .replace(/\r\n?/g, '\n')
-    .replace(/[ \t]+\n/g, '\n')
-    .replace(/\n[ \t]+/g, '\n')
+    // Preserve leading/trailing spaces on each line: Age 117 PDF tables use
+    // fixed character columns when pdf-parse cannot return a complete tab grid.
+    // Trimming each line here shifts every column and corrupts race/personality fields.
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 }
