@@ -20,12 +20,20 @@ function parseObject(value) {
   if (typeof value === 'object' && !Array.isArray(value)) return value;
   try { const result = JSON.parse(value); return result && typeof result === 'object' ? result : {}; } catch { return {}; }
 }
+
+function parseUnits(value) {
+  if (!value) return {};
+  if (typeof value === 'object' && !Array.isArray(value)) return value;
+  const raw = String(value).trim();
+  try { const decoded = JSON.parse(raw); if (decoded && typeof decoded === 'object' && !Array.isArray(decoded)) return decoded; } catch {}
+  return raw;
+}
 function entityFromRace(row) {
   return {
     emoji: row.emoji || null, archetype: row.archetype || null,
     war_doctrine: row.war_doctrine || null, unique_name: row.unique_name || null,
     unique_passive: row.unique_desc || null, bonuses: splitLines(row.bonuses),
-    penalties: splitLines(row.penalties), units: parseObject(row.units),
+    penalties: splitLines(row.penalties), units: parseUnits(row.units),
     spells: String(row.spells || '').split(/\s*,\s*/).filter(Boolean)
   };
 }
@@ -43,7 +51,7 @@ function entityToRaceRow(name, value, ageNumber) {
     archetype: value.archetype || null, war_doctrine: value.war_doctrine || null,
     unique_name: value.unique_name || null, unique_desc: value.unique_passive || null,
     bonuses: asArray(value.bonuses).join('\n'), penalties: asArray(value.penalties).join('\n'),
-    units: JSON.stringify(value.units || {}), spells: asArray(value.spells).join(', ')
+    units: typeof value.units === 'string' ? value.units : JSON.stringify(value.units || {}), spells: asArray(value.spells).join(', ')
   };
 }
 function entityToPersonalityRow(name, value, ageNumber) {
