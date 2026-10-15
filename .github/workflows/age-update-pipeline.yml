@@ -37,9 +37,7 @@ jobs:
           cache-dependency-path: bot/package-lock.json
       - run: npm ci
       - name: Install PDF table extraction dependency
-        run: |
-          python3 -m venv ../.venv
-          ../.venv/bin/python -m pip install --disable-pip-version-check -r ../requirements.txt
+        run: node ../scripts/ensure-python-parser.js
       - run: |
           node --check parsers/pdfTableText.js
           node --check ../scripts/ensure-python-parser.js
