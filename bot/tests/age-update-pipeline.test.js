@@ -93,9 +93,82 @@ test('blocks Age 117 reviews when PDF table columns leak numeric values into tex
   assert.ok(issues.some(issue => /ability effect for Avian/.test(issue)));
 });
 
+
+test('uses canonical cell-extracted rows for the real Age 117 table shape', () => {
+  const { parse117 } = require('../parsers/ageChangeParser');
+  const raceNames = ['Avian','Dark Elf','Dryad','Dwarf','Elf','Faery','Gnome','Halfling','Human','Orc','Undead'];
+  const personalityNames = ['Cleric','General','Heretic','Mystic','Rogue','Sage','Tactician','Warrior'];
+  const races = raceNames.map((name) => ({
+    name, archetype: name === 'Avian' ? 'Speed and Birth Rates' : name === 'Dark Elf' ? 'Magic / Attacker Hybrid' : 'Test archetype',
+    bonuses: name === 'Avian' ? ['-20% Attack Travel Time', '+25% Birth Rate'] : [],
+    penalties: name === 'Avian' ? ['No Horses'] : [],
+    spells: name === 'Avian' ? ['Town Watch'] : name === 'Dark Elf' ? ['Blizzard', 'Mind Focus'] : [],
+    doctrine: name === 'Avian' ? '-7.5% Attack time (-0.75% each)' : '',
+    units: name === 'Avian' ? 'Soldier 3/0 · Off Spec 12/0 (4.8nw) · Def Spec 0/10 (5nw) · Elite 14/3 (900gc, 6.25nw) · Merc 8/0 · Prisoner 8/0 · War Horse 2/0 (0.6nw)' : '',
+    unique_name: name === 'Avian' ? 'Opportunistic Raiders' : name === 'Dark Elf' ? 'Mystic Enthusiasts' : '',
+    unique_passive: name === 'Avian' ? 'Learn and Plunder attacks return armies 1 tick faster (after modifiers).' : name === 'Dark Elf' ? 'Successful offensive instant spells refund 30% of the rune cost.' : ''
+  }));
+  const personalities = personalityNames.map((name) => ({
+    name, archetype: 'Table archetype', bonuses: [], spells: [], starts_with: [],
+    unique_name: '', unique_passive: ''
+  }));
+  const rituals = ['Barrier','Benediction','Haste','Havoc','Onslaught','Stalwart'].map((name) => ({name,effects:['test effect']}));
+  const dragons = ['Emerald','Ruby','Sapphire','Topaz'].map((name) => ({name,effects:['test effect']}));
+  const block = (name, rows) => ['#TABLE ' + name, ...rows.map((row) => '#ROW ' + JSON.stringify(row)), '#ENDTABLE'].join('\n');
+  const source = [
+    'Age 117 General Changes:',
+    'Fanaticism spell will only be available as a Racial Spell',
+    '% Reduction Sciences Max Reductions Reduced from -95% to -75%',
+    'All Doctrines give double bonus for the first province, then scale by the listed amount',
+    'Dragon Hitpoints Reduced by 10%; recurring effects after 6 ticks removed',
+    'Race Archetype Bonuses',
+    'Personality Archetype Bonuses',
+    'Ritual Effect',
+    'Dragons Effect',
+    'Unique Abilty Programming Changes from Existing',
+    block('RACES', races), block('PERSONALITIES', personalities),
+    block('RITUALS', rituals), block('DRAGONS', dragons)
+  ].join('\n');
+  const parsed = parse117(source);
+  assert.equal(Object.keys(parsed.races).length, 11);
+  assert.equal(Object.keys(parsed.personalities).length, 8);
+  assert.equal(Object.keys(parsed.rituals).length, 6);
+  assert.equal(Object.keys(parsed.dragons).length, 4);
+  assert.equal(Object.hasOwn(parsed.dragons, 'Amethyst Dragon'), false);
+  assert.deepEqual(parsed.races.Avian.bonuses, ['-20% Attack Travel Time', '+25% Birth Rate']);
+  assert.equal(parsed.races.Avian.war_doctrine, '-7.5% Attack time (-0.75% each)');
+  assert.match(parsed.races.Avian.units, /Off Spec 12\/0 \(4\.8nw\)/);
+  assert.deepEqual(parsed.races['Dark Elf'].spells, ['Blizzard', 'Mind Focus']);
+
+  const baseline = {
+    races: {},
+    personalities: {
+      'The Artisan': { bonuses: ['baseline artisan'] },
+      'The Necromancer': { bonuses: ['baseline necromancer'] },
+      'The War Hero': { bonuses: ['baseline war hero'] }
+    },
+    buildings: {}, spells: {}, thievery: {}, game_rules: {}, science: {},
+    rituals: { 'Ascendancy Ritual': { effects: ['obsolete ritual'] }, 'Old Ritual': { effects: ['obsolete'] } },
+    dragons: {
+      'Amethyst Dragon': { effects: ['obsolete dragon'] },
+      'Emerald Dragon': { effects: ['old emerald'] },
+      'Ruby Dragon': { effects: ['old ruby'] },
+      'Sapphire Dragons': { effects: ['old sapphire'] },
+      'Topaz Dragon': { effects: ['old topaz'] }
+    }
+  };
+  const merged = mergeRules(baseline, parsed);
+  assert.equal(Object.keys(merged.races).length, 11);
+  assert.equal(Object.keys(merged.personalities).length, 11);
+  assert.equal(Object.keys(merged.rituals).length, 6);
+  assert.equal(Object.keys(merged.dragons).length, 4);
+  assert.equal(Object.hasOwn(merged.dragons, 'Amethyst Dragon'), false);
+  assert.equal(Object.hasOwn(merged.rituals, 'Ascendancy Ritual'), false);
+});
+
 test('serializes merged rules into database row sections', () => {
   const rows = toRows(117, {
-    races: { Human: { bonuses: ['+20% Battle Gains'], penalties: [], spells: ['Tree of Gold'], units: {} } },
+    races: { Human: { bonuses: ['+20% Battle Gains'], penalties: [], spells: ['Tree of Gold'], units: 'Soldier 3/0 · Off Spec 12/0 (4.8nw)' } },
     personalities: { 'The Sage': { bonuses: [], starts_with: [], spells: ['Fountain of Knowledge'] } },
     spells: { 'Tree of Gold': 'updated effect' },
     rituals: { Barrier: { effects: ['ritual effect'] } },
@@ -103,6 +176,7 @@ test('serializes merged rules into database row sections', () => {
     dragons: { 'Emerald Dragon': { effects: ['dragon effect'] } }
   });
   assert.equal(rows.races.length, 1);
+  assert.equal(rows.races[0].units, 'Soldier 3/0 · Off Spec 12/0 (4.8nw)');
   assert.equal(rows.personalities.length, 1);
   assert.ok(rows.game.some((row) => row.category === 'spell'));
   assert.ok(rows.game.some((row) => row.category === 'ritual'));

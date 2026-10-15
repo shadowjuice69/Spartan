@@ -10,6 +10,9 @@ on:
       - "bot/services/ageUpdateMessageHandler.js"
       - "bot/tests/**"
       - "bot/package.json"
+      - "package.json"
+      - "requirements.txt"
+      - "scripts/ensure-python-parser.js"
       - ".github/workflows/age-update-pipeline.yml"
   pull_request:
     paths:
@@ -36,8 +39,12 @@ jobs:
           cache: npm
           cache-dependency-path: bot/package-lock.json
       - run: npm ci
+      - name: Install PDF table extraction dependency
+        run: node ../scripts/ensure-python-parser.js
       - run: |
           node --check parsers/pdfTableText.js
+          ../.venv/bin/python -m py_compile parsers/pdf_table_extract.py
+          node --check ../scripts/ensure-python-parser.js
           node --check parsers/ageChangeParser.js
           node --check services/ageRuleMerge.js
           node --check services/ageUpdateService.js

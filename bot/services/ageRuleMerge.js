@@ -20,12 +20,20 @@ function parseObject(value) {
   if (typeof value === 'object' && !Array.isArray(value)) return value;
   try { const result = JSON.parse(value); return result && typeof result === 'object' ? result : {}; } catch { return {}; }
 }
+
+function parseUnits(value) {
+  if (!value) return {};
+  if (typeof value === 'object' && !Array.isArray(value)) return value;
+  const raw = String(value).trim();
+  try { const decoded = JSON.parse(raw); if (decoded && typeof decoded === 'object' && !Array.isArray(decoded)) return decoded; } catch {}
+  return raw;
+}
 function entityFromRace(row) {
   return {
     emoji: row.emoji || null, archetype: row.archetype || null,
     war_doctrine: row.war_doctrine || null, unique_name: row.unique_name || null,
     unique_passive: row.unique_desc || null, bonuses: splitLines(row.bonuses),
-    penalties: splitLines(row.penalties), units: parseObject(row.units),
+    penalties: splitLines(row.penalties), units: parseUnits(row.units),
     spells: String(row.spells || '').split(/\s*,\s*/).filter(Boolean)
   };
 }
@@ -43,7 +51,7 @@ function entityToRaceRow(name, value, ageNumber) {
     archetype: value.archetype || null, war_doctrine: value.war_doctrine || null,
     unique_name: value.unique_name || null, unique_desc: value.unique_passive || null,
     bonuses: asArray(value.bonuses).join('\n'), penalties: asArray(value.penalties).join('\n'),
-    units: JSON.stringify(value.units || {}), spells: asArray(value.spells).join(', ')
+    units: typeof value.units === 'string' ? value.units : JSON.stringify(value.units || {}), spells: asArray(value.spells).join(', ')
   };
 }
 function entityToPersonalityRow(name, value, ageNumber) {
@@ -167,8 +175,13 @@ function mergeRules(baseline, changes) {
     races: { ...baseline.races }, personalities: { ...baseline.personalities },
     buildings: { ...baseline.buildings }, spells: { ...baseline.spells },
     thievery: { ...baseline.thievery }, game_rules: { ...baseline.game_rules },
-    dragons: { ...baseline.dragons }, science: { ...baseline.science }, rituals: { ...baseline.rituals }
+    dragons: { ...baseline.dragons }, science: { ...baseline.science }, rituals: { ...baseline.rituals },
+    complete_sections: Array.isArray(changes.complete_sections) ? changes.complete_sections.slice() : [],
+    complete_table_counts: changes.complete_table_counts && typeof changes.complete_table_counts === 'object' ? { ...changes.complete_table_counts } : {}
   };
+  if (changes.complete_sections?.includes('races')) merged.races = {};
+  if (changes.complete_sections?.includes('rituals')) merged.rituals = {};
+  if (changes.complete_sections?.includes('dragons')) merged.dragons = {};
   for (const [name, value] of Object.entries(changes.races || {})) merged.races[name] = mergeEntity(merged.races[name], value, ['emoji','archetype','war_doctrine','unique_name','unique_passive','bonuses','penalties','units','spells']);
   for (const [name, value] of Object.entries(changes.personalities || {})) merged.personalities[name] = mergeEntity(merged.personalities[name], value, ['emoji','archetype','unique_name','unique_passive','bonuses','starts_with','spells']);
   for (const section of ['buildings','spells','thievery','game_rules','science']) merged[section] = overlayGameSection(merged[section], changes[section]);
@@ -221,7 +234,7 @@ function validateParsedShape(parsed, ageNumber) {
     if (!/Speed and Birth Rates/i.test(String(avian.archetype || ''))) issues.push('Avian archetype failed source regression check');
     if (!(avian.penalties || []).some(value => /No Horses/i.test(String(value)))) issues.push('Avian No Horses penalty failed source regression check');
     if (!(avian.spells || []).some(value => /Town Watch/i.test(String(value)))) issues.push('Avian Town Watch spell failed source regression check');
-    if (!/7\\.5% Attack time/i.test(String(avian.war_doctrine || ''))) issues.push('Avian doctrine failed source regression check');
+    if (!/7\.5% Attack time/i.test(String(avian.war_doctrine || ''))) issues.push('Avian doctrine failed source regression check');
     if (!/Opportunistic Raiders/i.test(String(avian.unique_name || ''))) issues.push('Avian unique ability name failed source regression check');
     if (!/Learn and Plunder attacks return armies 1 tick faster/i.test(String(avian.unique_passive || ''))) issues.push('Avian unique ability effect failed source regression check');
   }
@@ -246,6 +259,10 @@ function validateMerged(merged, ageNumber, rawText, baseline) {
     for (const name of ['The Artisan','The General','The Heretic','The Mystic','The Necromancer','The Cleric','The Rogue','The Tactician','The Warrior','The War Hero','The Sage']) if (!merged.personalities[name]) issues.push('missing personality: ' + name);
     if (Object.keys(merged.rituals || {}).length < 6) issues.push('fewer than 6 rituals after merge');
     if (Object.keys(merged.dragons || {}).length < 4) issues.push('fewer than 4 dragons after merge');
+    for (const section of merged.complete_sections || []) {
+      const expected = Number(merged.complete_table_counts?.[section]);
+      if (expected > 0 && Object.keys(merged[section] || {}).length !== expected) issues.push('complete ' + section + ' table replacement mismatch: expected ' + expected + ', found ' + Object.keys(merged[section] || {}).length);
+    }
     const gameCount = ['spells','thievery','buildings','science','game_rules'].reduce((n, section) => n + Object.keys(merged[section] || {}).length, 0);
     if (gameCount < 4) issues.push('fewer than 4 game-rule entries after merge');
     const source = String(rawText || '');
