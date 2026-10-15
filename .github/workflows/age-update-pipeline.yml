@@ -10,6 +10,9 @@ on:
       - "bot/services/ageUpdateMessageHandler.js"
       - "bot/tests/**"
       - "bot/package.json"
+      - "package.json"
+      - "requirements.txt"
+      - "scripts/ensure-python-parser.js"
       - ".github/workflows/age-update-pipeline.yml"
   pull_request:
     paths:
