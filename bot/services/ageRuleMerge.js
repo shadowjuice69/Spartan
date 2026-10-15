@@ -177,6 +177,9 @@ function mergeRules(baseline, changes) {
     thievery: { ...baseline.thievery }, game_rules: { ...baseline.game_rules },
     dragons: { ...baseline.dragons }, science: { ...baseline.science }, rituals: { ...baseline.rituals }
   };
+  if (changes.complete_sections?.includes('races')) merged.races = {};
+  if (changes.complete_sections?.includes('rituals')) merged.rituals = {};
+  if (changes.complete_sections?.includes('dragons')) merged.dragons = {};
   for (const [name, value] of Object.entries(changes.races || {})) merged.races[name] = mergeEntity(merged.races[name], value, ['emoji','archetype','war_doctrine','unique_name','unique_passive','bonuses','penalties','units','spells']);
   for (const [name, value] of Object.entries(changes.personalities || {})) merged.personalities[name] = mergeEntity(merged.personalities[name], value, ['emoji','archetype','unique_name','unique_passive','bonuses','starts_with','spells']);
   for (const section of ['buildings','spells','thievery','game_rules','science']) merged[section] = overlayGameSection(merged[section], changes[section]);
@@ -254,6 +257,7 @@ function validateMerged(merged, ageNumber, rawText, baseline) {
     for (const name of ['The Artisan','The General','The Heretic','The Mystic','The Necromancer','The Cleric','The Rogue','The Tactician','The Warrior','The War Hero','The Sage']) if (!merged.personalities[name]) issues.push('missing personality: ' + name);
     if (Object.keys(merged.rituals || {}).length < 6) issues.push('fewer than 6 rituals after merge');
     if (Object.keys(merged.dragons || {}).length < 4) issues.push('fewer than 4 dragons after merge');
+    if (parsed.complete_sections?.includes('dragons') && Object.keys(merged.dragons || {}).length !== Object.keys(parsed.dragons || {}).length) issues.push('complete dragon table replacement failed');
     const gameCount = ['spells','thievery','buildings','science','game_rules'].reduce((n, section) => n + Object.keys(merged[section] || {}).length, 0);
     if (gameCount < 4) issues.push('fewer than 4 game-rule entries after merge');
     const source = String(rawText || '');
