@@ -158,3 +158,29 @@ test('parses tab-separated PDF table cells by column rather than fixed character
   assert.ok(parsed.rituals.Barrier);
   assert.ok(parsed.dragons['Emerald Dragon']);
 });
+
+
+test('runs Age 117 parsed changes through merge and database-row serialization', () => {
+  const { parse117 } = require('../parsers/ageChangeParser');
+  const input = [
+    'Age 117 General Changes:',
+    'Race Archetype Bonuses',
+    'Avian\tSpeed and Birth Rates\t+25% Birth Rate\tNo Horses\tTown Watch\t-7.5% Attack Time',
+    'Personality Archetype Bonuses',
+    'Cleric\tDefensive\t+15% Defensive Military Efficiency\tSalvation',
+    'Ritual Effect',
+    'Barrier\t-20% Damage from Enemy Instant Magic',
+    'Dragons Effect',
+    'Emerald\t+25% Military Casualties'
+  ].join('\\n');
+  const parsed = parse117(input);
+  const merged = mergeRules({
+    races: {}, personalities: {}, buildings: {}, spells: {}, thievery: {},
+    game_rules: {}, science: {}, rituals: {}, dragons: {}
+  }, parsed);
+  const rows = toRows(117, merged);
+  assert.equal(rows.races.length, 1);
+  assert.equal(rows.personalities.length, 1);
+  assert.ok(rows.game.some((row) => row.category === 'ritual'));
+  assert.ok(rows.game.some((row) => row.category === 'dragon'));
+});
