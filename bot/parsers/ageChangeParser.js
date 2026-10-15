@@ -225,7 +225,12 @@ function parseAge117Tables(text) {
       : labels.map(label => layoutHeader.toLowerCase().indexOf(label.toLowerCase()));
     if (starts[0] < 0 || starts[1] < 0 || starts[2] < 0 || new Set(starts.filter(x => x >= 0)).size !== starts.filter(x => x >= 0).length) return;
     const cuts = starts.map((x,i)=>({x,i})).filter(v=>v.x>=0).sort((a,b)=>a.x-b.x);
-    const hasSparseTabs = lines.slice(start + 1, end).some(line => line.includes('\t') && line.split('\t').length < labels.length);
+    const tableLines = [];
+    for (const line of lines.slice(start + 1, end)) {
+      if (kind === 'personality' && /^\s*(?:Ritual\s+Effect|Dragons?\s+Effect)\b/i.test(line)) break;
+      tableLines.push(line);
+    }
+    const hasSparseTabs = tableLines.some(line => line.trim() && line.includes('\t') && line.split('\t').length < labels.length);
     if (hasSparseTabs) return;
     let current = null, cells = null;
     const flush = () => {
@@ -291,7 +296,7 @@ function parseAge117Tables(text) {
   let inGeneral=false, inRituals=false, inDragons=false, n=0;
   for (const line of lines) {
     const t=clean(line);
-    if (/^Age\s+117\s+General Changes:?$/i.test(t)) { inGeneral=true; inRituals=inDragons=false; continue; }
+    if (/^Age\s+\d+\s+General Changes:?$/i.test(t)) { inGeneral=true; inRituals=inDragons=false; continue; }
     if (/^Race\s+Archetype\s+Bonuses\b/i.test(t) || /^Personality\s+Archetype\s+Bonuses\b/i.test(t)) { inGeneral=inRituals=inDragons=false; continue; }
     if (/^Ritual\s+Effect$/i.test(t)) { inRituals=true; inGeneral=inDragons=false; continue; }
     if (/^Dragons?\s+Effect$/i.test(t)) { inDragons=true; inGeneral=inRituals=false; continue; }
@@ -299,11 +304,11 @@ function parseAge117Tables(text) {
     if (inGeneral && !/^(Race|Personality)\s+Archetype\b/i.test(t)) {
       result.game_rules['age117_general_'+(++n)] = t;
     } else if (inRituals) {
-      const m=t.match(/^(Barrier|Benediction|Haste|Havoc|Onslaught|Stalwart)\s+(.+)$/i);
-      if (m) result.rituals[m[1]]={effects:[m[2]]};
+      const m=t.match(/^([A-Z][A-Za-z'’ -]*?)\s+([+\-−].+)$/);
+      if (m) result.rituals[m[1].trim()]={effects:[m[2]]};
     } else if (inDragons) {
-      const m=t.match(/^(Amethyst|Emerald|Ruby|Sapphire|Topaz)\s+(.+)$/i);
-      if (m) result.dragons[m[1]==='Sapphire'?'Sapphire Dragons':m[1]+' Dragon']={effects:[m[2]]};
+      const m=t.match(/^([A-Z][A-Za-z'’ -]*?)\s+([+\-−].+)$/);
+      if (m) result.dragons[dragonKey(m[1].trim())]={effects:[m[2]]};
     }
   }
   if (canonical.races.length) {
