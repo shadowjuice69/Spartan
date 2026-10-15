@@ -234,7 +234,7 @@ function validateParsedShape(parsed, ageNumber) {
     if (!/Speed and Birth Rates/i.test(String(avian.archetype || ''))) issues.push('Avian archetype failed source regression check');
     if (!(avian.penalties || []).some(value => /No Horses/i.test(String(value)))) issues.push('Avian No Horses penalty failed source regression check');
     if (!(avian.spells || []).some(value => /Town Watch/i.test(String(value)))) issues.push('Avian Town Watch spell failed source regression check');
-    if (!/7\\.5% Attack time/i.test(String(avian.war_doctrine || ''))) issues.push('Avian doctrine failed source regression check');
+    if (!/7\.5% Attack time/i.test(String(avian.war_doctrine || ''))) issues.push('Avian doctrine failed source regression check');
     if (!/Opportunistic Raiders/i.test(String(avian.unique_name || ''))) issues.push('Avian unique ability name failed source regression check');
     if (!/Learn and Plunder attacks return armies 1 tick faster/i.test(String(avian.unique_passive || ''))) issues.push('Avian unique ability effect failed source regression check');
   }
