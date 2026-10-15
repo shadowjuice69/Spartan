@@ -43,6 +43,7 @@ jobs:
         run: node ../scripts/ensure-python-parser.js
       - run: |
           node --check parsers/pdfTableText.js
+          ../.venv/bin/python -m py_compile parsers/pdf_table_extract.py
           node --check ../scripts/ensure-python-parser.js
           node --check parsers/ageChangeParser.js
           node --check services/ageRuleMerge.js
