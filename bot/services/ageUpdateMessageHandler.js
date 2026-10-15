@@ -6,12 +6,41 @@ const permissionService = require("./permissionService");
 const logger = require("./logger");
 const { saveAgeUpdate } = require("./ageUpdateService");
 const { extractPdfTableText } = require("../parsers/pdfTableText");
+const { buildDetailedAgeChangeReport } = require("./ageChangeReport");
 
 const MAX_FILE_BYTES = 15 * 1024 * 1024;
 
 function extractAge(text) {
   const match = String(text || "").match(/\bage\s*[-_:]?\s*(\d{2,3})\b/i);
   return match ? match[1] : null;
+}
+
+function splitReportPages(report, maxLength = 3500) {
+  const pages = [];
+  let page = "";
+  for (const line of String(report || "").split(/\r?\n/)) {
+    const next = page ? page + "\n" + line : line;
+    if (next.length > maxLength && page) {
+      pages.push(page);
+      page = line;
+    } else {
+      page = next;
+    }
+  }
+  if (page) pages.push(page);
+  return pages.length ? pages : ["No detailed parser report was generated."];
+}
+
+async function sendReportPages(message, report, ageNumber, recordId) {
+  const pages = splitReportPages(report);
+  for (let index = 0; index < pages.length; index++) {
+    const embed = new EmbedBuilder()
+      .setColor(0x5865F2)
+      .setTitle("📘 Age " + ageNumber + " — Full Parser Report (" + (index + 1) + "/" + pages.length + ")")
+      .setDescription(pages[index])
+      .setFooter({ text: "Review record #" + recordId + " • Full report; no changes applied by displaying this report." });
+    await message.channel.send({ embeds: [embed] });
+  }
 }
 
 function htmlToText(html) {
@@ -106,7 +135,8 @@ module.exports = async function ageUpdateMessageHandler(message) {
     if (savedUpdate.error === "duplicate") {
       if (savedUpdate.status === "pending") {
         const summary = String(savedUpdate.parsedSummary || "").trim();
-        const preview = summary.length > 2600 ? summary.slice(0, 2600) + "\n…Full parser preview is attached." : summary;
+        const fullReport = buildDetailedAgeChangeReport(updateText, ageNumber, summary);
+        const preview = summary.length > 2600 ? summary.slice(0, 2600) + "\n…The complete report is shown in the following messages and attached as a text file." : summary;
         const ready = Boolean(savedUpdate.parsedReady);
         const review = new EmbedBuilder().setColor(ready ? 0xD6A84F : 0xD64545)
           .setTitle("📘 Age " + ageNumber + " — Existing Pending Review")
@@ -118,14 +148,16 @@ module.exports = async function ageUpdateMessageHandler(message) {
         const buttons = new ActionRowBuilder().addComponents(
           new ButtonBuilder().setCustomId("age_apply_" + savedUpdate.existingId).setLabel("✅ Review / Apply").setStyle(ButtonStyle.Success).setDisabled(!ready),
           new ButtonBuilder().setCustomId("age_revoke_" + savedUpdate.existingId).setLabel("❌ Cancel Review").setStyle(ButtonStyle.Danger));
-        const files = summary ? [new AttachmentBuilder(Buffer.from(summary, "utf8"), { name: "age-" + ageNumber + "-review-" + savedUpdate.existingId + ".txt" })] : [];
+        const files = fullReport ? [new AttachmentBuilder(Buffer.from(fullReport, "utf8"), { name: "age-" + ageNumber + "-full-review-" + savedUpdate.existingId + ".txt" })] : [];
         await message.reply({ embeds: [review], components: [buttons], files });
+        await sendReportPages(message, fullReport, ageNumber, savedUpdate.existingId);
       } else await message.reply("⚠️ An Age " + ageNumber + " record already exists and is **" + savedUpdate.status + "**. No duplicate was created.");
       return true;
     }
 
     const summary = String(savedUpdate.parsedSummary || "").trim();
-    const preview = summary.length > 2600 ? summary.slice(0, 2600) + "\n…Full parser preview is attached." : summary;
+    const fullReport = buildDetailedAgeChangeReport(updateText, savedUpdate.age_number, summary);
+    const preview = summary.length > 2600 ? summary.slice(0, 2600) + "\n…The complete report is shown in the following messages and attached as a text file." : summary;
     const ready = Boolean(savedUpdate.parsedReady);
     const review = new EmbedBuilder().setColor(ready ? 0xD6A84F : 0xD64545)
       .setTitle("📘 Age " + savedUpdate.age_number + " — Review Proposed Changes")
@@ -143,8 +175,9 @@ module.exports = async function ageUpdateMessageHandler(message) {
     const buttons = new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId("age_apply_" + savedUpdate.id).setLabel("✅ Apply Changes").setStyle(ButtonStyle.Success).setDisabled(!ready),
       new ButtonBuilder().setCustomId("age_revoke_" + savedUpdate.id).setLabel("❌ Cancel Review").setStyle(ButtonStyle.Danger));
-    const files = summary ? [new AttachmentBuilder(Buffer.from(summary, "utf8"), { name: "age-" + savedUpdate.age_number + "-review-" + savedUpdate.id + ".txt" })] : [];
+    const files = fullReport ? [new AttachmentBuilder(Buffer.from(fullReport, "utf8"), { name: "age-" + savedUpdate.age_number + "-full-review-" + savedUpdate.id + ".txt" })] : [];
     await message.reply({ embeds: [review], components: [buttons], files });
+    await sendReportPages(message, fullReport, savedUpdate.age_number, savedUpdate.id);
     logger.info("[AGE UPDATE INTAKE] id=" + savedUpdate.id + " age=" + savedUpdate.age_number + " submitted_by=" + message.author.id);
   } catch (error) {
     logger.error("[AGE UPDATE INTAKE ERROR] " + (error.stack || error.message));
