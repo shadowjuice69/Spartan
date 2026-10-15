@@ -152,8 +152,30 @@ function readPlain(text) {
   return result;
 }
 
-const RACE_TABLE_NAMES = ['Avian','Dark Elf','Dryad','Dwarf','Elf','Faery','Gnome','Halfling','Human','Orc','Undead'];
-const PERSONALITY_TABLE_NAMES = ['Cleric','General','Heretic','Mystic','Necromancer','Rogue','Sage','Tactician','Warrior','War Hero','Artisan'];
+function readCanonicalTables(text) {
+  const tables = { races: [], personalities: [], rituals: [], dragons: [] };
+  let active = null;
+  for (const line of String(text || '').split(/\r?\n/)) {
+    const heading = line.match(/^#TABLE\s+(RACES|PERSONALITIES|RITUALS|DRAGONS)\s*$/i);
+    if (heading) { active = heading[1].toLowerCase(); continue; }
+    if (/^#ENDTABLE\b/i.test(line)) { active = null; continue; }
+    if (!active || !/^#ROW\s+/.test(line)) continue;
+    try {
+      const row = JSON.parse(line.replace(/^#ROW\s+/, ''));
+      if (row && typeof row === 'object' && row.name) tables[active].push(row);
+    } catch { /* malformed canonical rows are ignored and validation will block Apply */ }
+  }
+  return tables;
+}
+
+function splitTableSpells(value) {
+  const raw = String(value || '');
+  const parts = raw.includes(',')
+    ? raw.replace(/\r/g, '').split(/\n+/).join(' ').split(/[,;]+/)
+    : raw.split(/\r?\n/);
+  return parts.map((item) => item.trim().replace(/[,;]+$/, '')).filter(Boolean);
+}
+
 function parseAge117Tables(text) {
   const lines = String(text).replace(/\r/g, '').split('\n');
   const result = { races:{}, personalities:{}, buildings:{}, spells:{}, thievery:{}, game_rules:{}, dragons:{}, science:{}, rituals:{} };
@@ -203,7 +225,8 @@ function parseAge117Tables(text) {
       : labels.map(label => layoutHeader.toLowerCase().indexOf(label.toLowerCase()));
     if (starts[0] < 0 || starts[1] < 0 || starts[2] < 0 || new Set(starts.filter(x => x >= 0)).size !== starts.filter(x => x >= 0).length) return;
     const cuts = starts.map((x,i)=>({x,i})).filter(v=>v.x>=0).sort((a,b)=>a.x-b.x);
-    const nameSet = new Map(names.map(n=>[n.toLowerCase(),n]));
+    const hasSparseTabs = lines.slice(start + 1, end).some(line => line.includes('\t') && line.split('\t').length < labels.length);
+    if (hasSparseTabs) return;
     let current = null, cells = null;
     const flush = () => {
       if (!current || !cells) return;
@@ -236,7 +259,7 @@ function parseAge117Tables(text) {
       const rowCells = useTabs ? line.split('\t').map(clean) : null;
       const layoutLine = useTabs ? line : expandTabs(line);
       const first = rowCells ? rowCells[0] : clean(layoutLine.slice(0, starts[1] >= 0 ? starts[1] : 20));
-      const name = nameSet.get(first.toLowerCase());
+      const name = first && first.length <= 50 && !/^(?:race|personality|ritual|dragons?)$/i.test(first) && !/^\d+(?:\.\d+)?$/.test(first) ? first : null;
       if (name) { flush(); current=name; cells={}; }
       else if (!current) continue;
       if (!cells) continue;
@@ -262,8 +285,9 @@ function parseAge117Tables(text) {
     }
     flush();
   }
-  readTable(raceHeader,RACE_TABLE_NAMES,'race',personalityHeader>=0?personalityHeader:lines.length);
-  readTable(personalityHeader,PERSONALITY_TABLE_NAMES,'personality',lines.length);
+  const canonical = readCanonicalTables(text);
+  if (!canonical.races.length) readTable(raceHeader, [], 'race', personalityHeader >= 0 ? personalityHeader : lines.length);
+  if (!canonical.personalities.length) readTable(personalityHeader, [], 'personality', lines.length);
   let inGeneral=false, inRituals=false, inDragons=false, n=0;
   for (const line of lines) {
     const t=clean(line);
@@ -282,6 +306,26 @@ function parseAge117Tables(text) {
       if (m) result.dragons[m[1]==='Sapphire'?'Sapphire Dragons':m[1]+' Dragon']={effects:[m[2]]};
     }
   }
+  if (canonical.races.length) {
+    result.races = Object.fromEntries(canonical.races.map((row) => [row.name, {
+      emoji: null, archetype: row.archetype || null, war_doctrine: row.doctrine || null,
+      unique_name: row.unique_name || null, unique_passive: row.unique_passive || null,
+      bonuses: Array.isArray(row.bonuses) ? row.bonuses : [],
+      penalties: Array.isArray(row.penalties) ? row.penalties : [],
+      units: row.units || '', spells: Array.isArray(row.spells) ? row.spells : []
+    }]));
+  }
+  if (canonical.personalities.length) {
+    result.personalities = Object.fromEntries(canonical.personalities.map((row) => [personalityKey(row.name), {
+      emoji: null, archetype: row.archetype || null, unique_name: row.unique_name || null,
+      unique_passive: row.unique_passive || null,
+      bonuses: Array.isArray(row.bonuses) ? row.bonuses : [],
+      starts_with: Array.isArray(row.starts_with) ? row.starts_with : [],
+      spells: Array.isArray(row.spells) ? row.spells : []
+    }]));
+  }
+  if (canonical.rituals.length) result.rituals = Object.fromEntries(canonical.rituals.map((row) => [row.name, { effects: row.effects || [] }]));
+  if (canonical.dragons.length) result.dragons = Object.fromEntries(canonical.dragons.map((row) => [dragonKey(row.name), { effects: row.effects || [] }]));
   return result;
 }
 
