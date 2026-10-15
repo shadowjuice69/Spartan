@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "node scripts/ensure-python-parser.js && next build",
     "start": "node scripts/start-all.js",
     "lint": "next lint"
   },
