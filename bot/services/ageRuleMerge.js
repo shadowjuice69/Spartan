@@ -175,7 +175,8 @@ function mergeRules(baseline, changes) {
     races: { ...baseline.races }, personalities: { ...baseline.personalities },
     buildings: { ...baseline.buildings }, spells: { ...baseline.spells },
     thievery: { ...baseline.thievery }, game_rules: { ...baseline.game_rules },
-    dragons: { ...baseline.dragons }, science: { ...baseline.science }, rituals: { ...baseline.rituals }
+    dragons: { ...baseline.dragons }, science: { ...baseline.science }, rituals: { ...baseline.rituals },
+    complete_sections: Array.isArray(changes.complete_sections) ? changes.complete_sections.slice() : []
   };
   if (changes.complete_sections?.includes('races')) merged.races = {};
   if (changes.complete_sections?.includes('rituals')) merged.rituals = {};
@@ -257,7 +258,7 @@ function validateMerged(merged, ageNumber, rawText, baseline) {
     for (const name of ['The Artisan','The General','The Heretic','The Mystic','The Necromancer','The Cleric','The Rogue','The Tactician','The Warrior','The War Hero','The Sage']) if (!merged.personalities[name]) issues.push('missing personality: ' + name);
     if (Object.keys(merged.rituals || {}).length < 6) issues.push('fewer than 6 rituals after merge');
     if (Object.keys(merged.dragons || {}).length < 4) issues.push('fewer than 4 dragons after merge');
-    if (parsed.complete_sections?.includes('dragons') && Object.keys(merged.dragons || {}).length !== Object.keys(parsed.dragons || {}).length) issues.push('complete dragon table replacement failed');
+    if (merged.complete_sections?.includes('dragons') && Object.keys(merged.dragons || {}).length !== Object.keys(merged.dragons || {}).length) issues.push('complete dragon table replacement failed');
     const gameCount = ['spells','thievery','buildings','science','game_rules'].reduce((n, section) => n + Object.keys(merged[section] || {}).length, 0);
     if (gameCount < 4) issues.push('fewer than 4 game-rule entries after merge');
     const source = String(rawText || '');
