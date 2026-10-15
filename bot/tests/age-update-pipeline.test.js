@@ -139,6 +139,31 @@ test('uses canonical cell-extracted rows for the real Age 117 table shape', () =
   assert.equal(parsed.races.Avian.war_doctrine, '-7.5% Attack time (-0.75% each)');
   assert.match(parsed.races.Avian.units, /Off Spec 12\/0 \(4\.8nw\)/);
   assert.deepEqual(parsed.races['Dark Elf'].spells, ['Blizzard', 'Mind Focus']);
+
+  const baseline = {
+    races: {},
+    personalities: {
+      'The Artisan': { bonuses: ['baseline artisan'] },
+      'The Necromancer': { bonuses: ['baseline necromancer'] },
+      'The War Hero': { bonuses: ['baseline war hero'] }
+    },
+    buildings: {}, spells: {}, thievery: {}, game_rules: {}, science: {},
+    rituals: { 'Ascendancy Ritual': { effects: ['obsolete ritual'] }, 'Old Ritual': { effects: ['obsolete'] } },
+    dragons: {
+      'Amethyst Dragon': { effects: ['obsolete dragon'] },
+      'Emerald Dragon': { effects: ['old emerald'] },
+      'Ruby Dragon': { effects: ['old ruby'] },
+      'Sapphire Dragons': { effects: ['old sapphire'] },
+      'Topaz Dragon': { effects: ['old topaz'] }
+    }
+  };
+  const merged = mergeRules(baseline, parsed);
+  assert.equal(Object.keys(merged.races).length, 11);
+  assert.equal(Object.keys(merged.personalities).length, 11);
+  assert.equal(Object.keys(merged.rituals).length, 6);
+  assert.equal(Object.keys(merged.dragons).length, 4);
+  assert.equal(Object.hasOwn(merged.dragons, 'Amethyst Dragon'), false);
+  assert.equal(Object.hasOwn(merged.rituals, 'Ascendancy Ritual'), false);
 });
 
 test('serializes merged rules into database row sections', () => {
