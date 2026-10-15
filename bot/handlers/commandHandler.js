@@ -38,7 +38,7 @@ const COMMANDS={
  'spartan-war':{analyze:analyzeWarHandler,summary:warSummaryHandler,board:warBoardHandler,status:warHandler,target:targetHandler,ambush:ambushHandler,intel:intelHandler},
  'spartan-admin':{panel:adminHandler,logs:logsHandler,admins:adminsHandler,access:spartanAccessHandler,alerts:alertsHandler,broadcast:broadcastHandler,setkingdom:setkingdomHandler}
 };
-for(const [command,subs] of Object.entries(COMMANDS))for(const [sub,handler] of Object.entries(subs)){if(!commandRegistry.has(command,sub)){const access=command==='spartan'&&(sub==='register'||sub==='status'||sub==='wiki')?'public':command==='spartan'&&sub==='access'?'admin':command==='spartan-admin'?'admin':'registered';commandRegistry.register(command,sub,handler,{access});}}
+for(const [command,subs] of Object.entries(COMMANDS))for(const [sub,handler] of Object.entries(subs)){if(!commandRegistry.has(command,sub)){const access=command==='spartan'&&(sub==='register'||sub==='status'||sub==='help'||sub==='wiki')?'public':command==='spartan'&&sub==='access'?'admin':command==='spartan-admin'?'admin':'registered';commandRegistry.register(command,sub,handler,{access});}}
 async function hasSpartanAccess(userId){return spartanAccess.hasAccess(userId);}
 
 function forceEphemeralInteraction(interaction){
