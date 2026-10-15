@@ -311,7 +311,9 @@ function parseAge117Tables(text) {
       if (m) result.dragons[dragonKey(m[1].trim())]={effects:[m[2]]};
     }
   }
+  result.complete_sections = [];
   if (canonical.races.length) {
+    result.complete_sections.push('races');
     result.races = Object.fromEntries(canonical.races.map((row) => [row.name, {
       emoji: null, archetype: row.archetype || null, war_doctrine: row.doctrine || null,
       unique_name: row.unique_name || null, unique_passive: row.unique_passive || null,
@@ -329,8 +331,8 @@ function parseAge117Tables(text) {
       spells: Array.isArray(row.spells) ? row.spells : []
     }]));
   }
-  if (canonical.rituals.length) result.rituals = Object.fromEntries(canonical.rituals.map((row) => [row.name, { effects: row.effects || [] }]));
-  if (canonical.dragons.length) result.dragons = Object.fromEntries(canonical.dragons.map((row) => [dragonKey(row.name), { effects: row.effects || [] }]));
+  if (canonical.rituals.length) { result.complete_sections.push('rituals'); result.rituals = Object.fromEntries(canonical.rituals.map((row) => [row.name, { effects: row.effects || [] }])); }
+  if (canonical.dragons.length) { result.complete_sections.push('dragons'); result.dragons = Object.fromEntries(canonical.dragons.map((row) => [dragonKey(row.name), { effects: row.effects || [] }])); }
   return result;
 }
 
@@ -598,6 +600,7 @@ function parseAgeChangeText(rawText, ageNumber) {
   ]) normalized[section] = normalizeFlatSection(normalized[section], prefix);
 
   normalized.removed = extractRemovals(text);
+  normalized.complete_sections = Array.isArray(parsed?.complete_sections) ? parsed.complete_sections.slice() : [];
   normalized.source = {
     ageNumber: Number(ageNumber) || null,
     isChangeSheet: /\b(?:proposed\s+changes|general\s+changes|changes\s+from\s+existing|change\s+log)\b/i.test(text),
