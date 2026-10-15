@@ -18,7 +18,7 @@ def bullet_lines(value):
     result = []
     starts = re.compile(
         r"^(?:[+\-−]\s*\d|\d+%\s|immune\b|can\b|no\b|access\b|all\b|incite\b|train\b|gain\b|"
-        r"offensive\s+specialist|elite\s+gets|successful\s+|operations\b)",
+        r"offensive\s+specialist|elite\s+gets|successful\s+)",
         re.I,
     )
     for item in lines(value):
