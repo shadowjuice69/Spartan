@@ -392,3 +392,17 @@ test('posts the review controls after the last detailed report page', async () =
   });
   assert.deepEqual(order, ['review-summary', 'report-page', 'controls']);
 });
+
+
+test('keeps one database row per dragon while preserving separated effects', () => {
+  const rows = toRows(117, {
+    races: {}, personalities: {}, spells: {}, rituals: {}, thievery: {},
+    buildings: {}, science: {}, game_rules: {},
+    dragons: {
+      'Ruby Dragon': { effects: ['-10% Military Efficiency', '+20% Military Wages', 'destroys 2% of troops home on arrival'] }
+    }
+  });
+  const dragonRows = rows.game.filter(row => row.category === 'dragon' && row.rule_name === 'Ruby Dragon');
+  assert.equal(dragonRows.length, 1);
+  assert.equal(dragonRows[0].value, '-10% Military Efficiency, +20% Military Wages, destroys 2% of troops home on arrival');
+});
