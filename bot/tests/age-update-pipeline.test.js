@@ -268,9 +268,12 @@ test('parses revision and ability change logs instead of dropping them after tab
   ].join('\n');
   const parsed = parse117(source);
   assert.ok(Object.values(parsed.game_rules).some(value => /All Doctrines/i.test(value)));
-  assert.ok(Object.values(parsed.spells).some(value => /Mages Fury/i.test(value)));
-  assert.ok(Object.values(parsed.spells).some(value => /Mind Focus/i.test(value)));
-  assert.ok(Object.values(parsed.thievery).some(value => /offensive TPA/i.test(value)));
-  assert.ok(Object.values(parsed.spells).some(value => /Arcane Respite/i.test(value)));
-  assert.ok(Object.values(parsed.thievery).some(value => /Cunning Assault/i.test(value)));
+  assert.ok(parsed.change_log.some(entry => /Mages Fury/i.test(entry.text)));
+  assert.ok(parsed.change_log.some(entry => /Mind Focus/i.test(entry.text)));
+  assert.ok(parsed.change_log.some(entry => /offensive TPA/i.test(entry.text)));
+  assert.ok(parsed.ability_changes.some(entry => /Arcane Respite/i.test(entry.text)));
+  assert.ok(parsed.ability_changes.some(entry => /Cunning Assault/i.test(entry.text)));
+  assert.equal(parsed.change_log.length, 11);
+  assert.equal(parsed.ability_changes.length, 5);
+  assert.equal(Object.values(parsed.spells).some(value => /Mages Fury/i.test(value)), false);
 });
