@@ -71,6 +71,15 @@ function buildDetailedAgeChangeReport(rawText, ageNumber, shortSummary) {
     }
   }
 
+  for (const [heading, entries] of [
+    ['Revision change log — review only', parsed.change_log || []],
+    ['Unique ability programming changes — review only', parsed.ability_changes || []]
+  ]) {
+    lines.push('', '## ' + heading + ' (' + entries.length + ')');
+    if (!entries.length) lines.push('- No entries extracted.');
+    else for (const entry of entries) lines.push('- [' + (entry.category || 'unclassified') + '] ' + entry.text);
+  }
+
   lines.push('', '## Explicit removals (' + (parsed.removed || []).length + ')');
   if (parsed.removed?.length) {
     for (const item of parsed.removed) lines.push('- ' + [item.category || 'unspecified category', item.entity ? 'entity=' + item.entity : '', item.name || 'unnamed removal'].filter(Boolean).join(' — '));
