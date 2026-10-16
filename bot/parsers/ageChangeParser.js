@@ -342,32 +342,32 @@ function parseAge117Tables(text) {
 
 
 function classifyAgeChangeLine(line) {
-  const value = String(line || '').trim().replace(/^[•*-]+\\s*/, '');
+  const value = String(line || '').trim().replace(/^[•*-]+\s*/, '');
   if (!value) return null;
-  const match = value.match(/^([^:]{2,100}):\\s*(.+)$/);
+  const match = value.match(/^([^:]{2,100}):\s*(.+)$/);
   const name = match ? match[1].trim() : value.slice(0, 90);
   const detail = match ? match[2].trim() : value;
   const haystack = (name + ' ' + detail).toLowerCase();
   let section = 'game_rules';
-  if (/\\b(spell|rune|mana|wizard|wpa|fanaticism|instant magic|ritual effectiveness)\\b/.test(haystack)) section = 'spells';
-  if (/\\b(thiev|thief|tpa|sabotage|stealth|espionage|guild effect)\\b/.test(haystack)) section = 'thievery';
-  if (/\\b(building|construction|raze|architect)\\b/.test(haystack)) section = 'buildings';
-  if (/\\b(science|scientist|bookkeeping|book generation|research)\\b/.test(haystack)) section = 'science';
-  if (/\\b(dragon|hitpoints|recurring effects)\\b/.test(haystack)) section = 'game_rules';
+  if (/\b(spell|rune|mana|wizard|wpa|fanaticism|instant magic|ritual effectiveness)\b/.test(haystack)) section = 'spells';
+  if (/\b(thiev|thief|tpa|sabotage|stealth|espionage|guild effect)\b/.test(haystack)) section = 'thievery';
+  if (/\b(building|construction|raze|architect)\b/.test(haystack)) section = 'buildings';
+  if (/\b(science|scientist|bookkeeping|book generation|research)\b/.test(haystack)) section = 'science';
+  if (/\b(dragon|hitpoints|recurring effects)\b/.test(haystack)) section = 'game_rules';
   return { section, key: name, value };
 }
 
 function parseAge117ChangeLogs(text, result) {
-  const lines = String(text || '').replace(/\\r/g, '').split('\\n');
+  const lines = String(text || '').replace(/\r/g, '').split('\n');
   let mode = null;
   for (const raw of lines) {
     const line = raw.trim();
     if (/^Change Log from Revised:?$/i.test(line)) { mode = 'revision'; continue; }
     if (/^Unique Abil(?:i)?ty Programming Changes from Existing:?$/i.test(line)) { mode = 'ability'; continue; }
-    if (/^#TABLE\\s+/i.test(line) || /^Race\\s+Archetype\\s+Bonuses\\b/i.test(line) ||
-        /^Personality\\s+Archetype\\s+Bonuses\\b/i.test(line)) { mode = null; continue; }
-    if (!mode || !line || /^#ENDTABLE/i.test(line) || /^#ROW\\s+/i.test(line)) continue;
-    if (/^(?:Age\\s+\\d+\\s+General Changes|Ritual\\s+Effect|Dragons?\\s+Effect)$/i.test(line)) { mode = null; continue; }
+    if (/^#TABLE\s+/i.test(line) || /^Race\s+Archetype\s+Bonuses\b/i.test(line) ||
+        /^Personality\s+Archetype\s+Bonuses\b/i.test(line)) { mode = null; continue; }
+    if (!mode || !line || /^#ENDTABLE/i.test(line) || /^#ROW\s+/i.test(line)) continue;
+    if (/^(?:Age\s+\d+\s+General Changes|Ritual\s+Effect|Dragons?\s+Effect)$/i.test(line)) { mode = null; continue; }
     const classified = classifyAgeChangeLine(line);
     if (!classified) continue;
     const target = result[classified.section] || result.game_rules;
@@ -667,9 +667,9 @@ function parseAgeChangeText(rawText, ageNumber) {
     isChangeSheet: /\b(?:proposed\s+changes|general\s+changes|changes\s+from\s+existing|change\s+log)\b/i.test(text),
     parser: Number(ageNumber) === 117 || looksLike117(text) ? (normalized.complete_sections.length ? 'age117-structured' : 'age117-text') : 'age-full',
     revisionLogPresent: /Change Log from Revised/i.test(text),
-    revisionEntries: (text.split(/Change Log from Revised\\s*:?/i)[1]?.split(/Unique Abil(?:i)?ty Programming Changes from Existing/i)[0] || '').split(/\\r?\\n/).map(line => line.trim()).filter(line => /^[^:]{2,100}:\\s*\\S/.test(line)).length,
+    revisionEntries: (text.split(/Change Log from Revised\s*:?/i)[1]?.split(/Unique Abil(?:i)?ty Programming Changes from Existing/i)[0] || '').split(/\r?\n/).map(line => line.trim()).filter(line => /^[^:]{2,100}:\s*\S/.test(line)).length,
     abilityChangeLogPresent: /Unique Abil(?:i)?ty Programming Changes from Existing/i.test(text),
-    abilityChangeEntries: (text.split(/Unique Abil(?:i)?ty Programming Changes from Existing\\s*:?/i)[1] || '').split(/\\r?\\n/).map(line => line.trim()).filter(line => /^[^:]{2,100}:\\s*\\S/.test(line)).length
+    abilityChangeEntries: (text.split(/Unique Abil(?:i)?ty Programming Changes from Existing\s*:?/i)[1] || '').split(/\r?\n/).map(line => line.trim()).filter(line => /^[^:]{2,100}:\s*\S/.test(line)).length
   };
   return normalized;
 }
