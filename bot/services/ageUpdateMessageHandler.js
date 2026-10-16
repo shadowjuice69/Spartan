@@ -9,6 +9,7 @@ const { extractPdfTableText } = require("../parsers/pdfTableText");
 const { buildDetailedAgeChangeReport } = require("./ageChangeReport");
 
 const MAX_FILE_BYTES = 15 * 1024 * 1024;
+const MAX_CHANNEL_REPORT_PAGES = 4;
 
 function extractAge(text) {
   const match = String(text || "").match(/\bage\s*[-_:]?\s*(\d{2,3})\b/i);
@@ -32,14 +33,18 @@ function splitReportPages(report, maxLength = 3500) {
 }
 
 async function sendReportPages(message, report, ageNumber, recordId) {
-  const pages = splitReportPages(report);
+  const allPages = splitReportPages(report);
+  const pages = allPages.slice(0, MAX_CHANNEL_REPORT_PAGES);
   for (let index = 0; index < pages.length; index++) {
     const embed = new EmbedBuilder()
       .setColor(0x5865F2)
-      .setTitle("📘 Age " + ageNumber + " — Full Parser Report (" + (index + 1) + "/" + pages.length + ")")
+      .setTitle("📘 Age " + ageNumber + " — Full Parser Report (" + (index + 1) + "/" + allPages.length + ")")
       .setDescription(pages[index])
-      .setFooter({ text: "Review record #" + recordId + " • Full report; no changes applied by displaying this report." });
+      .setFooter({ text: "Review record #" + recordId + " • Full report is in the attached .txt; nothing is applied by viewing it." });
     await message.channel.send({ embeds: [embed] });
+  }
+  if (allPages.length > pages.length) {
+    await message.channel.send("📎 " + (allPages.length - pages.length) + " more report page(s) are not repeated here. Everything is in the attached full-review .txt file.");
   }
 }
 
@@ -72,9 +77,13 @@ function buildDecisionEmbed(ageNumber, recordId, ready, summary) {
 }
 
 async function sendReviewSequence(message, { review, files, fullReport, ageNumber, recordId, decision, buttons }) {
-  // Post in a predictable order: summary and attachment, every report page, then the controls.
+  // Post in a predictable order, but never let a report-page failure suppress Apply/Cancel controls.
   await message.reply({ embeds: [review], files });
-  await sendReportPages(message, fullReport, ageNumber, recordId);
+  try {
+    await sendReportPages(message, fullReport, ageNumber, recordId);
+  } catch (error) {
+    logger.warn("[AGE UPDATE] report page failed to send: " + error.message);
+  }
   return message.reply({ embeds: [decision], components: [buttons] });
 }
 

@@ -406,3 +406,64 @@ test('keeps one database row per dragon while preserving separated effects', () 
   assert.equal(dragonRows.length, 1);
   assert.equal(dragonRows[0].value, '-10% Military Efficiency, +20% Military Wages, destroys 2% of troops home on arrival');
 });
+
+
+test('validateMerged does not throw on a real table-shaped source and flags empty parsed tables', () => {
+  const { validateMerged } = require('../services/ageRuleMerge');
+  const source = 'Age 117 General Changes:\nRace \tArchetype \tBonuses\nPersonality \tArchetype \tBonuses\nRitual \tEffect\nDragons \tEffect';
+  const many = (n) => Object.fromEntries(Array.from({ length: n }, (_, i) => ['K' + i, {}]));
+  const merged = { races: many(11), personalities: many(11), game_rules: { A: 'x' }, rituals: {}, dragons: {}, spells: {}, thievery: {}, buildings: {}, science: {} };
+  let issues;
+  assert.doesNotThrow(() => { issues = validateMerged(merged, 117, source, { age: 116, rules: {} }, merged); });
+  assert.ok(issues.some((issue) => /source contains a rituals table but no rituals rows/.test(issue)));
+  assert.ok(issues.some((issue) => /source contains a dragons table but no dragons rows/.test(issue)));
+});
+
+test('review summary does not embed the complete source document', async () => {
+  const { buildReview, toRows } = require('../services/ageRuleMerge');
+  const { parseAgeChangeText: parse } = require('../parsers/ageChangeParser');
+  const block = (name, rows) => ['#TABLE ' + name, ...rows.map((row) => '#ROW ' + JSON.stringify(row)), '#ENDTABLE'].join('\n');
+  const names = (prefix, n) => Array.from({ length: n }, (_, i) => prefix + i);
+  const source = [
+    'Age 117 General Changes:', 'Fanaticism spell will only be available as a Racial Spell',
+    'Race Archetype Bonuses', 'Personality Archetype Bonuses', 'Ritual Effect', 'Dragons Effect',
+    'UNIQUE-SOURCE-MARKER-' + 'z'.repeat(5000),
+    block('RACES', names('Race', 10).map((name) => ({ name, archetype: 'A', bonuses: ['+1% X'] }))),
+    block('PERSONALITIES', names('Pers', 10).map((name) => ({ name, archetype: 'A', bonuses: ['+1% X'] }))),
+    block('RITUALS', [{ name: 'Barrier', effects: ['e'] }]),
+    block('DRAGONS', [{ name: 'Ruby', effects: ['e'] }])
+  ].join('\n');
+  const base = toRows(116, {
+    races: Object.fromEntries(names('Race', 10).map((n) => [n, { bonuses: ['+1% X'], units: {} }])),
+    personalities: Object.fromEntries(names('Pers', 10).map((n) => ['The ' + n, { bonuses: ['+1% X'] }])),
+    spells: {}, rituals: {}, thievery: {}, buildings: {}, science: {}, dragons: {},
+    game_rules: Object.fromEntries(names('G', 10).map((n) => [n, 'v']))
+  });
+  const data = { spartan_race_rules: base.races, spartan_personality_rules: base.personalities, spartan_game_rules: base.game };
+  const supabase = { from: (table) => ({ select: () => ({ eq: () => Promise.resolve({ data: data[table], error: null }) }) }) };
+  const review = await buildReview(supabase, source, 117);
+  assert.equal(review.summary.includes('UNIQUE-SOURCE-MARKER'), false);
+  assert.ok(review.summary.length < 6000);
+  assert.ok(parse(source, 117).races.Race0);
+});
+
+test('review controls still post when a report page fails, and channel pages are capped', async () => {
+  const { sendReviewSequence } = require('../services/ageUpdateMessageHandler');
+  const order = [];
+  let sends = 0;
+  const message = {
+    reply: async (payload) => { order.push(payload.components?.length ? 'controls' : 'summary'); return {}; },
+    channel: { send: async () => { sends += 1; if (sends === 2) throw new Error('rate limited'); order.push('page'); return {}; } }
+  };
+  await sendReviewSequence(message, { review: {}, files: [], fullReport: ('line\n').repeat(4000), ageNumber: 117, recordId: 99, decision: {}, buttons: { components: [1] } });
+  assert.equal(order[order.length - 1], 'controls');
+
+  const capped = [];
+  const message2 = {
+    reply: async (payload) => { capped.push(payload.components?.length ? 'controls' : 'summary'); return {}; },
+    channel: { send: async () => { capped.push('page'); return {}; } }
+  };
+  await sendReviewSequence(message2, { review: {}, files: [], fullReport: ('line\n').repeat(40000), ageNumber: 117, recordId: 99, decision: {}, buttons: { components: [1] } });
+  assert.ok(capped.filter((x) => x === 'page').length <= 5);
+  assert.equal(capped[capped.length - 1], 'controls');
+});
