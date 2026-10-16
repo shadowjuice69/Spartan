@@ -339,18 +339,74 @@ function parseAge117Tables(text) {
 }
 
 
-function parse117(rawText) {
-  let text = String(rawText).replace(/^\uFEFF/, '').replace(/\u000C/g, '').replace(/<PARSED TEXT FOR PAGE:\s*\d+\s*\/\s*\d+>/gi, '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-  const isPrefinal117 = /Age\s*117\s+General Changes/i.test(text) &&
-    /Unique Abilty Programming Changes from Existing/i.test(text);
-  const hasRaceAndPersonalityHeaders =
-    /\bRace\s+Archetype[\s\S]{0,160}?\bBonuses\b/i.test(text) &&
-    /\bPersonality\s+Archetype[\s\S]{0,160}?\bBonuses\b/i.test(text);
-  if (isPrefinal117 || hasRaceAndPersonalityHeaders) {
-    return parseAge117Tables(text);
+function classifyAgeChangeLine(line) {
+  const value = String(line || '').trim().replace(/^[•*-]+\\s*/, '');
+  if (!value) return null;
+  const match = value.match(/^([^:]{2,100}):\\s*(.+)$/);
+  const name = match ? match[1].trim() : value.slice(0, 90);
+  const detail = match ? match[2].trim() : value;
+  const haystack = (name + ' ' + detail).toLowerCase();
+  let section = 'game_rules';
+  if (/\\b(spell|rune|mana|wizard|wpa|fanaticism|instant magic|ritual effectiveness)\\b/.test(haystack)) section = 'spells';
+  if (/\\b(thiev|thief|tpa|sabotage|stealth|espionage|guild effect)\\b/.test(haystack)) section = 'thievery';
+  if (/\\b(building|construction|raze|architect)\\b/.test(haystack)) section = 'buildings';
+  if (/\\b(science|scientist|bookkeeping|book generation|research)\\b/.test(haystack)) section = 'science';
+  if (/\\b(dragon|hitpoints|recurring effects)\\b/.test(haystack)) section = 'game_rules';
+  return { section, key: name, value };
+}
+
+function parseAge117ChangeLogs(text, result) {
+  const lines = String(text || '').replace(/\\r/g, '').split('\\n');
+  let mode = null;
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (/^Change Log from Revised:?$/i.test(line)) { mode = 'revision'; continue; }
+    if (/^Unique Abil(?:i)?ty Programming Changes from Existing:?$/i.test(line)) { mode = 'ability'; continue; }
+    if (/^#TABLE\\s+/i.test(line) || /^Race\\s+Archetype\\s+Bonuses\\b/i.test(line) ||
+        /^Personality\\s+Archetype\\s+Bonuses\\b/i.test(line)) { mode = null; continue; }
+    if (!mode || !line || /^#ENDTABLE/i.test(line) || /^#ROW\\s+/i.test(line)) continue;
+    if (/^(?:Age\\s+\\d+\\s+General Changes|Ritual\\s+Effect|Dragons?\\s+Effect)$/i.test(line)) { mode = null; continue; }
+    const classified = classifyAgeChangeLine(line);
+    if (!classified) continue;
+    const target = result[classified.section] || result.game_rules;
+    target[classified.key] = classified.value;
   }
-  if (looksBoxed(text)) text = boxedToPlain(text);
-  return readPlain(text);
+}
+
+function parse117(rawText) {
+  let text = String(rawText).replace(/^\\uFEFF/, '').replace(/\\u000C/g, '').replace(/<PARSED TEXT FOR PAGE:\\s*\\d+\\s*\\/\\s*\\d+>/gi, '').replace(/\\r\\n/g, '\\n').replace(/\\r/g, '\\n');
+  const hasAge117Structure = /Age\\s*\\d+\\s+General Changes/i.test(text) &&
+    /Unique Abil(?:i)?ty Programming Changes from Existing/i.test(text);
+  const hasTables = /#TABLE\\s+(?:RACES|PERSONALITIES)/i.test(text) ||
+    (/\\bRace\\s+Archetype[\\s\\S]{0,160}?\\bBonuses\\b/i.test(text) &&
+     /\\bPersonality\\s+Archetype[\\s\\S]{0,160}?\\bBonuses\\b/i.test(text));
+  if (!hasAge117Structure && !hasTables) {
+    if (looksBoxed(text)) text = boxedToPlain(text);
+    return readPlain(text);
+  }
+
+  // Keep every parser's useful output: the canonical table extractor is authoritative
+  // for cell-backed race/personality/ritual/dragon rows; the line parser captures
+  // ordinary section bullets. Never return the table parser early and discard the
+  // revision log or ability-programming changes that follow the tables.
+  const tableResult = parseAge117Tables(text);
+  const structured = parseStructuredFormat(text.split('\\n'));
+  const plain = readPlain(text);
+  const result = emptyResult();
+  for (const section of ['buildings', 'spells', 'thievery', 'science']) {
+    result[section] = { ...(structured[section] || {}), ...(plain[section] || {}) };
+  }
+  result.races = Object.keys(tableResult.races || {}).length ? tableResult.races
+    : (Object.keys(structured.races || {}).length ? structured.races : plain.races);
+  result.personalities = Object.keys(tableResult.personalities || {}).length ? tableResult.personalities
+    : (Object.keys(structured.personalities || {}).length ? structured.personalities : plain.personalities);
+  result.rituals = { ...(plain.rituals || {}), ...(structured.rituals || {}), ...(tableResult.rituals || {}) };
+  result.dragons = { ...(plain.dragons || {}), ...(structured.dragons || {}), ...(tableResult.dragons || {}) };
+  result.game_rules = { ...(plain.game_rules || {}), ...(structured.game_rules || {}), ...(tableResult.game_rules || {}) };
+  result.complete_sections = Array.isArray(tableResult.complete_sections) ? tableResult.complete_sections.slice() : [];
+  result.complete_table_counts = { ...(tableResult.complete_table_counts || {}) };
+  parseAge117ChangeLogs(text, result);
+  return result;
 }
 
 
