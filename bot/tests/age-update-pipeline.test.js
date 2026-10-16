@@ -297,7 +297,7 @@ test('ignores generic PDF pagination artifacts in the ability-programming log', 
     'Arcane Respite: Regenerate +2 mana per day for 6 days.',
     'Arcane Overflow: Offensive spells reduce enemy ritual effectiveness.',
     '- [game_rules] 3 of 3 --'
-  ].join('\\n');
+  ].join('\n');
   const parsed = parse117(source);
   assert.equal(parsed.ability_changes.length, 5);
   assert.ok(parsed.ability_changes.every(entry => !/3 of 3/.test(entry.text)));
@@ -305,7 +305,7 @@ test('ignores generic PDF pagination artifacts in the ability-programming log', 
 
 test('normalizes merged dragon-cell effects into separate, readable modifiers', () => {
   const { parse117 } = require('../parsers/ageChangeParser');
-  const block = (name, rows) => ['#TABLE ' + name, ...rows.map(row => '#ROW ' + JSON.stringify(row)), '#ENDTABLE'].join('\\n');
+  const block = (name, rows) => ['#TABLE ' + name, ...rows.map(row => '#ROW ' + JSON.stringify(row)), '#ENDTABLE'].join('\n');
   const source = [
     'Age 117 General Changes:',
     'Race Archetype Bonuses',
@@ -319,7 +319,7 @@ test('normalizes merged dragon-cell effects into separate, readable modifiers', 
       {name:'Ruby',effects:['-10% Military Efficiency, +20% Military Wages, destroys 2% of troops home at home on arrival']},
       {name:'Sapphire',effects:['-20% WPA and TPA, +15% Instant Spell and Sabotage Damage taken destroys 3% of thieves and wizards on arrival']}
     ])
-  ].join('\\n');
+  ].join('\n');
   const parsed = parse117(source);
   assert.deepEqual(parsed.dragons['Ruby Dragon'].effects, [
     '-10% Military Efficiency',
@@ -348,7 +348,7 @@ test('resolves entity-field removals to their race/personality section', () => {
     'Human: Removed Greed Immunity',
     'Unique Abilty Programming Changes from Existing:',
     'Overgrowth: Maximum population increases by +25% for 5 days.'
-  ].join('\\n');
+  ].join('\n');
   const parsed = parseAgeChangeText(source, 117);
   assert.equal(parsed.removed.length, 1);
   assert.equal(parsed.removed[0].category, 'race_field');
@@ -368,7 +368,7 @@ test('blocks malformed canonical rows instead of silently applying a partial tab
     '#ROW ' + JSON.stringify({name:'Avian',archetype:'Speed and Birth Rates',bonuses:['+25% Birth Rate']}),
     '#ROW {not-json}',
     '#ENDTABLE'
-  ].join('\\n');
+  ].join('\n');
   const parsed = parseAgeChangeText(source, 117);
   const issues = validateParsedShape(parsed, 117, source);
   assert.ok(issues.some(issue => /canonical races table row mismatch/.test(issue)));
