@@ -183,10 +183,10 @@ function normalizeDragonEffects(values) {
     // PDF cell extraction can duplicate a short phrase or run the arrival-damage clause
     // into the preceding modifier. Normalize those layout artifacts without naming any age.
     const normalized = String(value || "")
-      .replace(/\\b([A-Za-z]+)\\s+at\\s+\\1\\b/gi, "$1")
-      .replace(/\\s+(destroys?\\s+\\d+(?:\\.\\d+)?%\\s+of\\b)/gi, ", $1");
-    for (const part of normalized.split(/,\\s*(?=(?:[+\\-]\\s*\\d|destroys?\\b))/i)) {
-      const cleanPart = part.replace(/\\s+/g, " ").trim();
+      .replace(/\b([A-Za-z]+)\s+at\s+\1\b/gi, "$1")
+      .replace(/\s+(destroys?\s+\d+(?:\.\d+)?%\s+of\b)/gi, ", $1");
+    for (const part of normalized.split(/,\s*(?=(?:[+\-]\s*\d|destroys?\b))/i)) {
+      const cleanPart = part.replace(/\s+/g, " ").trim();
       if (cleanPart) out.push(cleanPart);
     }
   }
@@ -376,11 +376,11 @@ function classifyAgeChangeLine(line) {
 
 function isPageFooterLine(line) {
   const normalized = String(line || "").trim()
-    .replace(/^[•*\\-]+\\s*/, "")
-    .replace(/^\\[[^\\]]+\\]\\s*/, "")
-    .replace(/\\s+/g, " ")
+    .replace(/^[•*\-]+\s*/, "")
+    .replace(/^\[[^\]]+\]\s*/, "")
+    .replace(/\s+/g, " ")
     .trim();
-  return /^(?:page\\s*)?\\d+\\s*(?:of|\\/)\\s*\\d+\\s*(?:[-–—]+)?$/i.test(normalized) ||
+  return /^(?:page\s*)?\d+\s*(?:of|\/)\s*\d+\s*(?:[-–—]+)?$/i.test(normalized) ||
     /^(?:end of document|continued on next page)$/i.test(normalized);
 }
 
