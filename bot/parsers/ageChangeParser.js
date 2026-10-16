@@ -325,7 +325,6 @@ function parseAge117Tables(text) {
     }]));
   }
   if (canonical.personalities.length) {
-    result.complete_sections.push('personalities');
     result.complete_table_counts.personalities = canonical.personalities.length;
     result.personalities = Object.fromEntries(canonical.personalities.map((row) => [personalityKey(row.name), {
       emoji: null, archetype: row.archetype || null, unique_name: row.unique_name || null,
@@ -670,7 +669,7 @@ function parseAgeChangeText(rawText, ageNumber) {
     revisionLogPresent: /Change Log from Revised/i.test(text),
     revisionEntries: (text.split(/Change Log from Revised\s*:?/i)[1]?.split(/Unique Abil(?:i)?ty Programming Changes from Existing/i)[0] || '').split(/\r?\n/).map(line => line.trim()).filter(line => /^[^:]{2,100}:\s*\S/.test(line)).length,
     abilityChangeLogPresent: /Unique Abil(?:i)?ty Programming Changes from Existing/i.test(text),
-    abilityChangeEntries: (text.split(/Unique Abil(?:i)?ty Programming Changes from Existing\s*:?/i)[1] || '').split(/\r?\n/).map(line => line.trim()).filter(line => /^[^:]{2,100}:\s*\S/.test(line)).length
+    abilityChangeEntries: (text.split(/Unique Abil(?:i)?ty Programming Changes from Existing\s*:?/i)[1] || '').split(/#TABLE\s+/i)[0].split(/\r?\n/).map(line => line.trim()).filter(line => /^[^:]{2,100}:\s*\S/.test(line)).length
   };
   return normalized;
 }
