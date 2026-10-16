@@ -272,9 +272,9 @@ function validateParsedShape(parsed, ageNumber, rawText = '') {
     }
   }
 
-  if (parsed.source?.revisionLogPresent && parsed.source.revisionEntries > 0 &&
-      (parsed.change_log || []).length !== parsed.source.revisionEntries) {
-    issues.push('revision change log count mismatch: expected ' + parsed.source.revisionEntries +
+  if (parsed.source?.revisionLogPresent &&
+      (parsed.change_log || []).length !== Number(parsed.source.revisionEntries || 0)) {
+    issues.push('revision change log count mismatch: expected ' + Number(parsed.source.revisionEntries || 0) +
       ' entries, extracted ' + (parsed.change_log || []).length);
   }
   if (parsed.source?.abilityChangeLogPresent &&
