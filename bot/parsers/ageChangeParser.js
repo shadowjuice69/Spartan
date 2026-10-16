@@ -325,6 +325,7 @@ function parseAge117Tables(text) {
     }]));
   }
   if (canonical.personalities.length) {
+    result.complete_table_counts.personalities = canonical.personalities.length;
     result.personalities = Object.fromEntries(canonical.personalities.map((row) => [personalityKey(row.name), {
       emoji: null, archetype: row.archetype || null, unique_name: row.unique_name || null,
       unique_passive: row.unique_passive || null,
@@ -339,18 +340,78 @@ function parseAge117Tables(text) {
 }
 
 
+function classifyAgeChangeLine(line) {
+  const value = String(line || '').trim().replace(/^[•*-]+\s*/, '');
+  if (!value) return null;
+  if (/:\s*Removed\b/i.test(value)) return { section: 'removals', text: value };
+  const match = value.match(/^([^:]{2,100}):\s*(.+)$/);
+  const name = match ? match[1].trim() : value.slice(0, 90);
+  const detail = match ? match[2].trim() : value;
+  const haystack = (name + ' ' + detail).toLowerCase();
+  let section = 'game_rules';
+  if (/\b(spell|rune|mana|wizard|wpa|fanaticism|instant magic|ritual effectiveness)\b/.test(haystack)) section = 'spells';
+  if (/\b(thiev|thief|tpa|sabotage|stealth|espionage|guild effect)\b/.test(haystack)) section = 'thievery';
+  if (/\b(building|construction|raze|architect)\b/.test(haystack)) section = 'buildings';
+  if (/\b(science|scientist|bookkeeping|book generation|research)\b/.test(haystack)) section = 'science';
+  if (/\b(dragon|hitpoints|recurring effects)\b/.test(haystack)) section = 'game_rules';
+  return { section, text: match ? name + ' — ' + detail : value };
+}
+
+function parseAge117ChangeLogs(text, result) {
+  const lines = String(text || '').replace(/\r/g, '').split('\n');
+  let mode = null;
+  result.change_log = [];
+  result.ability_changes = [];
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (/^Change Log from Revised:?$/i.test(line)) { mode = 'revision'; continue; }
+    if (/^Unique Abil(?:i)?ty Programming Changes from Existing:?$/i.test(line)) { mode = 'ability'; continue; }
+    if (/^#TABLE\s+/i.test(line) || /^Race\s+Archetype\s+Bonuses\b/i.test(line) ||
+        /^Personality\s+Archetype\s+Bonuses\b/i.test(line)) { mode = null; continue; }
+    if (!mode || !line || /^#ENDTABLE/i.test(line) || /^#ROW\s+/i.test(line)) continue;
+    if (/^(?:Age\s+\d+\s+General Changes|Ritual\s+Effect|Dragons?\s+Effect)$/i.test(line)) { mode = null; continue; }
+    const classified = classifyAgeChangeLine(line);
+    if (!classified) continue;
+    const item = { category: classified.section, text: classified.text };
+    if (mode === 'revision') result.change_log.push(item);
+    else result.ability_changes.push(item);
+  }
+}
+
 function parse117(rawText) {
   let text = String(rawText).replace(/^\uFEFF/, '').replace(/\u000C/g, '').replace(/<PARSED TEXT FOR PAGE:\s*\d+\s*\/\s*\d+>/gi, '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-  const isPrefinal117 = /Age\s*117\s+General Changes/i.test(text) &&
-    /Unique Abilty Programming Changes from Existing/i.test(text);
-  const hasRaceAndPersonalityHeaders =
-    /\bRace\s+Archetype[\s\S]{0,160}?\bBonuses\b/i.test(text) &&
-    /\bPersonality\s+Archetype[\s\S]{0,160}?\bBonuses\b/i.test(text);
-  if (isPrefinal117 || hasRaceAndPersonalityHeaders) {
-    return parseAge117Tables(text);
+  const hasAge117Structure = /Age\s*\d+\s+General Changes/i.test(text) &&
+    /Unique Abil(?:i)?ty Programming Changes from Existing/i.test(text);
+  const hasTables = /#TABLE\s+(?:RACES|PERSONALITIES)/i.test(text) ||
+    (/\bRace\s+Archetype[\s\S]{0,160}?\bBonuses\b/i.test(text) &&
+     /\bPersonality\s+Archetype[\s\S]{0,160}?\bBonuses\b/i.test(text));
+  if (!hasAge117Structure && !hasTables) {
+    if (looksBoxed(text)) text = boxedToPlain(text);
+    return readPlain(text);
   }
-  if (looksBoxed(text)) text = boxedToPlain(text);
-  return readPlain(text);
+
+  // Keep every parser's useful output: the canonical table extractor is authoritative
+  // for cell-backed race/personality/ritual/dragon rows; the line parser captures
+  // ordinary section bullets. Never return the table parser early and discard the
+  // revision log or ability-programming changes that follow the tables.
+  const tableResult = parseAge117Tables(text);
+  const structured = parseStructuredFormat(text.split('\n'));
+  const plain = readPlain(text);
+  const result = emptyResult();
+  for (const section of ['buildings', 'spells', 'thievery', 'science']) {
+    result[section] = { ...(structured[section] || {}), ...(plain[section] || {}) };
+  }
+  result.races = Object.keys(tableResult.races || {}).length ? tableResult.races
+    : (Object.keys(structured.races || {}).length ? structured.races : plain.races);
+  result.personalities = Object.keys(tableResult.personalities || {}).length ? tableResult.personalities
+    : (Object.keys(structured.personalities || {}).length ? structured.personalities : plain.personalities);
+  result.rituals = { ...(plain.rituals || {}), ...(structured.rituals || {}), ...(tableResult.rituals || {}) };
+  result.dragons = { ...(plain.dragons || {}), ...(structured.dragons || {}), ...(tableResult.dragons || {}) };
+  result.game_rules = { ...(plain.game_rules || {}), ...(structured.game_rules || {}), ...(tableResult.game_rules || {}) };
+  result.complete_sections = Array.isArray(tableResult.complete_sections) ? tableResult.complete_sections.slice() : [];
+  result.complete_table_counts = { ...(tableResult.complete_table_counts || {}) };
+  parseAge117ChangeLogs(text, result);
+  return result;
 }
 
 
@@ -604,10 +665,16 @@ function parseAgeChangeText(rawText, ageNumber) {
   normalized.removed = extractRemovals(text);
   normalized.complete_sections = Array.isArray(parsed?.complete_sections) ? parsed.complete_sections.slice() : [];
   normalized.complete_table_counts = parsed?.complete_table_counts && typeof parsed.complete_table_counts === 'object' ? { ...parsed.complete_table_counts } : {};
+  normalized.change_log = Array.isArray(parsed?.change_log) ? parsed.change_log.slice() : [];
+  normalized.ability_changes = Array.isArray(parsed?.ability_changes) ? parsed.ability_changes.slice() : [];
   normalized.source = {
     ageNumber: Number(ageNumber) || null,
     isChangeSheet: /\b(?:proposed\s+changes|general\s+changes|changes\s+from\s+existing|change\s+log)\b/i.test(text),
-    parser: Number(ageNumber) === 117 || looksLike117(text) ? 'age117-generic' : 'age-full'
+    parser: Number(ageNumber) === 117 || looksLike117(text) ? (normalized.complete_sections.length ? 'age117-structured' : 'age117-text') : 'age-full',
+    revisionLogPresent: /Change Log from Revised/i.test(text),
+    revisionEntries: (text.split(/Change Log from Revised\s*:?/i)[1]?.split(/Unique Abil(?:i)?ty Programming Changes from Existing/i)[0] || '').split(/\r?\n/).map(line => line.trim()).filter(line => /^[^:]{2,100}:\s*\S/.test(line)).length,
+    abilityChangeLogPresent: /Unique Abil(?:i)?ty Programming Changes from Existing/i.test(text),
+    abilityChangeEntries: (text.split(/Unique Abil(?:i)?ty Programming Changes from Existing\s*:?/i)[1] || '').split(/#TABLE\s+/i)[0].split(/\r?\n/).map(line => line.trim()).filter(line => /^[^:]{2,100}:\s*\S/.test(line)).length
   };
   return normalized;
 }

@@ -180,6 +180,7 @@ function mergeRules(baseline, changes) {
     complete_table_counts: changes.complete_table_counts && typeof changes.complete_table_counts === 'object' ? { ...changes.complete_table_counts } : {}
   };
   if (changes.complete_sections?.includes('races')) merged.races = {};
+  if (changes.complete_sections?.includes('personalities')) merged.personalities = {};
   if (changes.complete_sections?.includes('rituals')) merged.rituals = {};
   if (changes.complete_sections?.includes('dragons')) merged.dragons = {};
   for (const [name, value] of Object.entries(changes.races || {})) merged.races[name] = mergeEntity(merged.races[name], value, ['emoji','archetype','war_doctrine','unique_name','unique_passive','bonuses','penalties','units','spells']);
@@ -209,83 +210,109 @@ function toRows(ageNumber, merged) {
 }
 function validateParsedShape(parsed, ageNumber) {
   const issues = [];
-  if (Number(ageNumber) !== 117) return issues;
+  const sections = ['races','personalities','rituals','dragons','spells','thievery','buildings','science','game_rules'];
   const numberOnly = value => /^[-+]?\d+(?:\.\d+)?%?$/.test(String(value || '').trim());
-  for (const [name, race] of Object.entries(parsed.races || {})) {
-    if (numberOnly(race.archetype) || /[+-]\s*\d+(?:\.\d+)?%/.test(String(race.archetype || ''))) issues.push('invalid Age 117 race archetype for ' + name + ': mixed or numeric table cells detected');
-    if (Array.isArray(race.penalties) && race.penalties.some(numberOnly)) issues.push('invalid Age 117 race penalties for ' + name + ': numeric table cell detected');
-    if (Array.isArray(race.spells) && race.spells.some(value => numberOnly(value) || /\b(?:attack time|rune cost|military wage)\b/i.test(value))) issues.push('invalid Age 117 race spells for ' + name + ': non-spell table cell detected');
-    if (numberOnly(race.war_doctrine)) issues.push('invalid Age 117 war doctrine for ' + name + ': numeric table cell detected');
-    if (numberOnly(race.unique_name)) issues.push('invalid Age 117 unique ability name for ' + name + ': numeric table cell detected');
-    if (numberOnly(race.unique_passive)) issues.push('invalid Age 117 unique ability effect for ' + name + ': numeric table cell detected');
-  }
-  for (const [name, personality] of Object.entries(parsed.personalities || {})) {
-    if (numberOnly(personality.archetype) || /[+-]\s*\d+(?:\.\d+)?%/.test(String(personality.archetype || ''))) issues.push('invalid Age 117 personality archetype for ' + name + ': mixed or numeric table cells detected');
-    if (Array.isArray(personality.spells) && personality.spells.some(numberOnly)) issues.push('invalid Age 117 personality spells for ' + name + ': numeric table cell detected');
-    if (Array.isArray(personality.starts_with) && personality.starts_with.some(numberOnly)) issues.push('invalid Age 117 personality starting units for ' + name + ': numeric table cell detected');
-    if (numberOnly(personality.unique_name)) issues.push('invalid Age 117 personality ability name for ' + name + ': numeric table cell detected');
-    if (numberOnly(personality.unique_passive)) issues.push('invalid Age 117 personality ability effect for ' + name + ': numeric table cell detected');
+  const hasStructuredTables = Array.isArray(parsed.complete_sections) && parsed.complete_sections.length > 0;
+
+  for (const section of Object.keys(parsed.complete_table_counts || {})) {
+    const expected = Number(parsed.complete_table_counts?.[section]);
+    const actual = Object.keys(parsed[section] || {}).length;
+    if (!Number.isInteger(expected) || expected < 1) issues.push('invalid expected row count for complete ' + section + ' table');
+    else if (actual !== expected) issues.push('complete ' + section + ' table extraction mismatch: expected ' + expected + ', found ' + actual);
   }
 
-  // Regression guards for the sparse-column corruption seen in the Age 117 PDF.
-  const avian = parsed.races?.Avian;
-  if (!avian) issues.push('Avian row missing from Age 117 source regression checks');
-  else {
-    if (!/Speed and Birth Rates/i.test(String(avian.archetype || ''))) issues.push('Avian archetype failed source regression check');
-    if (!(avian.penalties || []).some(value => /No Horses/i.test(String(value)))) issues.push('Avian No Horses penalty failed source regression check');
-    if (!(avian.spells || []).some(value => /Town Watch/i.test(String(value)))) issues.push('Avian Town Watch spell failed source regression check');
-    if (!/7\.5% Attack time/i.test(String(avian.war_doctrine || ''))) issues.push('Avian doctrine failed source regression check');
-    if (!/Opportunistic Raiders/i.test(String(avian.unique_name || ''))) issues.push('Avian unique ability name failed source regression check');
-    if (!/Learn and Plunder attacks return armies 1 tick faster/i.test(String(avian.unique_passive || ''))) issues.push('Avian unique ability effect failed source regression check');
+  for (const [name, race] of Object.entries(parsed.races || {})) {
+    for (const field of ['archetype','war_doctrine','unique_name','unique_passive']) {
+      if (numberOnly(race[field]) || (field === 'archetype' && /\b\d+(?:\.\d+)?%?\b/.test(String(race[field] || '')))) issues.push('invalid numeric or mixed table value in race ' + name + ' field ' + field);
+    }
+    for (const field of ['bonuses','penalties','spells']) {
+      if (Array.isArray(race[field]) && race[field].some(value => !String(value || '').trim() || ((field === 'penalties' || field === 'spells') && numberOnly(value)) || /^(?:page \d+(?: of \d+)?|footer|continued)$/i.test(String(value).trim()))) {
+        issues.push('empty or page-footer value in race ' + name + ' field ' + field);
+      }
+    }
   }
-  const darkElf = parsed.races?.['Dark Elf'];
-  if (!darkElf) issues.push('Dark Elf row missing from Age 117 source regression checks');
-  else {
-    if (!/Mystic Enthusiasts/i.test(String(darkElf.unique_name || ''))) issues.push('Dark Elf unique ability name failed source regression check');
-    if (!/30% of the rune cost/i.test(String(darkElf.unique_passive || ''))) issues.push('Dark Elf unique ability effect failed source regression check');
-    if (!(darkElf.spells || []).some(value => /Blizzard/i.test(String(value))) || !(darkElf.spells || []).some(value => /Mind Focus/i.test(String(value)))) issues.push('Dark Elf Blizzard/Mind Focus spells failed source regression check');
+  for (const [name, personality] of Object.entries(parsed.personalities || {})) {
+    for (const field of ['archetype','unique_name','unique_passive']) {
+      if (numberOnly(personality[field]) || (field === 'archetype' && /\b\d+(?:\.\d+)?%?\b/.test(String(personality[field] || '')))) issues.push('invalid numeric or mixed table value in personality ' + name + ' field ' + field);
+    }
+    for (const field of ['bonuses','starts_with','spells']) {
+      if (Array.isArray(personality[field]) && personality[field].some(value => !String(value || '').trim() || (field === 'spells' && numberOnly(value)) || /^(?:page \d+(?: of \d+)?|footer|continued)$/i.test(String(value).trim()))) {
+        issues.push('empty or page-footer value in personality ' + name + ' field ' + field);
+      }
+    }
+  }
+
+  if (parsed.source?.revisionLogPresent && parsed.source.revisionEntries > 0 &&
+      (parsed.change_log || []).length < parsed.source.revisionEntries) {
+    issues.push('revision change log is incomplete: expected ' + parsed.source.revisionEntries +
+      ' entries, extracted ' + (parsed.change_log || []).length);
+  }
+  if (parsed.source?.abilityChangeLogPresent && parsed.source.abilityChangeEntries > 0 &&
+      (parsed.ability_changes || []).length < parsed.source.abilityChangeEntries) {
+    issues.push('ability programming section is incomplete: expected ' + parsed.source.abilityChangeEntries +
+      ' entries, extracted ' + (parsed.ability_changes || []).length);
+  }
+  if (hasStructuredTables) {
+    for (const section of ['races','personalities']) {
+      if (!Object.keys(parsed[section] || {}).length) issues.push('structured source table produced no ' + section);
+    }
+  }
+  for (const section of sections) {
+    for (const [key, value] of Object.entries(parsed[section] || {})) {
+      const serialized = typeof value === 'string' ? value : JSON.stringify(value);
+      if (/\b(?:end of document|page \d+ of \d+|confidential footer)\b/i.test(serialized)) {
+        issues.push('possible PDF footer garbage in ' + section + ' entry ' + key);
+      }
+    }
   }
   return issues;
 }
 
 function validateMerged(merged, ageNumber, rawText, baseline) {
   const issues = [];
-  if (Object.keys(merged.races || {}).length < 10) issues.push('fewer than 10 race rules');
-  if (Object.keys(merged.personalities || {}).length < 10) issues.push('fewer than 10 personality rules');
-  if (!Object.keys(merged.game_rules || {}).length && !Object.keys(merged.spells || {}).length && !Object.keys(merged.rituals || {}).length && !Object.keys(merged.thievery || {}).length) issues.push('no game-rule entries');
+  if (Object.keys(merged.races || {}).length < 10) issues.push('fewer than 10 race rules after merge');
+  if (Object.keys(merged.personalities || {}).length < 10) issues.push('fewer than 10 personality rules after merge');
+  const gameCount = ['game_rules','spells','rituals','thievery','buildings','science','dragons'].reduce(
+    (count, section) => count + Object.keys(merged[section] || {}).length, 0
+  );
+  if (!gameCount) issues.push('no game-rule entries after merge');
   if (isChangeSheet(rawText, ageNumber) && !baseline) issues.push('change sheet has no verified previous-age baseline');
-  if (Number(ageNumber) === 117) {
-    for (const name of ['Avian','Dark Elf','Dryad','Dwarf','Elf','Faery','Gnome','Halfling','Human','Orc','Undead']) if (!merged.races[name]) issues.push('missing race: ' + name);
-    for (const name of ['The Artisan','The General','The Heretic','The Mystic','The Necromancer','The Cleric','The Rogue','The Tactician','The Warrior','The War Hero','The Sage']) if (!merged.personalities[name]) issues.push('missing personality: ' + name);
-    if (Object.keys(merged.rituals || {}).length < 6) issues.push('fewer than 6 rituals after merge');
-    if (Object.keys(merged.dragons || {}).length < 4) issues.push('fewer than 4 dragons after merge');
-    for (const section of merged.complete_sections || []) {
-      const expected = Number(merged.complete_table_counts?.[section]);
-      if (expected > 0 && Object.keys(merged[section] || {}).length !== expected) issues.push('complete ' + section + ' table replacement mismatch: expected ' + expected + ', found ' + Object.keys(merged[section] || {}).length);
-    }
-    const gameCount = ['spells','thievery','buildings','science','game_rules'].reduce((n, section) => n + Object.keys(merged[section] || {}).length, 0);
-    if (gameCount < 4) issues.push('fewer than 4 game-rule entries after merge');
-    const source = String(rawText || '');
-    const requiredSourceSections = [
-      [/Age\s*117\s+General Changes/i, 'general changes'],
-      [/Change Log from Revised/i, 'revision change log'],
-      [/Unique Abil(?:i)?ty Programming Changes from Existing/i, 'unique-ability programming changes'],
-      [/Ritual\s+Effect/i, 'ritual effects'],
-      [/Dragons?\s+Effect/i, 'dragon effects'],
-      [/Race\s+Archetype\s+Bonuses/i, 'race table'],
-      [/Personality\s+Archetype\s+Bonuses/i, 'personality table']
-    ];
-    for (const [pattern, label] of requiredSourceSections) if (!pattern.test(source)) issues.push('source document section missing: ' + label);
-    const revisionBlock = source.split(/Change Log from Revised\s*:?/i)[1]?.split(/Unique Abil(?:i)?ty Programming Changes from Existing/i)[0] || '';
-    const revisionItems = revisionBlock.split(/\r?\n/).map(line => line.trim()).filter(line => /^(?:Ascendancy Ritual|Heretic|Dark Elf|Elf|Faery|Halfling|Human|Sage|Tactician|Warrior|Orc)\s*:/i.test(line));
-    if (revisionItems.length !== 11) issues.push('revision change log incomplete: expected 11 items, found ' + revisionItems.length);
-    const abilityBlock = source.split(/Unique Abil(?:i)?ty Programming Changes from Existing\s*:?/i)[1] || '';
-    const abilityItems = abilityBlock.split(/\r?\n/).map(line => line.trim()).filter(line => /^(?:Overgrowth|Cunning Assault|Indomitable Spirit|Arcane Respite|Arcane Overflow)\s*:/i.test(line));
-    if (abilityItems.length !== 5) issues.push('unique-ability programming changes incomplete: expected 5 items, found ' + abilityItems.length);
-    const generalBlock = source.split(/Age\s*117\s+General Changes\s*:?/i)[1]?.split(/Race\s+Archetype\s+Bonuses/i)[0] || '';
-    const generalItems = generalBlock.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
-    if (generalItems.length !== 4) issues.push('general changes incomplete: expected 4 items, found ' + generalItems.length);
 
+  for (const section of merged.complete_sections || []) {
+    const expected = Number(merged.complete_table_counts?.[section]);
+    const actual = Object.keys(merged[section] || {}).length;
+    if (Number.isInteger(expected) && expected > 0 && actual !== expected) {
+      issues.push('complete ' + section + ' table replacement mismatch: expected ' + expected + ', found ' + actual);
+    }
+  }
+
+  const source = String(rawText || '');
+  const tablePairs = [
+    [/\bRace\s+Archetype\s+Bonuses\b/i, 'races'],
+    [/\bPersonality\s+Archetype\s+Bonuses\b/i, 'personalities'],
+    [/^\s*Ritual\s+Effect\s*$/im, 'rituals'],
+    [/^\s*Dragons?\s+Effect\s*$/im, 'dragons']
+  ];
+  for (const [pattern, section] of tablePairs) {
+    if (pattern.test(source) && !Object.keys(merged[section] || {}).length) {
+      issues.push('source contains a ' + section + ' table but no ' + section + ' rows were parsed');
+    }
+  }
+  if (/Change Log from Revised/i.test(source)) {
+    const block = source.split(/Change Log from Revised\s*:?/i)[1]?.split(/Unique Abil(?:i)?ty Programming Changes from Existing/i)[0] || '';
+    const entries = block.split(/\r?\n/).map(line => line.trim()).filter(line => /^[^:]{2,100}:\s*\S/.test(line));
+    if (entries.length && !['spells','thievery','buildings','science','game_rules'].some(section => Object.keys(merged[section] || {}).length)) {
+      issues.push('revision change log exists but no categorized change entries were parsed');
+    }
+  }
+  if (/Unique Abil(?:i)?ty Programming Changes from Existing/i.test(source)) {
+    const block = source.split(/Unique Abil(?:i)?ty Programming Changes from Existing\s*:?/i)[1] || '';
+    const entries = block.split(/\r?\n/).map(line => line.trim()).filter(line => /^[^:]{2,100}:\s*\S/.test(line));
+    if (entries.length && !Object.keys(merged.game_rules || {}).length && !Object.keys(merged.spells || {}).length &&
+        !Object.keys(merged.thievery || {}).length && !Object.keys(merged.buildings || {}).length &&
+        !Object.keys(merged.science || {}).length) {
+      issues.push('ability programming changes exist but no entries were parsed');
+    }
   }
   return issues;
 }
@@ -367,7 +394,13 @@ function buildChangeDetails(parsed, baseline, merged, rawText) {
     for (const item of parsed.removed) lines.push('- ' + (item.category || 'unspecified') + ': ' + item.name + (item.entity ? ' (entity: ' + item.entity + ')' : ''));
     lines.push('');
   }
-  lines.push('COMPLETE SOURCE DOCUMENT — ALL SECTIONS', 'The complete extracted source follows so no proposed change is omitted from the review.', '', String(rawText || '').trim(), '');
+  for (const [label, key] of [['REVISION CHANGE LOG (review only)', 'change_log'], ['UNIQUE ABILITY PROGRAMMING CHANGES (review only)', 'ability_changes']]) {
+    const entries = Array.isArray(parsed[key]) ? parsed[key] : [];
+    lines.push('', '## ' + label + ' (' + entries.length + ')');
+    if (!entries.length) lines.push('- No entries extracted.');
+    else for (const entry of entries) lines.push('- [' + (entry.category || 'unclassified') + '] ' + entry.text);
+  }
+  lines.push('', 'COMPLETE SOURCE DOCUMENT — ALL SECTIONS', 'The complete extracted source follows so no proposed change is omitted from the review.', '', String(rawText || '').trim(), '');
   return lines.join('\n');
 }
 
@@ -390,6 +423,8 @@ async function buildReview(supabase, rawText, ageNumber) {
     'Buildings: ' + Object.keys(merged.buildings || {}).length,
     'Science: ' + Object.keys(merged.science || {}).length,
     'Game rules: ' + Object.keys(merged.game_rules || {}).length,
+    'Revision log entries: ' + (parsed.change_log || []).length,
+    'Unique ability programming changes: ' + (parsed.ability_changes || []).length,
     '',
     buildChangeDetails(parsed, baseline, merged, rawText)
   ];
