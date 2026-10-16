@@ -265,7 +265,7 @@ test('parses revision and ability change logs instead of dropping them after tab
     'Indomitable Spirit: Warriors gain 5% Offensive Military Efficiency for 6 days.',
     'Arcane Respite: Regenerate +2 mana per day for 6 days.',
     'Arcane Overflow: Offensive spells reduce enemy ritual effectiveness.'
-  ].join('\\n');
+  ].join('\n');
   const parsed = parse117(source);
   assert.ok(Object.keys(parsed.game_rules).some(key => /All Doctrines/i.test(key)));
   assert.ok(Object.values(parsed.spells).some(value => /Mages Fury/i.test(value)));
