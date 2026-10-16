@@ -354,7 +354,8 @@ function classifyAgeChangeLine(line) {
   if (/\b(building|construction|raze|architect)\b/.test(haystack)) section = 'buildings';
   if (/\b(science|scientist|bookkeeping|book generation|research)\b/.test(haystack)) section = 'science';
   if (/\b(dragon|hitpoints|recurring effects)\b/.test(haystack)) section = 'game_rules';
-  return { section, key: name, value };
+  const description = match ? name + ' — ' + detail : value;
+  return { section, key: description, value: description };
 }
 
 function parseAge117ChangeLogs(text, result) {
