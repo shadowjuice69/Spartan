@@ -214,7 +214,7 @@ function validateParsedShape(parsed, ageNumber) {
   const numberOnly = value => /^[-+]?\d+(?:\.\d+)?%?$/.test(String(value || '').trim());
   const hasStructuredTables = Array.isArray(parsed.complete_sections) && parsed.complete_sections.length > 0;
 
-  for (const section of parsed.complete_sections || []) {
+  for (const section of Object.keys(parsed.complete_table_counts || {})) {
     const expected = Number(parsed.complete_table_counts?.[section]);
     const actual = Object.keys(parsed[section] || {}).length;
     if (!Number.isInteger(expected) || expected < 1) issues.push('invalid expected row count for complete ' + section + ' table');
@@ -223,7 +223,7 @@ function validateParsedShape(parsed, ageNumber) {
 
   for (const [name, race] of Object.entries(parsed.races || {})) {
     for (const field of ['archetype','war_doctrine','unique_name','unique_passive']) {
-      if (numberOnly(race[field])) issues.push('invalid numeric value in race ' + name + ' field ' + field);
+      if (numberOnly(race[field]) || (field === 'archetype' && /\\b\\d+(?:\\.\\d+)?%?\\b/.test(String(race[field] || '')))) issues.push('invalid numeric or mixed table value in race ' + name + ' field ' + field);
     }
     for (const field of ['bonuses','penalties','spells']) {
       if (Array.isArray(race[field]) && race[field].some(value => !String(value || '').trim() || /^(?:page \d+(?: of \d+)?|footer|continued)$/i.test(String(value).trim()))) {
@@ -233,7 +233,7 @@ function validateParsedShape(parsed, ageNumber) {
   }
   for (const [name, personality] of Object.entries(parsed.personalities || {})) {
     for (const field of ['archetype','unique_name','unique_passive']) {
-      if (numberOnly(personality[field])) issues.push('invalid numeric value in personality ' + name + ' field ' + field);
+      if (numberOnly(personality[field]) || (field === 'archetype' && /\\b\\d+(?:\\.\\d+)?%?\\b/.test(String(personality[field] || '')))) issues.push('invalid numeric or mixed table value in personality ' + name + ' field ' + field);
     }
     for (const field of ['bonuses','starts_with','spells']) {
       if (Array.isArray(personality[field]) && personality[field].some(value => !String(value || '').trim() || /^(?:page \d+(?: of \d+)?|footer|continued)$/i.test(String(value).trim()))) {
@@ -242,7 +242,6 @@ function validateParsedShape(parsed, ageNumber) {
     }
   }
 
-  const raw = String(parsed.source?.rawText || '');
   if (parsed.source?.revisionLogPresent && !parsed.source?.revisionEntries) {
     // Older callers do not provide entry counts; only flag this when the source was
     // explicitly tagged by the parser with a zero count.
