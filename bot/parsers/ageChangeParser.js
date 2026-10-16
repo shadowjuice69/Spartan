@@ -325,6 +325,8 @@ function parseAge117Tables(text) {
     }]));
   }
   if (canonical.personalities.length) {
+    result.complete_sections.push('personalities');
+    result.complete_table_counts.personalities = canonical.personalities.length;
     result.personalities = Object.fromEntries(canonical.personalities.map((row) => [personalityKey(row.name), {
       emoji: null, archetype: row.archetype || null, unique_name: row.unique_name || null,
       unique_passive: row.unique_passive || null,
