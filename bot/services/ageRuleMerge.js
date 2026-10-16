@@ -223,20 +223,20 @@ function validateParsedShape(parsed, ageNumber) {
 
   for (const [name, race] of Object.entries(parsed.races || {})) {
     for (const field of ['archetype','war_doctrine','unique_name','unique_passive']) {
-      if (numberOnly(race[field]) || (field === 'archetype' && /\\b\\d+(?:\\.\\d+)?%?\\b/.test(String(race[field] || '')))) issues.push('invalid numeric or mixed table value in race ' + name + ' field ' + field);
+      if (numberOnly(race[field]) || (field === 'archetype' && /\b\d+(?:\.\d+)?%?\b/.test(String(race[field] || '')))) issues.push('invalid numeric or mixed table value in race ' + name + ' field ' + field);
     }
     for (const field of ['bonuses','penalties','spells']) {
-      if (Array.isArray(race[field]) && race[field].some(value => !String(value || '').trim() || /^(?:page \d+(?: of \d+)?|footer|continued)$/i.test(String(value).trim()))) {
+      if (Array.isArray(race[field]) && race[field].some(value => !String(value || '').trim() || ((field === 'penalties' || field === 'spells') && numberOnly(value)) || /^(?:page \d+(?: of \d+)?|footer|continued)$/i.test(String(value).trim()))) {
         issues.push('empty or page-footer value in race ' + name + ' field ' + field);
       }
     }
   }
   for (const [name, personality] of Object.entries(parsed.personalities || {})) {
     for (const field of ['archetype','unique_name','unique_passive']) {
-      if (numberOnly(personality[field]) || (field === 'archetype' && /\\b\\d+(?:\\.\\d+)?%?\\b/.test(String(personality[field] || '')))) issues.push('invalid numeric or mixed table value in personality ' + name + ' field ' + field);
+      if (numberOnly(personality[field]) || (field === 'archetype' && /\b\d+(?:\.\d+)?%?\b/.test(String(personality[field] || '')))) issues.push('invalid numeric or mixed table value in personality ' + name + ' field ' + field);
     }
     for (const field of ['bonuses','starts_with','spells']) {
-      if (Array.isArray(personality[field]) && personality[field].some(value => !String(value || '').trim() || /^(?:page \d+(?: of \d+)?|footer|continued)$/i.test(String(value).trim()))) {
+      if (Array.isArray(personality[field]) && personality[field].some(value => !String(value || '').trim() || (field === 'spells' && numberOnly(value)) || /^(?:page \d+(?: of \d+)?|footer|continued)$/i.test(String(value).trim()))) {
         issues.push('empty or page-footer value in personality ' + name + ' field ' + field);
       }
     }
