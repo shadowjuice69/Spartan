@@ -277,3 +277,118 @@ test('parses revision and ability change logs instead of dropping them after tab
   assert.equal(parsed.ability_changes.length, 5);
   assert.equal(Object.values(parsed.spells).some(value => /Mages Fury/i.test(value)), false);
 });
+
+
+test('ignores generic PDF pagination artifacts in the ability-programming log', () => {
+  const { parse117 } = require('../parsers/ageChangeParser');
+  const source = [
+    'Age 117 General Changes:',
+    'Race Archetype Bonuses',
+    'Personality Archetype Bonuses',
+    'Ritual Effect',
+    'Dragons Effect',
+    'Change Log from Revised:',
+    'Ascendancy Ritual: Removed',
+    'Human: Removed Greed Immunity',
+    'Unique Abilty Programming Changes from Existing',
+    'Overgrowth: Maximum population increases by +25% for 5 days.',
+    'Cunning Assault: Provides thievery boosts for 6 days.',
+    'Indomitable Spirit: Warriors gain 5% Offensive Military Efficiency for 6 days.',
+    'Arcane Respite: Regenerate +2 mana per day for 6 days.',
+    'Arcane Overflow: Offensive spells reduce enemy ritual effectiveness.',
+    '- [game_rules] 3 of 3 --'
+  ].join('\\n');
+  const parsed = parse117(source);
+  assert.equal(parsed.ability_changes.length, 5);
+  assert.ok(parsed.ability_changes.every(entry => !/3 of 3/.test(entry.text)));
+});
+
+test('normalizes merged dragon-cell effects into separate, readable modifiers', () => {
+  const { parse117 } = require('../parsers/ageChangeParser');
+  const block = (name, rows) => ['#TABLE ' + name, ...rows.map(row => '#ROW ' + JSON.stringify(row)), '#ENDTABLE'].join('\\n');
+  const source = [
+    'Age 117 General Changes:',
+    'Race Archetype Bonuses',
+    'Personality Archetype Bonuses',
+    'Ritual Effect',
+    'Dragons Effect',
+    block('RACES', [{name:'Avian',archetype:'Speed and Birth Rates',bonuses:['+25% Birth Rate']}]),
+    block('PERSONALITIES', [{name:'Cleric',archetype:'Defensive',bonuses:['Immune to the Plague']}]),
+    block('RITUALS', [{name:'Barrier',effects:['-20% Damage from Enemy Instant Magic']}]),
+    block('DRAGONS', [
+      {name:'Ruby',effects:['-10% Military Efficiency, +20% Military Wages, destroys 2% of troops home at home on arrival']},
+      {name:'Sapphire',effects:['-20% WPA and TPA, +15% Instant Spell and Sabotage Damage taken destroys 3% of thieves and wizards on arrival']}
+    ])
+  ].join('\\n');
+  const parsed = parse117(source);
+  assert.deepEqual(parsed.dragons['Ruby Dragon'].effects, [
+    '-10% Military Efficiency',
+    '+20% Military Wages',
+    'destroys 2% of troops home on arrival'
+  ]);
+  assert.deepEqual(parsed.dragons['Sapphire Dragons'].effects, [
+    '-20% WPA and TPA',
+    '+15% Instant Spell and Sabotage Damage taken',
+    'destroys 3% of thieves and wizards on arrival'
+  ]);
+});
+
+test('resolves entity-field removals to their race/personality section', () => {
+  const source = [
+    'Age 117 General Changes:',
+    'Race Archetype Bonuses',
+    'Personality Archetype Bonuses',
+    '#TABLE RACES',
+    '#ROW ' + JSON.stringify({name:'Human',archetype:'Economy',bonuses:['+25% Income','Greed Immunity'],penalties:[],spells:['Tree of Gold']}),
+    '#ENDTABLE',
+    '#TABLE PERSONALITIES',
+    '#ROW ' + JSON.stringify({name:'Sage',archetype:'Science',bonuses:['+10 Starting Scientists'],spells:['Fountain of Knowledge']}),
+    '#ENDTABLE',
+    'Change Log from Revised:',
+    'Human: Removed Greed Immunity',
+    'Unique Abilty Programming Changes from Existing:',
+    'Overgrowth: Maximum population increases by +25% for 5 days.'
+  ].join('\\n');
+  const parsed = parseAgeChangeText(source, 117);
+  assert.equal(parsed.removed.length, 1);
+  assert.equal(parsed.removed[0].category, 'race_field');
+  const merged = mergeRules({
+    races: {}, personalities: {}, buildings: {}, spells: {}, thievery: {},
+    game_rules: {}, dragons: {}, science: {}, rituals: {}
+  }, parsed);
+  assert.deepEqual(merged.races.Human.bonuses, ['+25% Income']);
+});
+
+test('blocks malformed canonical rows instead of silently applying a partial table', () => {
+  const { validateParsedShape } = require('../services/ageRuleMerge');
+  const { parseAgeChangeText } = require('../parsers/ageChangeParser');
+  const source = [
+    'Age 117 General Changes:',
+    '#TABLE RACES',
+    '#ROW ' + JSON.stringify({name:'Avian',archetype:'Speed and Birth Rates',bonuses:['+25% Birth Rate']}),
+    '#ROW {not-json}',
+    '#ENDTABLE'
+  ].join('\\n');
+  const parsed = parseAgeChangeText(source, 117);
+  const issues = validateParsedShape(parsed, 117, source);
+  assert.ok(issues.some(issue => /canonical races table row mismatch/.test(issue)));
+});
+
+test('posts the review controls after the last detailed report page', async () => {
+  const { sendReviewSequence } = require('../services/ageUpdateMessageHandler');
+  const order = [];
+  const message = {
+    reply: async payload => {
+      order.push(payload.components?.length ? 'controls' : 'review-summary');
+      return {};
+    },
+    channel: {
+      send: async () => { order.push('report-page'); return {}; }
+    }
+  };
+  await sendReviewSequence(message, {
+    review: {}, files: [], fullReport: 'one complete report page',
+    ageNumber: 117, recordId: 99, decision: {}, buttons: {}
+  });
+  assert.deepEqual(order, ['review-summary', 'report-page', 'controls']);
+});
