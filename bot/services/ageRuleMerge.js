@@ -242,13 +242,15 @@ function validateParsedShape(parsed, ageNumber) {
     }
   }
 
-  if (parsed.source?.revisionLogPresent && !parsed.source?.revisionEntries) {
-    // Older callers do not provide entry counts; only flag this when the source was
-    // explicitly tagged by the parser with a zero count.
-    if (parsed.source.revisionEntries === 0) issues.push('revision change log was present but no entries were extracted');
+  if (parsed.source?.revisionLogPresent && parsed.source.revisionEntries > 0 &&
+      (parsed.change_log || []).length < parsed.source.revisionEntries) {
+    issues.push('revision change log is incomplete: expected ' + parsed.source.revisionEntries +
+      ' entries, extracted ' + (parsed.change_log || []).length);
   }
-  if (parsed.source?.abilityChangeLogPresent && parsed.source.abilityChangeEntries === 0) {
-    issues.push('ability programming section was present but no entries were extracted');
+  if (parsed.source?.abilityChangeLogPresent && parsed.source.abilityChangeEntries > 0 &&
+      (parsed.ability_changes || []).length < parsed.source.abilityChangeEntries) {
+    issues.push('ability programming section is incomplete: expected ' + parsed.source.abilityChangeEntries +
+      ' entries, extracted ' + (parsed.ability_changes || []).length);
   }
   if (hasStructuredTables) {
     for (const section of ['races','personalities']) {
@@ -392,7 +394,13 @@ function buildChangeDetails(parsed, baseline, merged, rawText) {
     for (const item of parsed.removed) lines.push('- ' + (item.category || 'unspecified') + ': ' + item.name + (item.entity ? ' (entity: ' + item.entity + ')' : ''));
     lines.push('');
   }
-  lines.push('COMPLETE SOURCE DOCUMENT — ALL SECTIONS', 'The complete extracted source follows so no proposed change is omitted from the review.', '', String(rawText || '').trim(), '');
+  for (const [label, key] of [['REVISION CHANGE LOG (review only)', 'change_log'], ['UNIQUE ABILITY PROGRAMMING CHANGES (review only)', 'ability_changes']]) {
+    const entries = Array.isArray(parsed[key]) ? parsed[key] : [];
+    lines.push('', '## ' + label + ' (' + entries.length + ')');
+    if (!entries.length) lines.push('- No entries extracted.');
+    else for (const entry of entries) lines.push('- [' + (entry.category || 'unclassified') + '] ' + entry.text);
+  }
+  lines.push('', 'COMPLETE SOURCE DOCUMENT — ALL SECTIONS', 'The complete extracted source follows so no proposed change is omitted from the review.', '', String(rawText || '').trim(), '');
   return lines.join('\n');
 }
 
