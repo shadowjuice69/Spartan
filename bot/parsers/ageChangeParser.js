@@ -342,7 +342,7 @@ function parseAge117Tables(text) {
 
 function classifyAgeChangeLine(line) {
   const value = String(line || '').trim().replace(/^[•*-]+\s*/, '');
-  if (!value || /:\s*Removed\s*$/i.test(value)) return null; // removals are handled separately by extractRemovals
+  if (!value || /:\s*Removed\b/i.test(value)) return null; // removals are handled separately by extractRemovals
   const match = value.match(/^([^:]{2,100}):\s*(.+)$/);
   const name = match ? match[1].trim() : value.slice(0, 90);
   const detail = match ? match[2].trim() : value;
