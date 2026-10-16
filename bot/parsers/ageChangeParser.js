@@ -342,7 +342,8 @@ function parseAge117Tables(text) {
 
 function classifyAgeChangeLine(line) {
   const value = String(line || '').trim().replace(/^[•*-]+\s*/, '');
-  if (!value || /:\s*Removed\b/i.test(value)) return null; // removals are handled separately by extractRemovals
+  if (!value) return null;
+  if (/:\s*Removed\b/i.test(value)) return { section: 'removals', text: value };
   const match = value.match(/^([^:]{2,100}):\s*(.+)$/);
   const name = match ? match[1].trim() : value.slice(0, 90);
   const detail = match ? match[2].trim() : value;
@@ -353,13 +354,14 @@ function classifyAgeChangeLine(line) {
   if (/\b(building|construction|raze|architect)\b/.test(haystack)) section = 'buildings';
   if (/\b(science|scientist|bookkeeping|book generation|research)\b/.test(haystack)) section = 'science';
   if (/\b(dragon|hitpoints|recurring effects)\b/.test(haystack)) section = 'game_rules';
-  const description = match ? name + ' — ' + detail : value;
-  return { section, key: description, value: description };
+  return { section, text: match ? name + ' — ' + detail : value };
 }
 
 function parseAge117ChangeLogs(text, result) {
   const lines = String(text || '').replace(/\r/g, '').split('\n');
   let mode = null;
+  result.change_log = [];
+  result.ability_changes = [];
   for (const raw of lines) {
     const line = raw.trim();
     if (/^Change Log from Revised:?$/i.test(line)) { mode = 'revision'; continue; }
@@ -370,8 +372,9 @@ function parseAge117ChangeLogs(text, result) {
     if (/^(?:Age\s+\d+\s+General Changes|Ritual\s+Effect|Dragons?\s+Effect)$/i.test(line)) { mode = null; continue; }
     const classified = classifyAgeChangeLine(line);
     if (!classified) continue;
-    const target = result[classified.section] || result.game_rules;
-    target[classified.key] = classified.value;
+    const item = { category: classified.section, text: classified.text };
+    if (mode === 'revision') result.change_log.push(item);
+    else result.ability_changes.push(item);
   }
 }
 
