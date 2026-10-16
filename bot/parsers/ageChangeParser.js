@@ -176,6 +176,23 @@ function splitTableSpells(value) {
   return parts.map((item) => item.trim().replace(/[,;]+$/, '')).filter(Boolean);
 }
 
+function normalizeDragonEffects(values) {
+  const source = Array.isArray(values) ? values : values == null ? [] : [values];
+  const out = [];
+  for (const value of source) {
+    // PDF cell extraction can duplicate a short phrase or run the arrival-damage clause
+    // into the preceding modifier. Normalize those layout artifacts without naming any age.
+    const normalized = String(value || "")
+      .replace(/\\b([A-Za-z]+)\\s+at\\s+\\1\\b/gi, "$1")
+      .replace(/\\s+(destroys?\\s+\\d+(?:\\.\\d+)?%\\s+of\\b)/gi, ", $1");
+    for (const part of normalized.split(/,\\s*(?=(?:[+\\-]\\s*\\d|destroys?\\b))/i)) {
+      const cleanPart = part.replace(/\\s+/g, " ").trim();
+      if (cleanPart) out.push(cleanPart);
+    }
+  }
+  return out;
+}
+
 function parseAge117Tables(text) {
   const lines = String(text).replace(/\r/g, '').split('\n');
   const result = { races:{}, personalities:{}, buildings:{}, spells:{}, thievery:{}, game_rules:{}, dragons:{}, science:{}, rituals:{} };
@@ -308,7 +325,7 @@ function parseAge117Tables(text) {
       if (m) result.rituals[m[1].trim()]={effects:[m[2]]};
     } else if (inDragons) {
       const m=t.match(/^([A-Z][A-Za-z'’ -]*?)\s+([+\-−].+)$/);
-      if (m) result.dragons[dragonKey(m[1].trim())]={effects:[m[2]]};
+      if (m) result.dragons[dragonKey(m[1].trim())]={effects:normalizeDragonEffects([m[2]])};
     }
   }
   result.complete_sections = [];
@@ -335,7 +352,7 @@ function parseAge117Tables(text) {
     }]));
   }
   if (canonical.rituals.length) { result.complete_sections.push('rituals'); result.complete_table_counts.rituals = canonical.rituals.length; result.rituals = Object.fromEntries(canonical.rituals.map((row) => [row.name, { effects: row.effects || [] }])); }
-  if (canonical.dragons.length) { result.complete_sections.push('dragons'); result.complete_table_counts.dragons = canonical.dragons.length; result.dragons = Object.fromEntries(canonical.dragons.map((row) => [dragonKey(row.name), { effects: row.effects || [] }])); }
+  if (canonical.dragons.length) { result.complete_sections.push('dragons'); result.complete_table_counts.dragons = canonical.dragons.length; result.dragons = Object.fromEntries(canonical.dragons.map((row) => [dragonKey(row.name), { effects: normalizeDragonEffects(row.effects || []) }])); }
   return result;
 }
 
@@ -357,6 +374,16 @@ function classifyAgeChangeLine(line) {
   return { section, text: match ? name + ' — ' + detail : value };
 }
 
+function isPageFooterLine(line) {
+  const normalized = String(line || "").trim()
+    .replace(/^[•*\\-]+\\s*/, "")
+    .replace(/^\\[[^\\]]+\\]\\s*/, "")
+    .replace(/\\s+/g, " ")
+    .trim();
+  return /^(?:page\\s*)?\\d+\\s*(?:of|\\/)\\s*\\d+\\s*(?:[-–—]+)?$/i.test(normalized) ||
+    /^(?:end of document|continued on next page)$/i.test(normalized);
+}
+
 function parseAge117ChangeLogs(text, result) {
   const lines = String(text || '').replace(/\r/g, '').split('\n');
   let mode = null;
@@ -364,6 +391,7 @@ function parseAge117ChangeLogs(text, result) {
   result.ability_changes = [];
   for (const raw of lines) {
     const line = raw.trim();
+    if (isPageFooterLine(line)) continue;
     if (/^Change Log from Revised:?$/i.test(line)) { mode = 'revision'; continue; }
     if (/^Unique Abil(?:i)?ty Programming Changes from Existing:?$/i.test(line)) { mode = 'ability'; continue; }
     if (/^#TABLE\s+/i.test(line) || /^Race\s+Archetype\s+Bonuses\b/i.test(line) ||
@@ -662,7 +690,15 @@ function parseAgeChangeText(rawText, ageNumber) {
     ['science', 'science'], ['game_rules', 'rule']
   ]) normalized[section] = normalizeFlatSection(normalized[section], prefix);
 
-  normalized.removed = extractRemovals(text);
+  normalized.removed = extractRemovals(text).map((item) => {
+    if (item.category || !item.entity) return item;
+    if (Object.prototype.hasOwnProperty.call(normalized.races, item.entity)) return { ...item, category: 'race_field' };
+    const personalityName = Object.keys(normalized.personalities).find((name) =>
+      name.toLowerCase() === item.entity.toLowerCase() ||
+      name.replace(/^The\\s+/i, '').toLowerCase() === item.entity.toLowerCase()
+    );
+    return personalityName ? { ...item, category: 'personality_field' } : item;
+  });
   normalized.complete_sections = Array.isArray(parsed?.complete_sections) ? parsed.complete_sections.slice() : [];
   normalized.complete_table_counts = parsed?.complete_table_counts && typeof parsed.complete_table_counts === 'object' ? { ...parsed.complete_table_counts } : {};
   normalized.change_log = Array.isArray(parsed?.change_log) ? parsed.change_log.slice() : [];
