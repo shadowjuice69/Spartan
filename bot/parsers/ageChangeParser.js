@@ -376,12 +376,12 @@ function parseAge117ChangeLogs(text, result) {
 }
 
 function parse117(rawText) {
-  let text = String(rawText).replace(/^\\uFEFF/, '').replace(/\\u000C/g, '').replace(/<PARSED TEXT FOR PAGE:\\s*\\d+\\s*\\/\\s*\\d+>/gi, '').replace(/\\r\\n/g, '\\n').replace(/\\r/g, '\\n');
-  const hasAge117Structure = /Age\\s*\\d+\\s+General Changes/i.test(text) &&
+  let text = String(rawText).replace(/^\uFEFF/, '').replace(/\u000C/g, '').replace(/<PARSED TEXT FOR PAGE:\s*\d+\s*\/\s*\d+>/gi, '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  const hasAge117Structure = /Age\s*\d+\s+General Changes/i.test(text) &&
     /Unique Abil(?:i)?ty Programming Changes from Existing/i.test(text);
-  const hasTables = /#TABLE\\s+(?:RACES|PERSONALITIES)/i.test(text) ||
-    (/\\bRace\\s+Archetype[\\s\\S]{0,160}?\\bBonuses\\b/i.test(text) &&
-     /\\bPersonality\\s+Archetype[\\s\\S]{0,160}?\\bBonuses\\b/i.test(text));
+  const hasTables = /#TABLE\s+(?:RACES|PERSONALITIES)/i.test(text) ||
+    (/\bRace\s+Archetype[\s\S]{0,160}?\bBonuses\b/i.test(text) &&
+     /\bPersonality\s+Archetype[\s\S]{0,160}?\bBonuses\b/i.test(text));
   if (!hasAge117Structure && !hasTables) {
     if (looksBoxed(text)) text = boxedToPlain(text);
     return readPlain(text);
@@ -392,7 +392,7 @@ function parse117(rawText) {
   // ordinary section bullets. Never return the table parser early and discard the
   // revision log or ability-programming changes that follow the tables.
   const tableResult = parseAge117Tables(text);
-  const structured = parseStructuredFormat(text.split('\\n'));
+  const structured = parseStructuredFormat(text.split('\n'));
   const plain = readPlain(text);
   const result = emptyResult();
   for (const section of ['buildings', 'spells', 'thievery', 'science']) {
