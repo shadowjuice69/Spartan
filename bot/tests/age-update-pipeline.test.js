@@ -267,7 +267,7 @@ test('parses revision and ability change logs instead of dropping them after tab
     'Arcane Overflow: Offensive spells reduce enemy ritual effectiveness.'
   ].join('\n');
   const parsed = parse117(source);
-  assert.ok(Object.keys(parsed.game_rules).some(key => /All Doctrines/i.test(key)));
+  assert.ok(Object.values(parsed.game_rules).some(value => /All Doctrines/i.test(value)));
   assert.ok(Object.values(parsed.spells).some(value => /Mages Fury/i.test(value)));
   assert.ok(Object.values(parsed.spells).some(value => /Mind Focus/i.test(value)));
   assert.ok(Object.values(parsed.thievery).some(value => /offensive TPA/i.test(value)));
