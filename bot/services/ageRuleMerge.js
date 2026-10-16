@@ -423,6 +423,8 @@ async function buildReview(supabase, rawText, ageNumber) {
     'Buildings: ' + Object.keys(merged.buildings || {}).length,
     'Science: ' + Object.keys(merged.science || {}).length,
     'Game rules: ' + Object.keys(merged.game_rules || {}).length,
+    'Revision log entries: ' + (parsed.change_log || []).length,
+    'Unique ability programming changes: ' + (parsed.ability_changes || []).length,
     '',
     buildChangeDetails(parsed, baseline, merged, rawText)
   ];
