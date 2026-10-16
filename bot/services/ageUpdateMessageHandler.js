@@ -178,7 +178,7 @@ module.exports = async function ageUpdateMessageHandler(message) {
           .setDescription(["**Record:** #" + savedUpdate.existingId,
             "**Status:** Pending review — nothing has been applied.", "", "**Parser summary**",
             preview || "🛑 **No structured rules detected. Do not apply this upload.**"].join("\n"))
-          .addFields({ name: "Apply readiness", value: ready ? "Structured entries detected; final validation still required" : "BLOCKED — validation failed", inline: false })
+          .addFields({ name: "Apply readiness", value: ready ? "Preflight passed; Apply revalidates server-side" : "BLOCKED — Apply disabled; see controls after report", inline: false })
           .setFooter({ text: "This is the already-staged upload; no duplicate was created." });
         const buttons = new ActionRowBuilder().addComponents(
           new ButtonBuilder().setCustomId("age_apply_" + savedUpdate.existingId).setLabel("✅ Review / Apply").setStyle(ButtonStyle.Success).setDisabled(!ready),
@@ -207,7 +207,7 @@ module.exports = async function ageUpdateMessageHandler(message) {
       .addFields(
         { name: "Target age", value: String(savedUpdate.age_number), inline: true },
         { name: "Review record", value: "#" + savedUpdate.id, inline: true },
-        { name: "Apply readiness", value: ready ? "Structured entries detected; final validation still required" : "BLOCKED — validation failed", inline: false })
+        { name: "Apply readiness", value: ready ? "Preflight passed; Apply revalidates server-side" : "BLOCKED — Apply disabled; see controls after report", inline: false })
       .setFooter({ text: "Review the summary before choosing Apply or Cancel Review." });
     const buttons = new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId("age_apply_" + savedUpdate.id).setLabel("✅ Apply Changes").setStyle(ButtonStyle.Success).setDisabled(!ready),
