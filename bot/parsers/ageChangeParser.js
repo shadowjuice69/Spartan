@@ -665,7 +665,9 @@ function parseAgeChangeText(rawText, ageNumber) {
   normalized.source = {
     ageNumber: Number(ageNumber) || null,
     isChangeSheet: /\b(?:proposed\s+changes|general\s+changes|changes\s+from\s+existing|change\s+log)\b/i.test(text),
-    parser: Number(ageNumber) === 117 || looksLike117(text) ? 'age117-generic' : 'age-full'
+    parser: Number(ageNumber) === 117 || looksLike117(text) ? (normalized.complete_sections.length ? 'age117-structured' : 'age117-text') : 'age-full',
+    revisionLogPresent: /Change Log from Revised/i.test(text),
+    abilityChangeLogPresent: /Unique Abil(?:i)?ty Programming Changes from Existing/i.test(text)
   };
   return normalized;
 }
