@@ -49,4 +49,6 @@ jobs:
           node --check services/ageRuleMerge.js
           node --check services/ageUpdateService.js
           node --check services/ageUpdateMessageHandler.js
+          node --check services/ageChangeReport.js
+          node --check handlers/buttonHandler.js
       - run: node --test tests/age-update-pipeline.test.js
