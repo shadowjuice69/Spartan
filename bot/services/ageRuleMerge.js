@@ -204,7 +204,12 @@ function toRows(ageNumber, merged) {
     }
   }
   for (const [name, dragon] of Object.entries(merged.dragons || {})) {
-    for (const effect of asArray(dragon?.effects)) game.push({ age_number: ageNumber, category: 'dragon', rule_name: name, value: effect, description: String(effect) });
+    const effects = asArray(dragon?.effects).map(String).map(effect => effect.trim()).filter(Boolean);
+    if (!effects.length) continue;
+    // Keep the established one-row-per-dragon database shape; the parser/report still
+    // treats each modifier as a separate effect before serializing the combined value.
+    const value = effects.join(', ');
+    game.push({ age_number: ageNumber, category: 'dragon', rule_name: name, value, description: value });
   }
   return { races, personalities, game };
 }
