@@ -204,11 +204,16 @@ function toRows(ageNumber, merged) {
     }
   }
   for (const [name, dragon] of Object.entries(merged.dragons || {})) {
-    for (const effect of asArray(dragon?.effects)) game.push({ age_number: ageNumber, category: 'dragon', rule_name: name, value: effect, description: String(effect) });
+    const effects = asArray(dragon?.effects).map(String).map(effect => effect.trim()).filter(Boolean);
+    if (!effects.length) continue;
+    // Keep the established one-row-per-dragon database shape; the parser/report still
+    // treats each modifier as a separate effect before serializing the combined value.
+    const value = effects.join(', ');
+    game.push({ age_number: ageNumber, category: 'dragon', rule_name: name, value, description: value });
   }
   return { races, personalities, game };
 }
-function validateParsedShape(parsed, ageNumber) {
+function validateParsedShape(parsed, ageNumber, rawText = '') {
   const issues = [];
   const sections = ['races','personalities','rituals','dragons','spells','thievery','buildings','science','game_rules'];
   const numberOnly = value => /^[-+]?\d+(?:\.\d+)?%?$/.test(String(value || '').trim());
@@ -219,6 +224,31 @@ function validateParsedShape(parsed, ageNumber) {
     const actual = Object.keys(parsed[section] || {}).length;
     if (!Number.isInteger(expected) || expected < 1) issues.push('invalid expected row count for complete ' + section + ' table');
     else if (actual !== expected) issues.push('complete ' + section + ' table extraction mismatch: expected ' + expected + ', found ' + actual);
+  }
+
+  const sourceText = String(rawText || '');
+  const canonicalHeader = /^#TABLE\s+(RACES|PERSONALITIES|RITUALS|DRAGONS)\s*$/gim;
+  const canonicalCounts = {};
+  let tableMatch;
+  while ((tableMatch = canonicalHeader.exec(sourceText))) {
+    const tableName = tableMatch[1].toLowerCase();
+    const remainder = sourceText.slice(canonicalHeader.lastIndex);
+    const endIndex = remainder.search(/^#ENDTABLE\s*$/im);
+    canonicalCounts[tableName] = (canonicalCounts[tableName] || 0) + 1;
+    if (endIndex < 0) {
+      issues.push('canonical ' + tableName + ' table is missing #ENDTABLE');
+      continue;
+    }
+    const block = remainder.slice(0, endIndex);
+    const rawRows = (block.match(/^#ROW\s+/gim) || []).length;
+    const parsedRows = Object.keys(parsed[tableName] || {}).length;
+    if (rawRows === 0) issues.push('canonical ' + tableName + ' table contains no rows');
+    if (rawRows !== parsedRows) {
+      issues.push('canonical ' + tableName + ' table row mismatch: source has ' + rawRows + ', parsed ' + parsedRows);
+    }
+  }
+  for (const [section, count] of Object.entries(canonicalCounts)) {
+    if (count > 1) issues.push('multiple canonical tables found for ' + section + '; review is ambiguous');
   }
 
   for (const [name, race] of Object.entries(parsed.races || {})) {
@@ -242,19 +272,30 @@ function validateParsedShape(parsed, ageNumber) {
     }
   }
 
-  if (parsed.source?.revisionLogPresent && parsed.source.revisionEntries > 0 &&
-      (parsed.change_log || []).length < parsed.source.revisionEntries) {
-    issues.push('revision change log is incomplete: expected ' + parsed.source.revisionEntries +
+  if (parsed.source?.revisionLogPresent &&
+      (parsed.change_log || []).length !== Number(parsed.source.revisionEntries || 0)) {
+    issues.push('revision change log count mismatch: expected ' + Number(parsed.source.revisionEntries || 0) +
       ' entries, extracted ' + (parsed.change_log || []).length);
   }
-  if (parsed.source?.abilityChangeLogPresent && parsed.source.abilityChangeEntries > 0 &&
-      (parsed.ability_changes || []).length < parsed.source.abilityChangeEntries) {
-    issues.push('ability programming section is incomplete: expected ' + parsed.source.abilityChangeEntries +
+  if (parsed.source?.abilityChangeLogPresent &&
+      (parsed.ability_changes || []).length !== Number(parsed.source.abilityChangeEntries || 0)) {
+    issues.push('ability programming section count mismatch: expected ' + Number(parsed.source.abilityChangeEntries || 0) +
       ' entries, extracted ' + (parsed.ability_changes || []).length);
   }
   if (hasStructuredTables) {
     for (const section of ['races','personalities']) {
       if (!Object.keys(parsed[section] || {}).length) issues.push('structured source table produced no ' + section);
+    }
+  }
+  for (const [name, dragon] of Object.entries(parsed.dragons || {})) {
+    for (const effect of Array.isArray(dragon?.effects) ? dragon.effects : [dragon?.effects]) {
+      const text = String(effect || '');
+      if (/\b([A-Za-z]+)\s+at\s+\1\b/i.test(text)) {
+        issues.push('ambiguous repeated wording in dragon ' + name + ' effect');
+      }
+      if (/\b(?:taken|wages|income|efficiency|gains|casualties)\s+destroys?\b/i.test(text)) {
+        issues.push('dragon ' + name + ' effect is missing a separator before its arrival effect');
+      }
     }
   }
   for (const section of sections) {
@@ -294,7 +335,7 @@ function validateMerged(merged, ageNumber, rawText, baseline) {
     [/^\s*Dragons?\s+Effect\s*$/im, 'dragons']
   ];
   for (const [pattern, section] of tablePairs) {
-    if (pattern.test(source) && !Object.keys(merged[section] || {}).length) {
+    if (pattern.test(source) && !Object.keys(parsed[section] || {}).length) {
       issues.push('source contains a ' + section + ' table but no ' + section + ' rows were parsed');
     }
   }
@@ -372,7 +413,8 @@ function buildChangeDetails(parsed, baseline, merged, rawText) {
     }
     for (const item of parsed?.removed || []) {
       const cat = String(item.category || '').toLowerCase();
-      const expected = cat === 'race' ? 'races' : cat === 'personality' ? 'personalities' :
+      const expected = cat === 'race' || cat === 'race_field' ? 'races' :
+        cat === 'personality' || cat === 'personality_field' ? 'personalities' :
         cat === 'spell' ? 'spells' : cat === 'ritual' ? 'rituals' : cat === 'dragon' ? 'dragons' :
         cat === 'thievery' ? 'thievery' : cat === 'building' ? 'buildings' :
         cat === 'science' ? 'science' : cat === 'game_rule' ? 'game_rules' : '';
@@ -410,7 +452,7 @@ async function buildReview(supabase, rawText, ageNumber) {
   let baseline = null;
   if (needsBaseline) baseline = await loadBaseline(supabase, ageNumber);
   const merged = needsBaseline ? mergeRules(baseline.rules, parsed) : parsed;
-  const issues = [...validateParsedShape(parsed, ageNumber), ...validateMerged(merged, ageNumber, rawText, baseline)];
+  const issues = [...validateParsedShape(parsed, ageNumber, rawText), ...validateMerged(merged, ageNumber, rawText, baseline)];
   const summaryLines = [
     'Age ' + ageNumber + ' parsed with ' + parsed.source.parser,
     'Baseline: ' + (baseline ? 'Age ' + baseline.age + ' (' + baseline.source + ')' : 'not required'),

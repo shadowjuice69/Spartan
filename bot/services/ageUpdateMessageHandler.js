@@ -43,6 +43,41 @@ async function sendReportPages(message, report, ageNumber, recordId) {
   }
 }
 
+function validationBlockers(summary) {
+  const text = String(summary || "");
+  const marker = text.lastIndexOf("\nBLOCKED:");
+  if (marker < 0) return [];
+  return text.slice(marker + "\nBLOCKED:".length).split(/\r?\n/)
+    .map(line => line.replace(/^\s*-\s*/, "").trim()).filter(Boolean);
+}
+
+function buildDecisionEmbed(ageNumber, recordId, ready, summary) {
+  const blockers = validationBlockers(summary);
+  const embed = new EmbedBuilder()
+    .setColor(ready ? 0x2ECC71 : 0xD64545)
+    .setTitle("🔘 Age " + ageNumber + " — Review Controls")
+    .setDescription(ready
+      ? "The report is complete. Choose **Apply Changes** only after reviewing it. Server-side validation runs again before any active rules are changed."
+      : "🛑 **Apply is disabled because validation failed.** Active rules and saved builds have not been changed. Upload a corrected file to refresh this pending review, or choose Cancel Review.")
+    .addFields(
+      { name: "Review record", value: "#" + recordId, inline: true },
+      { name: "Preflight", value: ready ? "Passed; server rechecks on Apply" : "BLOCKED", inline: true }
+    )
+    .setFooter({ text: "These controls are intentionally placed after the complete report." });
+  if (!ready && blockers.length) {
+    const detail = blockers.join("\n").slice(0, 1000);
+    embed.addFields({ name: "Why Apply is blocked", value: detail || "See the report for validation details.", inline: false });
+  }
+  return embed;
+}
+
+async function sendReviewSequence(message, { review, files, fullReport, ageNumber, recordId, decision, buttons }) {
+  // Post in a predictable order: summary and attachment, every report page, then the controls.
+  await message.reply({ embeds: [review], files });
+  await sendReportPages(message, fullReport, ageNumber, recordId);
+  return message.reply({ embeds: [decision], components: [buttons] });
+}
+
 function htmlToText(html) {
   return String(html || "")
     .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, " ")
@@ -143,14 +178,16 @@ module.exports = async function ageUpdateMessageHandler(message) {
           .setDescription(["**Record:** #" + savedUpdate.existingId,
             "**Status:** Pending review — nothing has been applied.", "", "**Parser summary**",
             preview || "🛑 **No structured rules detected. Do not apply this upload.**"].join("\n"))
-          .addFields({ name: "Apply readiness", value: ready ? "Structured entries detected; final validation still required" : "BLOCKED — validation failed", inline: false })
+          .addFields({ name: "Apply readiness", value: ready ? "Preflight passed; Apply revalidates server-side" : "BLOCKED — Apply disabled; see controls after report", inline: false })
           .setFooter({ text: "This is the already-staged upload; no duplicate was created." });
         const buttons = new ActionRowBuilder().addComponents(
           new ButtonBuilder().setCustomId("age_apply_" + savedUpdate.existingId).setLabel("✅ Review / Apply").setStyle(ButtonStyle.Success).setDisabled(!ready),
           new ButtonBuilder().setCustomId("age_revoke_" + savedUpdate.existingId).setLabel("❌ Cancel Review").setStyle(ButtonStyle.Danger));
         const files = fullReport ? [new AttachmentBuilder(Buffer.from(fullReport, "utf8"), { name: "age-" + ageNumber + "-full-review-" + savedUpdate.existingId + ".txt" })] : [];
-        await message.reply({ embeds: [review], components: [buttons], files });
-        await sendReportPages(message, fullReport, ageNumber, savedUpdate.existingId);
+        const decision = buildDecisionEmbed(ageNumber, savedUpdate.existingId, ready, summary);
+        await sendReviewSequence(message, {
+          review, files, fullReport, ageNumber, recordId: savedUpdate.existingId, decision, buttons
+        });
       } else await message.reply("⚠️ An Age " + ageNumber + " record already exists and is **" + savedUpdate.status + "**. No duplicate was created.");
       return true;
     }
@@ -170,14 +207,16 @@ module.exports = async function ageUpdateMessageHandler(message) {
       .addFields(
         { name: "Target age", value: String(savedUpdate.age_number), inline: true },
         { name: "Review record", value: "#" + savedUpdate.id, inline: true },
-        { name: "Apply readiness", value: ready ? "Structured entries detected; final validation still required" : "BLOCKED — validation failed", inline: false })
+        { name: "Apply readiness", value: ready ? "Preflight passed; Apply revalidates server-side" : "BLOCKED — Apply disabled; see controls after report", inline: false })
       .setFooter({ text: "Review the summary before choosing Apply or Cancel Review." });
     const buttons = new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId("age_apply_" + savedUpdate.id).setLabel("✅ Apply Changes").setStyle(ButtonStyle.Success).setDisabled(!ready),
       new ButtonBuilder().setCustomId("age_revoke_" + savedUpdate.id).setLabel("❌ Cancel Review").setStyle(ButtonStyle.Danger));
     const files = fullReport ? [new AttachmentBuilder(Buffer.from(fullReport, "utf8"), { name: "age-" + savedUpdate.age_number + "-full-review-" + savedUpdate.id + ".txt" })] : [];
-    await message.reply({ embeds: [review], components: [buttons], files });
-    await sendReportPages(message, fullReport, savedUpdate.age_number, savedUpdate.id);
+    const decision = buildDecisionEmbed(savedUpdate.age_number, savedUpdate.id, ready, summary);
+    await sendReviewSequence(message, {
+      review, files, fullReport, ageNumber: savedUpdate.age_number, recordId: savedUpdate.id, decision, buttons
+    });
     logger.info("[AGE UPDATE INTAKE] id=" + savedUpdate.id + " age=" + savedUpdate.age_number + " submitted_by=" + message.author.id);
   } catch (error) {
     logger.error("[AGE UPDATE INTAKE ERROR] " + (error.stack || error.message));
@@ -187,3 +226,6 @@ module.exports = async function ageUpdateMessageHandler(message) {
   }
   return true;
 };
+
+module.exports.sendReviewSequence = sendReviewSequence;
+module.exports.buildDecisionEmbed = buildDecisionEmbed;

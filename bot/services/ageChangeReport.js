@@ -7,10 +7,10 @@ const SECTIONS = [
   ['Personalities', 'personalities'],
   ['Rituals', 'rituals'],
   ['Dragons', 'dragons'],
-  ['Spells', 'spells'],
-  ['Thievery', 'thievery'],
-  ['Buildings', 'buildings'],
-  ['Science', 'science'],
+  ['Standalone spell rules', 'spells'],
+  ['Standalone thievery rules', 'thievery'],
+  ['Standalone building rules', 'buildings'],
+  ['Standalone science rules', 'science'],
   ['Game rules / general changes', 'game_rules']
 ];
 
@@ -62,7 +62,9 @@ function buildDetailedAgeChangeReport(rawText, ageNumber, shortSummary) {
     const values = parsed[section] && typeof parsed[section] === 'object' ? parsed[section] : {};
     lines.push('', '## ' + heading + ' (' + Object.keys(values).length + ')');
     if (!Object.keys(values).length) {
-      lines.push('- No entries extracted in this section.');
+      if (section === 'spells') lines.push('- No standalone spell-rule entries extracted. Spell lists attached to races and personalities are shown in those entries above.');
+      else if (section === 'thievery') lines.push('- No standalone thievery-rule entries extracted. Race and personality thievery abilities remain listed with their entities.');
+      else lines.push('- No standalone entries extracted in this section.');
       continue;
     }
     for (const [name, value] of Object.entries(values)) {
