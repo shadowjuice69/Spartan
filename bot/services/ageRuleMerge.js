@@ -180,6 +180,7 @@ function mergeRules(baseline, changes) {
     complete_table_counts: changes.complete_table_counts && typeof changes.complete_table_counts === 'object' ? { ...changes.complete_table_counts } : {}
   };
   if (changes.complete_sections?.includes('races')) merged.races = {};
+  if (changes.complete_sections?.includes('personalities')) merged.personalities = {};
   if (changes.complete_sections?.includes('rituals')) merged.rituals = {};
   if (changes.complete_sections?.includes('dragons')) merged.dragons = {};
   for (const [name, value] of Object.entries(changes.races || {})) merged.races[name] = mergeEntity(merged.races[name], value, ['emoji','archetype','war_doctrine','unique_name','unique_passive','bonuses','penalties','units','spells']);
