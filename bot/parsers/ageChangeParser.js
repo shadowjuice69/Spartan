@@ -186,7 +186,7 @@ function normalizeDragonEffects(values) {
       .replace(/\b([A-Za-z]+)\s+at\s+\1\b/gi, "$1")
       .replace(/\s+(destroys?\s+\d+(?:\.\d+)?%\s+of\b)/gi, ", $1");
     for (const part of normalized.split(/,\s*(?=(?:[+\-]\s*\d|destroys?\b))/i)) {
-      const cleanPart = part.replace(/\s+/g, " ").trim();
+      const cleanPart = part.replace(/\s+/g, " ").replace(/[,;]+$/, "").trim();
       if (cleanPart) out.push(cleanPart);
     }
   }
