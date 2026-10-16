@@ -10,6 +10,20 @@ const {
 const { approveAgeUpdate, denyAgeUpdate } = require("../services/ageUpdateService");
 const permissionService = require("../services/permissionService");
 
+function blockedAgeReviewControls(id) {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId("age_apply_" + id)
+      .setLabel("Apply blocked — validation failed")
+      .setStyle(ButtonStyle.Secondary)
+      .setDisabled(true),
+    new ButtonBuilder()
+      .setCustomId("age_revoke_" + id)
+      .setLabel("❌ Cancel Review")
+      .setStyle(ButtonStyle.Danger)
+  );
+}
+
 module.exports = async function buttonHandler(interaction) {
   console.log(`Button pressed: ${interaction.customId}`);
 
@@ -57,8 +71,8 @@ module.exports = async function buttonHandler(interaction) {
 
     if (!result) {
       return interaction.editReply({
-        content: "⚠️ The age update could not be processed. Check the Render logs for the specific error; no success is being reported.",
-        components: []
+        content: "⚠️ The age update could not be processed. The submission remains pending unless the server reports otherwise. Check Render logs, or upload a corrected file to refresh this review.",
+        components: [blockedAgeReviewControls(id)]
       });
     }
 
@@ -69,9 +83,9 @@ module.exports = async function buttonHandler(interaction) {
           "",
           result.reason,
           "",
-          "The active age and saved builds were left unchanged. If this is a proposed-changes document, Spartan must merge verified changes with the existing rules before activation."
-        ].join("\\n"),
-        components: []
+          "The active age and saved builds were left unchanged. This submission is still pending. Upload a corrected file to refresh the same pending review, or use Cancel Review below."
+        ].join("\n"),
+        components: [blockedAgeReviewControls(id)]
       });
     }
 
