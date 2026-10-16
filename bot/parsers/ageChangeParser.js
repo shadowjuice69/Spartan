@@ -665,6 +665,8 @@ function parseAgeChangeText(rawText, ageNumber) {
   normalized.removed = extractRemovals(text);
   normalized.complete_sections = Array.isArray(parsed?.complete_sections) ? parsed.complete_sections.slice() : [];
   normalized.complete_table_counts = parsed?.complete_table_counts && typeof parsed.complete_table_counts === 'object' ? { ...parsed.complete_table_counts } : {};
+  normalized.change_log = Array.isArray(parsed?.change_log) ? parsed.change_log.slice() : [];
+  normalized.ability_changes = Array.isArray(parsed?.ability_changes) ? parsed.ability_changes.slice() : [];
   normalized.source = {
     ageNumber: Number(ageNumber) || null,
     isChangeSheet: /\b(?:proposed\s+changes|general\s+changes|changes\s+from\s+existing|change\s+log)\b/i.test(text),
