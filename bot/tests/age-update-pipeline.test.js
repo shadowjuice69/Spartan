@@ -69,11 +69,11 @@ test('rejects empty text and returns normalized sections for parsed text', () =>
   }
 });
 
-test('blocks Age 117 reviews when PDF table columns leak numeric values into text fields', () => {
+test('blocks mixed or numeric PDF table cells in generic rule fields', () => {
   const issues = validateParsedShape({
     races: {
       Avian: {
-        archetype: 'Speed and Birth Rates -20% Attack Travel Time Town Watch -7.5% Attack time 10',
+        archetype: '123',
         war_doctrine: '6.25',
         penalties: ['3'],
         spells: ['900'],
@@ -82,17 +82,18 @@ test('blocks Age 117 reviews when PDF table columns leak numeric values into tex
       }
     },
     personalities: {
-      'The Cleric': { archetype: 'Defensive', spells: ['Salvation'], unique_name: 'Architects Revenge' }
+      'The Cleric': { archetype: 'Defensive 900 6.25', spells: ['900'], unique_name: 'Architects Revenge' }
     }
   }, 117);
-  assert.ok(issues.some(issue => /archetype for Avian/.test(issue)));
-  assert.ok(issues.some(issue => /war doctrine for Avian/.test(issue)));
-  assert.ok(issues.some(issue => /penalties for Avian/.test(issue)));
-  assert.ok(issues.some(issue => /spells for Avian/.test(issue)));
-  assert.ok(issues.some(issue => /ability name for Avian/.test(issue)));
-  assert.ok(issues.some(issue => /ability effect for Avian/.test(issue)));
+  assert.ok(issues.some(issue => /race Avian field archetype/.test(issue)));
+  assert.ok(issues.some(issue => /race Avian field war_doctrine/.test(issue)));
+  assert.ok(issues.some(issue => /race Avian field penalties/.test(issue)));
+  assert.ok(issues.some(issue => /race Avian field spells/.test(issue)));
+  assert.ok(issues.some(issue => /race Avian field unique_name/.test(issue)));
+  assert.ok(issues.some(issue => /race Avian field unique_passive/.test(issue)));
+  assert.ok(issues.some(issue => /personality The Cleric field archetype/.test(issue)));
+  assert.ok(issues.some(issue => /personality The Cleric field spells/.test(issue)));
 });
-
 
 test('uses canonical cell-extracted rows for the real Age 117 table shape', () => {
   const { parse117 } = require('../parsers/ageChangeParser');
@@ -231,4 +232,45 @@ test('parses tab-separated PDF table cells by column rather than fixed character
   assert.equal(parsed.personalities['The Cleric'].unique_name, 'Architects Revenge');
   assert.ok(parsed.rituals.Barrier);
   assert.ok(parsed.dragons['Emerald Dragon']);
+});
+
+
+test('parses revision and ability change logs instead of dropping them after table extraction', () => {
+  const { parse117 } = require('../parsers/ageChangeParser');
+  const source = [
+    'Age 117 General Changes:',
+    'Fanaticism spell will only be available as a Racial Spell',
+    '% Reduction Sciences Max Reductions Reduced from -95% to -75%',
+    'All Doctrines give double bonus for the first province',
+    'Dragon Hitpoints Reduced by 10%; recurring effects after 6 ticks removed',
+    'Race Archetype Bonuses',
+    'Personality Archetype Bonuses',
+    'Ritual Effect',
+    'Dragons Effect',
+    'Change Log from Revised:',
+    'Ascendancy Ritual: Removed',
+    'Heretic: Added Mages Fury spell',
+    'Dark Elf: Added Mind Focus spell',
+    'Elf: Penalty changed to offensive TPA, Doctrine Changed',
+    'Faery: Added bonus -1% mana self spell cost',
+    'Halfling: Penalty change to offensive WPA',
+    'Human: Removed Greed Immunity',
+    'Sage: Unique Ability Changed to Holy Inquisition',
+    'Tactician: Attack Travel Time bonus reduced to -15%',
+    'Warrior: Unique Ability Changed to Indomitable Spirit',
+    'Orc: Penalty changed to -5% DME',
+    'Unique Abilty Programming Changes from Existing',
+    'Overgrowth: Maximum population increases by +25% for 5 days.',
+    'Cunning Assault: Provides thievery boosts for 6 days.',
+    'Indomitable Spirit: Warriors gain 5% Offensive Military Efficiency for 6 days.',
+    'Arcane Respite: Regenerate +2 mana per day for 6 days.',
+    'Arcane Overflow: Offensive spells reduce enemy ritual effectiveness.'
+  ].join('\\n');
+  const parsed = parse117(source);
+  assert.ok(Object.keys(parsed.game_rules).some(key => /All Doctrines/i.test(key)));
+  assert.ok(Object.values(parsed.spells).some(value => /Mages Fury/i.test(value)));
+  assert.ok(Object.values(parsed.spells).some(value => /Mind Focus/i.test(value)));
+  assert.ok(Object.values(parsed.thievery).some(value => /offensive TPA/i.test(value)));
+  assert.ok(Object.values(parsed.spells).some(value => /Arcane Respite/i.test(value)));
+  assert.ok(Object.values(parsed.thievery).some(value => /Cunning Assault/i.test(value)));
 });
