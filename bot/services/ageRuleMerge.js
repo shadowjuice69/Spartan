@@ -309,7 +309,7 @@ function validateParsedShape(parsed, ageNumber, rawText = '') {
   return issues;
 }
 
-function validateMerged(merged, ageNumber, rawText, baseline) {
+function validateMerged(merged, ageNumber, rawText, baseline, parsed = merged) {
   const issues = [];
   if (Object.keys(merged.races || {}).length < 10) issues.push('fewer than 10 race rules after merge');
   if (Object.keys(merged.personalities || {}).length < 10) issues.push('fewer than 10 personality rules after merge');
@@ -442,7 +442,7 @@ function buildChangeDetails(parsed, baseline, merged, rawText) {
     if (!entries.length) lines.push('- No entries extracted.');
     else for (const entry of entries) lines.push('- [' + (entry.category || 'unclassified') + '] ' + entry.text);
   }
-  lines.push('', 'COMPLETE SOURCE DOCUMENT — ALL SECTIONS', 'The complete extracted source follows so no proposed change is omitted from the review.', '', String(rawText || '').trim(), '');
+  lines.push('', 'The full source text and every extracted entry are in the attached report file.');
   return lines.join('\n');
 }
 
@@ -452,7 +452,7 @@ async function buildReview(supabase, rawText, ageNumber) {
   let baseline = null;
   if (needsBaseline) baseline = await loadBaseline(supabase, ageNumber);
   const merged = needsBaseline ? mergeRules(baseline.rules, parsed) : parsed;
-  const issues = [...validateParsedShape(parsed, ageNumber, rawText), ...validateMerged(merged, ageNumber, rawText, baseline)];
+  const issues = [...validateParsedShape(parsed, ageNumber, rawText), ...validateMerged(merged, ageNumber, rawText, baseline, parsed)];
   const summaryLines = [
     'Age ' + ageNumber + ' parsed with ' + parsed.source.parser,
     'Baseline: ' + (baseline ? 'Age ' + baseline.age + ' (' + baseline.source + ')' : 'not required'),
