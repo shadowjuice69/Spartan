@@ -210,7 +210,7 @@ function toRows(ageNumber, merged) {
 function validateParsedShape(parsed, ageNumber) {
   const issues = [];
   const sections = ['races','personalities','rituals','dragons','spells','thievery','buildings','science','game_rules'];
-  const numberOnly = value => /^[-+]?\\d+(?:\\.\\d+)?%?$/.test(String(value || '').trim());
+  const numberOnly = value => /^[-+]?\d+(?:\.\d+)?%?$/.test(String(value || '').trim());
   const hasStructuredTables = Array.isArray(parsed.complete_sections) && parsed.complete_sections.length > 0;
 
   for (const section of parsed.complete_sections || []) {
@@ -225,7 +225,7 @@ function validateParsedShape(parsed, ageNumber) {
       if (numberOnly(race[field])) issues.push('invalid numeric value in race ' + name + ' field ' + field);
     }
     for (const field of ['bonuses','penalties','spells']) {
-      if (Array.isArray(race[field]) && race[field].some(value => !String(value || '').trim() || /^(?:page \\d+(?: of \\d+)?|footer|continued)$/i.test(String(value).trim()))) {
+      if (Array.isArray(race[field]) && race[field].some(value => !String(value || '').trim() || /^(?:page \d+(?: of \d+)?|footer|continued)$/i.test(String(value).trim()))) {
         issues.push('empty or page-footer value in race ' + name + ' field ' + field);
       }
     }
@@ -235,7 +235,7 @@ function validateParsedShape(parsed, ageNumber) {
       if (numberOnly(personality[field])) issues.push('invalid numeric value in personality ' + name + ' field ' + field);
     }
     for (const field of ['bonuses','starts_with','spells']) {
-      if (Array.isArray(personality[field]) && personality[field].some(value => !String(value || '').trim() || /^(?:page \\d+(?: of \\d+)?|footer|continued)$/i.test(String(value).trim()))) {
+      if (Array.isArray(personality[field]) && personality[field].some(value => !String(value || '').trim() || /^(?:page \d+(?: of \d+)?|footer|continued)$/i.test(String(value).trim()))) {
         issues.push('empty or page-footer value in personality ' + name + ' field ' + field);
       }
     }
@@ -258,7 +258,7 @@ function validateParsedShape(parsed, ageNumber) {
   for (const section of sections) {
     for (const [key, value] of Object.entries(parsed[section] || {})) {
       const serialized = typeof value === 'string' ? value : JSON.stringify(value);
-      if (/\\b(?:end of document|page \\d+ of \\d+|confidential footer)\\b/i.test(serialized)) {
+      if (/\b(?:end of document|page \d+ of \d+|confidential footer)\b/i.test(serialized)) {
         issues.push('possible PDF footer garbage in ' + section + ' entry ' + key);
       }
     }
@@ -286,10 +286,10 @@ function validateMerged(merged, ageNumber, rawText, baseline) {
 
   const source = String(rawText || '');
   const tablePairs = [
-    [/\\bRace\\s+Archetype\\s+Bonuses\\b/i, 'races'],
-    [/\\bPersonality\\s+Archetype\\s+Bonuses\\b/i, 'personalities'],
-    [/^\\s*Ritual\\s+Effect\\s*$/im, 'rituals'],
-    [/^\\s*Dragons?\\s+Effect\\s*$/im, 'dragons']
+    [/\bRace\s+Archetype\s+Bonuses\b/i, 'races'],
+    [/\bPersonality\s+Archetype\s+Bonuses\b/i, 'personalities'],
+    [/^\s*Ritual\s+Effect\s*$/im, 'rituals'],
+    [/^\s*Dragons?\s+Effect\s*$/im, 'dragons']
   ];
   for (const [pattern, section] of tablePairs) {
     if (pattern.test(source) && !Object.keys(merged[section] || {}).length) {
@@ -297,15 +297,15 @@ function validateMerged(merged, ageNumber, rawText, baseline) {
     }
   }
   if (/Change Log from Revised/i.test(source)) {
-    const block = source.split(/Change Log from Revised\\s*:?/i)[1]?.split(/Unique Abil(?:i)?ty Programming Changes from Existing/i)[0] || '';
-    const entries = block.split(/\\r?\\n/).map(line => line.trim()).filter(line => /^[^:]{2,100}:\\s*\\S/.test(line));
+    const block = source.split(/Change Log from Revised\s*:?/i)[1]?.split(/Unique Abil(?:i)?ty Programming Changes from Existing/i)[0] || '';
+    const entries = block.split(/\r?\n/).map(line => line.trim()).filter(line => /^[^:]{2,100}:\s*\S/.test(line));
     if (entries.length && !['spells','thievery','buildings','science','game_rules'].some(section => Object.keys(merged[section] || {}).length)) {
       issues.push('revision change log exists but no categorized change entries were parsed');
     }
   }
   if (/Unique Abil(?:i)?ty Programming Changes from Existing/i.test(source)) {
-    const block = source.split(/Unique Abil(?:i)?ty Programming Changes from Existing\\s*:?/i)[1] || '';
-    const entries = block.split(/\\r?\\n/).map(line => line.trim()).filter(line => /^[^:]{2,100}:\\s*\\S/.test(line));
+    const block = source.split(/Unique Abil(?:i)?ty Programming Changes from Existing\s*:?/i)[1] || '';
+    const entries = block.split(/\r?\n/).map(line => line.trim()).filter(line => /^[^:]{2,100}:\s*\S/.test(line));
     if (entries.length && !Object.keys(merged.game_rules || {}).length && !Object.keys(merged.spells || {}).length &&
         !Object.keys(merged.thievery || {}).length && !Object.keys(merged.buildings || {}).length &&
         !Object.keys(merged.science || {}).length) {
