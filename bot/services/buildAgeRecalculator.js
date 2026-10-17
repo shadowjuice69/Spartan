@@ -19,6 +19,28 @@ function normalize(result, original) {
   };
 }
 
+function findEntity(section, name) {
+  const wanted = String(name || "").trim().toLowerCase().replace(/^the\s+/, "");
+  for (const [key, value] of Object.entries(section || {})) {
+    if (String(key).toLowerCase().replace(/^the\s+/, "") === wanted) return { name: key, rules: value };
+  }
+  return null;
+}
+
+// Send only what this build needs. The full ruleset made prompts huge and free models
+// answered with prose or truncated JSON ("AI returned invalid build JSON").
+function relevantRules(build, parsed) {
+  return {
+    race: findEntity(parsed?.races, build.race),
+    personality: findEntity(parsed?.personalities, build.personality),
+    buildings: parsed?.buildings || {},
+    science: parsed?.science || {},
+    game_rules: parsed?.game_rules || {},
+    spells: parsed?.spells || {},
+    thievery: parsed?.thievery || {}
+  };
+}
+
 function buildPrompt(build, ageNumber, parsed) {
   return [
     "You are the Utopia Spartan build-maintenance engine. An official new Age ruleset has just been approved.",
@@ -38,14 +60,26 @@ function buildPrompt(build, ageNumber, parsed) {
     "SAVED SPARTAN BUILD:",
     JSON.stringify({ name: build.name, race: build.race, personality: build.personality, author: build.author, buildings: build.buildings, science: build.science, military_requirement: build.military_requirement }),
     "",
-    `OFFICIAL AGE ${ageNumber} RULES:`,
-    JSON.stringify(parsed)
+    `OFFICIAL AGE ${ageNumber} RULES (this build's race, this build's personality, and general rules only):`,
+    JSON.stringify(relevantRules(build, parsed))
   ].join("\n");
 }
 
 async function recalculateOne(sb, build, ageNumber, ageUpdateId, parsed) {
-  const response = await askOpenRouter(buildPrompt(build, ageNumber, parsed));
-  const updated = normalize(extractJson(response), build);
+  let result = null;
+  let lastError = null;
+  for (let attempt = 1; attempt <= 2 && !result; attempt++) {
+    const retryNote = attempt > 1 ? "\n\nYour previous reply was not valid JSON. Reply with ONLY the JSON object: no prose, no code fences." : "";
+    const response = await askOpenRouter(buildPrompt(build, ageNumber, parsed) + retryNote);
+    try {
+      result = extractJson(response);
+    } catch (err) {
+      lastError = err;
+      logger.warn("[BUILD AGE RECALC] " + (build.name || build.id) + " attempt " + attempt + " returned bad JSON; reply began: " + String(response || "").slice(0, 160).replace(/\s+/g, " "));
+    }
+  }
+  if (!result) throw lastError || new Error("AI returned invalid build JSON");
+  const updated = normalize(result, build);
   const changed =
     JSON.stringify(updated.buildings) !== JSON.stringify(build.buildings || {}) ||
     JSON.stringify(updated.science) !== JSON.stringify(build.science || {}) ||
