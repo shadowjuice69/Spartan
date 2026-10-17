@@ -66,8 +66,14 @@ module.exports = async function buttonHandler(interaction) {
     }
 
     await interaction.deferUpdate();
+    // Remove the buttons while applying so a second click cannot start a second run.
+    await interaction.editReply({ components: [] }).catch(() => {});
 
     const result = await approveAgeUpdate(id, interaction.user.id);
+
+    if (result && result.alreadyHandled) {
+      return interaction.followUp({ content: "ℹ️ Age update #" + id + " was already " + result.status + ". Nothing was changed.", flags: 64 });
+    }
 
     if (!result) {
       return interaction.editReply({
