@@ -110,12 +110,20 @@ async function approveAgeUpdate(id, adminId) {
       logger.error("[AGE BUILD RECALC ERROR] " + err.message);
       recalculation = { error: err.message };
     }
+    let wiki = null;
+    try {
+      const wikiService = require("./spartanWikiService");
+      wiki = await wikiService.updateWikiForAge(ageNumber);
+    } catch (err) {
+      logger.error("[AGE WIKI UPDATE ERROR] " + (err.stack || err.message));
+      wiki = { ok: false, error: err.message || "wiki_update_failed" };
+    }
     logger.info("[AGE UPDATE APPROVED] ID " + id + " AGE " + ageNumber +
       "; races=" + rows.races.length + ", personalities=" + rows.personalities.length +
       ", game_rules=" + rows.game.length);
     return { ...data, stats: {
       races: rows.races.length, personalities: rows.personalities.length, gameRows: rows.game.length,
-      summary: review.summary.split("\n").slice(0, 4).join("\n"), recalculation
+      summary: review.summary.split("\n").slice(0, 4).join("\n"), recalculation, wiki
     }, parsed: review.merged };
   } catch (err) {
     logger.error("[AGE APPROVE ERROR] " + (err.stack || err.message));
