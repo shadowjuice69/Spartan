@@ -9,6 +9,7 @@ const {
 
 const { approveAgeUpdate, denyAgeUpdate } = require("../services/ageUpdateService");
 const permissionService = require("../services/permissionService");
+const { wikiStatusLine } = require("../services/wikiAgeGenerator");
 
 function blockedAgeReviewControls(id) {
   return new ActionRowBuilder().addComponents(
@@ -105,6 +106,7 @@ module.exports = async function buttonHandler(interaction) {
         ``,
         `📊 **Rows written:** ${result.stats.races} race rules • ${result.stats.personalities} personality rules • ${result.stats.gameRows} game rules`,
         `🧠 **Build Library:** ${buildRefresh.updated} changed • ${buildRefresh.unchanged} validated • ${buildRefresh.failed.length} failed of ${buildRefresh.total}`,
+        wikiStatusLine(result.stats.wiki, result.age_number),
         buildRefresh.failed.length ? `⚠️ Failed builds: ${buildRefresh.failed.map((b) => b.name).slice(0, 10).join(", ")}` : `✅ All active saved builds were processed for the new Age.`
       ].join("\n"),
       components: []
@@ -129,7 +131,8 @@ module.exports = async function buttonHandler(interaction) {
             result.stats.summary,
             ``,
             `🧠 Build Library recalculated: ${buildRefresh.updated} changed • ${buildRefresh.unchanged} validated • ${buildRefresh.failed.length} failed`,
-            `Applied by ${interaction.user} • All wiki data updated.`
+            `Applied by ${interaction.user}`,
+            wikiStatusLine(result.stats.wiki, result.age_number)
           ].join("\n"));
         }
       }

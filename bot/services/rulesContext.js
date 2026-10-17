@@ -66,7 +66,7 @@ async function wikiHits(sb, words) {
     const terms = words.slice(0, 4).map((w) => w.replace(/[%,()]/g, ''));
     if (!terms.length) return [];
     const filter = terms.flatMap((w) => [`title.ilike.%${w}%`, `content_text.ilike.%${w}%`]).join(',');
-    const { data, error } = await sb.from('spartan_wiki').select('title,content_text,age_number').eq('approved', true).or(filter).limit(2);
+    const { data, error } = await sb.from('spartan_wiki').select('title,content_text,age_number').eq('approved', true).or(filter).order('age_number', { ascending: false }).limit(2);
     return error ? [] : data || [];
   } catch { return []; }
 }
