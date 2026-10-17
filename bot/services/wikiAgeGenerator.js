@@ -10,7 +10,7 @@ function valueText(v) {
   return String(v);
 }
 function emojiFor(html,name,fallback) {
-  const safe=String(name).replace(/[|\\{}()[\]^$+*?.-]/g,'\\$&');
+  const safe=String(name).replace(/[.*+?^$()|[\\]\\]/g,'\\$&');
   const m=String(html||'').match(new RegExp('<h4>([^<>\\w]*?)\\s*'+safe+'</h4>'));
   return (m&&m[1].trim())||fallback||'';
 }
@@ -74,7 +74,7 @@ function applyAgeToWiki(baseHtml,ageNumber,ageRows) {
   const mapRe=/(const pages = \{\n(\s*)home: 'Home',\n)/;
   if(!mapRe.test(html))throw Error('wiki pages map not found');
   html=html.replace(mapRe,(m,a,ind)=>a+ind+'age'+N+': \'Age '+N+' Changes\',\n');
-  html=html.replace(new RegExp('age'+newest.n+': \\'Age '+newest.n+' Changes\\'(?! \\(Previous\\))'),'age'+newest.n+': \\'Age '+newest.n+' Changes (Previous)\\'');
+  html=html.replace(new RegExp("age"+newest.n+": 'Age "+newest.n+" Changes'(?! \\(Previous\\))"),"age"+newest.n+": 'Age "+newest.n+" Changes (Previous)'");
   html=html.split('Age '+newest.n+' · World of Legends').join('Age '+N+' · World of Legends');
   const cardRe=new RegExp('(<button class="nav-card" onclick="showPage\\(\'age)'+newest.n+'(\'\\)">\\s*<div class="card-icon">[^<]*</div>\\s*<h3>Age )'+newest.n+'(</h3>)');
   html=html.replace(cardRe,(m,a,b,c)=>a+N+b+N+c);
