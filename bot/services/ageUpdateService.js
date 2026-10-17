@@ -64,8 +64,17 @@ async function approveAgeUpdate(id, adminId) {
 
   try {
     const { data: update, error: fetchError } = await supabase.from("age_updates")
-      .select("*").eq("id", id).eq("status", "pending").single();
+      .select("*").eq("id", id).eq("status", "pending").maybeSingle();
     if (fetchError) throw fetchError;
+    if (!update) {
+      const { data: current } = await supabase.from("age_updates")
+        .select("id,age_number,status").eq("id", id).maybeSingle();
+      if (current && current.status !== "pending") {
+        logger.info("[AGE APPROVE] ID " + id + " is already " + current.status + "; ignoring repeat click");
+        return { alreadyHandled: true, status: current.status, age_number: current.age_number };
+      }
+      throw new Error("Age update " + id + " was not found");
+    }
 
     const ageNumber = Number(update.age_number);
     const review = await buildReview(supabase, update.raw_text, ageNumber);
