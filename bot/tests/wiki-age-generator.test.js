@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { applyAgeToWiki, buildAgePage, wikiStatusLine } = require('../services/wikiAgeGenerator');
-const BASE = \`<html><body>
+const BASE = `<html><body>
 <nav><div class="nav-section"><div class="nav-section-title">Current Age</div>
 <button class="nav-link" onclick="showPage('age116')">📜 Age 116 Changes</button>
 <button class="nav-link sub" onclick="showPage('age116','races-116')">↳ Races (116)</button></div>
@@ -16,7 +16,7 @@ const BASE = \`<html><body>
     home: 'Home',
     age116: 'Age 116 Changes',
     age115: 'Age 115 Changes (Previous)',
-};</script></body></html>\`;
+};</script></body></html>`;
 const ROWS = {
  races:[{race:'Elf',emoji:null,archetype:'Magic',war_doctrine:'-20% casualties',unique_name:'Arcane Respite',unique_desc:'Regenerate +2 mana',bonuses:'+25% Wizards Per Acre\n+50% Rune Production',penalties:'-20% TPA',units:'Soldier 3/0',spells:'Greater Protection, Pitfalls'},
  {race:'Dark Elf',emoji:null,bonuses:'a',penalties:'',units:'u',spells:'s'}],
