@@ -21,6 +21,8 @@ on:
       - "bot/parsers/**"
       - "bot/services/ageRuleMerge.js"
       - "bot/services/ageUpdateService.js"
+      - "bot/services/buildAgeRecalculator.js"
+      - "bot/handlers/buttonHandler.js"
       - "bot/services/ageUpdateMessageHandler.js"
       - "bot/tests/**"
       - "bot/package.json"
@@ -54,4 +56,4 @@ jobs:
           node --check services/ageUpdateMessageHandler.js
           node --check services/ageChangeReport.js
           node --check handlers/buttonHandler.js
-      - run: node --test tests/age-update-pipeline.test.js
+      - run: node --test tests/age-update-pipeline.test.js tests/build-age-recalc.test.js
