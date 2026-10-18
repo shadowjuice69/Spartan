@@ -42,12 +42,45 @@ async function syncWikiFile() {
   if (!supabase) return { ok: false, error: 'supabase_unavailable' };
   if (!fs.existsSync(WIKI_PATH)) return { ok: false, error: 'wiki_file_missing' };
 
-  const contentHtml = fs.readFileSync(WIKI_PATH, 'utf8').replace(/\u0000/g, '');
+  const contentHtml = fs.readFileSync(WIKI_PATH, 'utf8').replace(/\\u0000/g, '');
   const ageNumber = detectAgeNumber(contentHtml);
   if (!ageNumber) return { ok: false, error: 'wiki_age_not_detected' };
 
   const contentText = htmlToText(contentHtml);
   const contentSha256 = crypto.createHash('sha256').update(contentHtml).digest('hex');
+  const { data: existing, error: existingError } = await supabase.from('spartan_wiki')
+    .select('age_number,source,content_html,content_sha256')
+    .eq('document_key', DOCUMENT_KEY)
+    .eq('age_number', ageNumber)
+    .eq('approved', true)
+    .maybeSingle();
+  if (existingError) throw existingError;
+
+  // The approved database wiki is authoritative. Never let the boot-time
+  // repository import replace an Age Update-generated wiki with an older copy.
+  if (existing?.source === 'age_update' && existing.content_html) {
+    let githubSync = null;
+    if (existing.content_sha256 !== contentSha256) {
+      githubSync = await commitWikiHtmlToGitHub({ html: existing.content_html, ageNumber });
+      if (githubSync.ok) {
+        logger.info('[WIKI GITHUB SYNC] Preserved approved Age ' + ageNumber + ' wiki and synchronized both HTML files sha=' + githubSync.commit_sha);
+      } else {
+        logger.error('[WIKI GITHUB SYNC] Approved Age ' + ageNumber + ' wiki needs file sync: ' + githubSync.error);
+      }
+    }
+    return { ok: true, age_number: ageNumber, preserved_approved_wiki: true, ...(githubSync ? { githubSync } : {}) };
+  }
+
+  // If the repo contains the current age but its database row was previously
+  // overwritten by the boot import, rebuild from the prior approved wiki and
+  // the already-applied age rules, then publish the same HTML to both paths.
+  if (existing?.source === 'github') {
+    const rebuilt = await updateWikiForAge(ageNumber);
+    if (rebuilt.ok) {
+      const githubSync = await syncApprovedWikiToGitHub(ageNumber);
+      return { ...rebuilt, regenerated_from_approved_rules: true, githubSync };
+    }
+  }
 
   const { data, error } = await supabase.from('spartan_wiki').upsert({
     document_key: DOCUMENT_KEY,
@@ -64,6 +97,14 @@ async function syncWikiFile() {
 
   if (error) throw error;
   logger.info(`[WIKI SYNC] Age ${ageNumber} stored in spartan_wiki sha=${contentSha256.slice(0, 12)}...`);
+
+  // A missing row can also be rebuilt when the age rules have already been
+  // applied. If the rules are incomplete, keep the imported wiki as fallback.
+  const rebuilt = await updateWikiForAge(ageNumber);
+  if (rebuilt.ok) {
+    const githubSync = await syncApprovedWikiToGitHub(ageNumber);
+    return { ...rebuilt, regenerated_from_approved_rules: true, githubSync };
+  }
   return { ok: true, ...data };
 }
 
