@@ -4,7 +4,7 @@ import { headers } from 'next/headers'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { registerSpartanAccount, resolveSpartanLoginEmail } from '@/lib/spartan/accounts'
+import { registerSpartanAccount, resolveSpartanLoginEmail, syncSpartanAccountProvinceFromDiscord } from '@/lib/spartan/accounts'
 import { recordLoginCheckpoint } from '@/lib/spartan/security'
 
 export async function login(formData: FormData) {
@@ -33,6 +33,14 @@ export async function login(formData: FormData) {
   } catch (error) {
     await supabase.auth.signOut()
     return { ok: false as const, error: error instanceof Error ? error.message : 'Security check failed.' }
+  }
+
+  try {
+    const synced = await syncSpartanAccountProvinceFromDiscord(data.user.id)
+    if (synced.synced) console.info(`[SPARTAN LOGIN] Province identity synced: ${synced.provinceName} (${synced.provinceLocation})`)
+  } catch (error) {
+    // A registration sync must never turn a successful password login into a failure.
+    console.error('[SPARTAN LOGIN] Province identity sync failed:', error)
   }
 
   revalidatePath('/', 'layout')
