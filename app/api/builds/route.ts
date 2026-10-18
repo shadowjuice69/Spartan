@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { isOwner, isTrustedAdmin } from '@/lib/spartan/security'
 
 export const dynamic = 'force-dynamic'
 
@@ -64,7 +65,7 @@ export async function GET(request: Request) {
   const view = params.get('view') || 'library'
   let query = readClient
     .from('spartan_builds')
-    .select('id,name,race,personality,author,updated_at,active,created_by_discord_id')
+    .select('id,name,race,personality,author,updated_at,active,created_by_discord_id,rules_age_number')
     .order('updated_at', { ascending: false })
 
   if (view !== 'vault') query = query.eq('active', true)
@@ -80,6 +81,29 @@ export async function POST(request: Request) {
   if (!auth.ok) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await request.json()
+
+  // Permanently remove selected build records from the Stored Builds vault.
+  if (body?.action === 'deleteStored') {
+    const ids = Array.isArray(body.buildIds) ? [...new Set(body.buildIds.filter((id: unknown) => typeof id === 'string'))] : []
+    if (!ids.length) return NextResponse.json({ error: 'Select at least one build to delete.' }, { status: 400 })
+
+    const { data: existing, error: lookupError } = await auth.db
+      .from('spartan_builds')
+      .select('id,created_by_discord_id,name')
+      .in('id', ids)
+    if (lookupError) return NextResponse.json({ error: lookupError.message }, { status: 500 })
+    if (!existing?.length || existing.length !== ids.length) {
+      return NextResponse.json({ error: 'One or more selected builds could not be found.' }, { status: 404 })
+    }
+
+    const admin = isOwner(auth.discordId) || isTrustedAdmin(auth.discordId)
+    const unauthorized = existing.some((b: any) => !admin && (!auth.discordId || b.created_by_discord_id !== auth.discordId))
+    if (unauthorized) return NextResponse.json({ error: 'Only the build author or an admin can permanently delete these builds.' }, { status: 403 })
+
+    const { error } = await auth.db.from('spartan_builds').delete().in('id', ids)
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ ok: true, deleted: ids.length, names: existing.map((b: any) => b.name) })
+  }
 
   // Restore existing stored builds into the user's visible Library without
   // duplicating the underlying records.
