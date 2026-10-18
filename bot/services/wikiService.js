@@ -163,22 +163,24 @@ async function searchScience(type = "all") {
     return Number.isFinite(age) ? Math.max(max, age) : max;
   }, -Infinity);
   const currentRows = rows.filter(row => latestAge === -Infinity || Number(row.age_number) === latestAge);
-  const scienceRows = currentRows.filter(row => {
-    const category = String(row.category || "").toLowerCase();
+  const scienceTrees = {
+    economy: new Set(["alchemy", "artisan", "bookkeeping", "housing", "production", "tools"]),
+    military: new Set(["heroism", "resilience", "shielding", "siege", "strategy", "tactics", "valor"]),
+    arcane_arts: new Set(["channeling", "cunning", "finesse", "sorcery", "arcana"])
+  };
+  const scienceRows = currentRows.filter(row => String(row.category || "").toLowerCase() === "science");
+  const categoryFor = row => {
     const name = String(row.rule_name || "").toLowerCase();
-    const value = String(row.value ?? "").toLowerCase();
-    return category.includes("science") || name.includes("science") ||
-      /\b(alchemy|channeling|crime|cunning|finesse|heroism|housing|production|resilience|shielding|siege|sorcery|strategy|tactics|tools|valor|arcana|artisan|bookkeeping)\b/.test(name + " " + value);
-  });
+    return Object.entries(scienceTrees).find(([, names]) => names.has(name))?.[0] || "science";
+  };
 
   const query = String(type || "all").toLowerCase();
   const filtered = query === "all"
     ? scienceRows
-    : scienceRows.filter(row => [row.category, row.rule_name, row.value, row.description]
-      .some(value => String(value || "").toLowerCase().includes(query)));
+    : scienceRows.filter(row => categoryFor(row) === query);
   return filtered.map(row => ({
     science_name: row.rule_name,
-    category: row.category || "science",
+    category: categoryFor(row),
     effect: typeof row.value === "string" ? row.value : JSON.stringify(row.value),
     multiplier: null,
     race_modifier: null,
