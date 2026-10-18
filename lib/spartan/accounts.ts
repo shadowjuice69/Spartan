@@ -178,9 +178,9 @@ export async function syncSpartanAccountProvinceFromDiscord(authUserId: string) 
     const meta = (row.metadata ?? {}) as Record<string, unknown>
     return {
       province: String(meta.province ?? '').trim(),
-      location: String(meta.coordinates ?? '').trim().replace(/\\s+/g, ''),
+      location: String(meta.coordinates ?? '').trim().replace(/\s+/g, ''),
     }
-  }).filter((row) => row.province.length >= 2 && /^\\d+:\\d+$/.test(row.location))
+  }).filter((row) => row.province.length >= 2 && /^\d+:\d+$/.test(row.location))
 
   // Never guess when the active Discord registration is missing or ambiguous.
   if (matches.length !== 1) return { synced: false }
