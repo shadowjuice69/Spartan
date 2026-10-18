@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { NAV_COMMAND, NAV_INTEL } from '@/lib/spartan/nav'
+import { logout } from '@/app/login/actions'
 
 /* ------------------------------------------------------------------ tokens */
 
@@ -140,6 +141,7 @@ export function Shell(props: {
       <Styles />
       <aside className="sp-side">
         <div className="sp-brand">SPARTAN<small>UTOPIA COMMAND</small></div>
+        <form action={logout}><button type="submit" className="sp-nav">Log out</button></form>
         <div className="sp-navhead">COMMAND SYSTEMS</div>
         {nav(NAV_COMMAND)}
         <div className="sp-navhead">INTEL DATA</div>
