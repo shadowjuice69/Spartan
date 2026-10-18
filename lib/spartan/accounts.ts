@@ -156,6 +156,96 @@ export async function registerSpartanAccount({ screenName, password, provinceNam
   return { screenName: name, discordUserId, provinceName: province, provinceLocation: location, ip }
 }
 
+export async function syncSpartanAccountProvinceFromDiscord(authUserId: string) {
+  const supabase = adminClient()
+  const { data: account, error: accountError } = await supabase
+    .from('spartan_accounts')
+    .select('id,auth_user_id,discord_user_id,screen_name,province_name,province_location')
+    .eq('auth_user_id', authUserId)
+    .maybeSingle()
+  if (accountError) throw new Error(`Spartan account identity lookup failed: ${accountError.message}`)
+  if (!account?.discord_user_id) return { synced: false }
+
+  const { data: accessRows, error: accessError } = await supabase
+    .from('spartan_access')
+    .select('discord_user_id,status,metadata')
+    .eq('discord_user_id', account.discord_user_id)
+    .eq('status', 'active')
+    .limit(5)
+  if (accessError) throw new Error(`Discord province lookup failed: ${accessError.message}`)
+
+  const matches = (accessRows ?? []).map((row) => {
+    const meta = (row.metadata ?? {}) as Record<string, unknown>
+    return {
+      province: String(meta.province ?? '').trim(),
+      location: String(meta.coordinates ?? '').trim().replace(/\\s+/g, ''),
+    }
+  }).filter((row) => row.province.length >= 2 && /^\\d+:\\d+$/.test(row.location))
+
+  // Never guess when the active Discord registration is missing or ambiguous.
+  if (matches.length !== 1) return { synced: false }
+  const { province, location } = matches[0]
+  if (account.province_name === province && account.province_location === location) return { synced: false }
+
+  const { data: registryRows, error: registryError } = await supabase
+    .from('spartan_province_registry')
+    .select('province_id,province_name,kingdom_code,user_id')
+    .ilike('province_name', province)
+    .eq('kingdom_code', location)
+    .limit(10)
+  if (registryError) throw new Error(`Province registry lookup failed: ${registryError.message}`)
+
+  let registry = (registryRows ?? []).find((row) => !row.user_id || row.user_id === authUserId) ?? null
+  if ((registryRows ?? []).some((row) => row.user_id && row.user_id !== authUserId) && !registry) {
+    throw new Error('The newly registered province is already linked to another Spartan account.')
+  }
+
+  if (!registry) {
+    const { data: inserted, error: insertError } = await supabase
+      .from('spartan_province_registry')
+      .insert({
+        province_id: crypto.randomUUID(),
+        province_name: province,
+        kingdom_code: location,
+        user_id: authUserId,
+        metadata: { source: 'discord-registration-sync' },
+      })
+      .select('province_id,province_name,kingdom_code,user_id')
+      .single()
+    if (insertError || !inserted) throw new Error(insertError?.message || 'Could not link the newly registered province.')
+    registry = inserted
+  } else if (registry.user_id !== authUserId || registry.province_name !== province) {
+    const { error: claimError } = await supabase
+      .from('spartan_province_registry')
+      .update({ user_id: authUserId, province_name: province, kingdom_code: location, updated_at: new Date().toISOString() })
+      .eq('province_id', registry.province_id)
+    if (claimError) throw new Error(`Province registry link failed: ${claimError.message}`)
+  }
+
+  const { error: updateAccountError } = await supabase
+    .from('spartan_accounts')
+    .update({ province_name: province, province_location: location, updated_at: new Date().toISOString() })
+    .eq('auth_user_id', authUserId)
+  if (updateAccountError) throw new Error(`Spartan account province sync failed: ${updateAccountError.message}`)
+
+  // Keep old province history and projections intact, but detach old registry rows
+  // so future captures and briefings resolve to the newly registered province.
+  const { error: detachError } = await supabase
+    .from('spartan_province_registry')
+    .update({ user_id: null, updated_at: new Date().toISOString() })
+    .eq('user_id', authUserId)
+    .neq('province_id', registry.province_id)
+  if (detachError) throw new Error(`Old province link cleanup failed: ${detachError.message}`)
+
+  const { error: jeevesError } = await supabase
+    .from('spartan_jeeves_profiles')
+    .update({ province_id: registry.province_id, discord_user_id: account.discord_user_id, updated_at: new Date().toISOString() })
+    .eq('auth_user_id', authUserId)
+  if (jeevesError) throw new Error(`Jeeves province link sync failed: ${jeevesError.message}`)
+
+  return { synced: true, provinceName: province, provinceLocation: location }
+}
+
 export function accountEmail(screenName: string) { return internalEmail(screenName.trim()) }
 
 export async function resolveSpartanLoginEmail(screenName: string) {
