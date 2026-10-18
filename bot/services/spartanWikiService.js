@@ -42,7 +42,7 @@ async function syncWikiFile() {
   if (!supabase) return { ok: false, error: 'supabase_unavailable' };
   if (!fs.existsSync(WIKI_PATH)) return { ok: false, error: 'wiki_file_missing' };
 
-  const contentHtml = fs.readFileSync(WIKI_PATH, 'utf8').replace(/\\u0000/g, '');
+  const contentHtml = fs.readFileSync(WIKI_PATH, 'utf8').replace(/\u0000/g, '');
   const ageNumber = detectAgeNumber(contentHtml);
   if (!ageNumber) return { ok: false, error: 'wiki_age_not_detected' };
 
