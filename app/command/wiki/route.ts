@@ -1,3 +1,7 @@
+import { readFile } from "node:fs/promises";
+import path from "node:path";
+import { createClient } from "@supabase/supabase-js";
+
 const WIKI_RETURN_BUTTON = `
 <a href="/" aria-label="Return to Command Center" style="
   position:fixed;top:16px;right:18px;z-index:99999;
@@ -95,22 +99,41 @@ const SPARTAN_THEME = `
 </style>`;
 
 export async function GET(request: Request) {
-  // Use Spartan's live wiki route, which serves the latest approved wiki from Supabase.
-  // This prevents this themed route from drifting behind on a separate repository copy.
-  const wikiUrl = new URL("/wiki", request.url);
-  const response = await fetch(wikiUrl, { cache: "no-store" });
+  // Read the approved wiki directly from Spartan's canonical Supabase data.
+  // Avoid an HTTP self-fetch to this Render service, which can fail at the proxy/TLS layer.
+  let html: string | null = null;
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY;
 
-  if (!response.ok) {
-    return new Response("Utopia Wiki source is temporarily unavailable.", {
-      status: 502,
-      headers: { "content-type": "text/plain; charset=utf-8" },
-    });
+  if (supabaseUrl && supabaseKey) {
+    try {
+      const supabase = createClient(supabaseUrl, supabaseKey, {
+        auth: { autoRefreshToken: false, persistSession: false },
+      });
+      const { data, error } = await supabase
+        .from("spartan_wiki")
+        .select("content_html")
+        .eq("document_key", "utopia-reference")
+        .eq("approved", true)
+        .order("age_number", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (!error && typeof data?.content_html === "string" && data.content_html.length > 0) {
+        html = data.content_html;
+      } else if (error) {
+        console.error("[COMMAND WIKI] Approved Spartan wiki query failed; using bundled fallback.");
+      }
+    } catch {
+      console.error("[COMMAND WIKI] Approved Spartan wiki lookup failed; using bundled fallback.");
+    }
   }
 
-  let html = await response.text();
+  if (!html) {
+    const wikiPath = path.join(process.cwd(), "lib", "spartan", "knowledge", "utopia-reference.html");
+    html = await readFile(wikiPath, "utf8");
+  }
 
-  // Keep the original wiki HTML/JS/navigation intact. Only layer Spartan's
-  // visual system and a return link on top so the wiki remains the user's authoritative file.
   if (html.includes("</head>")) {
     html = html.replace("</head>", `${SPARTAN_THEME}</head>`);
   } else {
