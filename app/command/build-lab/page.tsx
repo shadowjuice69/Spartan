@@ -532,6 +532,7 @@ function BuildLab() {
   const [vaultBuilds, setVaultBuilds] = useState<any[]>([])
   const [selectedVaultBuilds, setSelectedVaultBuilds] = useState<string[]>([])
   const [restoring, setRestoring] = useState(false)
+  const [deletingVaultBuild, setDeletingVaultBuild] = useState<string | null>(null)
   const [error, setError] = useState("")
 
   async function loadBuilds() {
@@ -561,6 +562,27 @@ function BuildLab() {
       setShowVault(true)
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load stored builds")
+    }
+  }
+
+  async function deleteStoredBuild(id: string, name: string) {
+    if (!window.confirm(`Permanently delete "${name}" from Stored Builds? This cannot be undone.`)) return
+    setDeletingVaultBuild(id)
+    setError("")
+    try {
+      const res = await fetch("/api/builds", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "deleteStored", buildIds: [id] }),
+      })
+      const body = await res.json()
+      if (!res.ok) throw new Error(body?.error || "Delete failed.")
+      await loadBuilds()
+      await loadVault()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to delete stored build")
+    } finally {
+      setDeletingVaultBuild(null)
     }
   }
 
@@ -633,24 +655,33 @@ function BuildLab() {
                   {vaultBuilds.map((b) => {
                     const selected = selectedVaultBuilds.includes(b.id)
                     return (
-                      <label key={b.id} style={{
+                      <div key={b.id} style={{
                         display:"flex", alignItems:"center", gap:10, padding:"11px 12px",
                         border:"1px solid " + (selected ? "rgba(216,255,84,.35)" : "rgba(255,255,255,.07)"),
-                        borderRadius:8, background:selected ? "rgba(216,255,84,.06)" : "rgba(255,255,255,.02)", cursor:"pointer"
+                        borderRadius:8, background:selected ? "rgba(216,255,84,.06)" : "rgba(255,255,255,.02)"
                       }}>
-                        <input type="checkbox" checked={selected} onChange={(e) => setSelectedVaultBuilds((current) =>
+                        <input aria-label={`Select ${b.name}`} type="checkbox" checked={selected} onChange={(e) => setSelectedVaultBuilds((current) =>
                           e.target.checked ? [...current, b.id] : current.filter((id) => id !== b.id)
                         )} />
-                        <span style={{ flex:1 }}>
+                        <span style={{ flex:1, minWidth:0 }}>
                           <b style={{ fontSize:12 }}>{b.name}</b>
                           <span style={{ display:"block", fontSize:10, color:"#8993a1", marginTop:3 }}>
                             {[b.race, b.personality].filter(Boolean).join(" / ") || "No race/personality set"}{b.author ? " · set by " + b.author : ""}
+                            {" · Age " + (b.rules_age_number ?? "unknown")}
                           </span>
                         </span>
-                        <span style={{ fontSize:9, color:b.active ? "#67f0b0" : "#ffcf70", letterSpacing:".08em" }}>
+                        <span style={{ fontSize:9, color:b.active ? "#67f0b0" : "#ffcf70", letterSpacing:".08em", whiteSpace:"nowrap" }}>
                           {b.active ? "IN LIBRARY" : "STORED"}
                         </span>
-                      </label>
+                        <button
+                          type="button"
+                          style={btnDanger}
+                          disabled={deletingVaultBuild === b.id}
+                          onClick={() => deleteStoredBuild(b.id, b.name)}
+                        >
+                          {deletingVaultBuild === b.id ? "Deleting…" : "Delete"}
+                        </button>
+                      </div>
                     )
                   })}
                 </div>
