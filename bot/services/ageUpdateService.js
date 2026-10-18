@@ -114,6 +114,14 @@ async function approveAgeUpdate(id, adminId) {
     try {
       const wikiService = require("./spartanWikiService");
       wiki = await wikiService.updateWikiForAge(ageNumber);
+      if (wiki?.ok) {
+        try {
+          wiki.githubSync = await wikiService.syncApprovedWikiToGitHub(ageNumber);
+        } catch (syncError) {
+          logger.error("[AGE WIKI GITHUB SYNC ERROR] " + (syncError.stack || syncError.message));
+          wiki.githubSync = { ok: false, error: "github_sync_failed" };
+        }
+      }
     } catch (err) {
       logger.error("[AGE WIKI UPDATE ERROR] " + (err.stack || err.message));
       wiki = { ok: false, error: err.message || "wiki_update_failed" };

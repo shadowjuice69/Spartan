@@ -7,6 +7,8 @@ on:
       - "bot/parsers/**"
       - "bot/services/ageRuleMerge.js"
       - "bot/services/ageUpdateService.js"
+      - "bot/services/spartanWikiService.js"
+      - "bot/services/githubWikiSync.js"
       - "bot/services/buildAgeRecalculator.js"
       - "bot/handlers/buttonHandler.js"
       - "bot/services/ageUpdateMessageHandler.js"
@@ -52,8 +54,10 @@ jobs:
           node --check parsers/ageChangeParser.js
           node --check services/ageRuleMerge.js
           node --check services/ageUpdateService.js
+          node --check services/spartanWikiService.js
+          node --check services/githubWikiSync.js
           node --check services/buildAgeRecalculator.js
           node --check services/ageUpdateMessageHandler.js
           node --check services/ageChangeReport.js
           node --check handlers/buttonHandler.js
-      - run: node --test tests/age-update-pipeline.test.js tests/build-age-recalc.test.js
+      - run: node --test tests/age-update-pipeline.test.js tests/build-age-recalc.test.js tests/github-wiki-sync.test.js

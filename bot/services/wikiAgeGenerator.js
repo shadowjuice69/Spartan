@@ -82,7 +82,11 @@ function applyAgeToWiki(baseHtml,ageNumber,ageRows) {
   return html;
 }
 function wikiStatusLine(wiki,ageNumber) {
-  if(wiki&&wiki.ok===true)return '📘 Wiki updated for Age '+ageNumber+'.';
+  if(wiki&&wiki.ok===true) {
+    if (!wiki.githubSync) return '📘 Wiki updated for Age '+ageNumber+'.';
+    if (wiki.githubSync.ok===true) return '📘 Wiki updated for Age '+ageNumber+' in Supabase and both GitHub HTML files (commit '+String(wiki.githubSync.commit_sha||'created').slice(0,7)+'). Render will deploy the updated fallback files.';
+    return '📘 Supabase wiki updated for Age '+ageNumber+'. ⚠️ Downloadable HTML sync failed ('+String(wiki.githubSync.error||'unknown_error')+'); the rules remain applied and the failure was logged.';
+  }
   return '⚠️ Age rules were applied, but the wiki update failed ('+String(wiki&&wiki.error||'unknown_error')+'). Rules remain applied; wiki content was not confirmed updated.';
 }
 module.exports={buildAgePage,applyAgeToWiki,valueText,esc,wikiStatusLine};

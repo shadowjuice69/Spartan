@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const supabaseService = require('./supabase');
 const logger = require('./logger');
 const { applyAgeToWiki } = require('./wikiAgeGenerator');
+const { commitWikiHtmlToGitHub } = require('./githubWikiSync');
 
 const WIKI_PATH = path.resolve(__dirname, '../../utopia-wiki.html');
 const DOCUMENT_KEY = 'utopia-reference';
@@ -152,4 +153,29 @@ async function updateWikiForAge(ageNumber) {
   return { ok: true, ...data };
 }
 
-module.exports = { syncWikiFile, syncWikiHtml, detectAgeNumber, updateWikiForAge };
+
+async function syncApprovedWikiToGitHub(ageNumber) {
+  const supabase = supabaseService.getClient();
+  if (!supabase) return { ok: false, error: 'supabase_unavailable' };
+  const age = Number(ageNumber);
+  const { data, error } = await supabase.from('spartan_wiki')
+    .select('content_html,content_sha256')
+    .eq('document_key', DOCUMENT_KEY)
+    .eq('age_number', age)
+    .eq('approved', true)
+    .maybeSingle();
+  if (error) {
+    logger.error('[WIKI GITHUB SYNC] Could not read approved wiki for Age ' + age + ': ' + error.message);
+    return { ok: false, error: 'approved_wiki_read_failed' };
+  }
+  if (!data?.content_html) return { ok: false, error: 'approved_wiki_missing' };
+  const result = await commitWikiHtmlToGitHub({ html: data.content_html, ageNumber: age });
+  if (result.ok) {
+    logger.info('[WIKI GITHUB SYNC] Age ' + age + ' HTML files committed sha=' + result.commit_sha);
+  } else {
+    logger.error('[WIKI GITHUB SYNC] Age ' + age + ' failed: ' + result.error);
+  }
+  return result;
+}
+
+module.exports = { syncWikiFile, syncWikiHtml, detectAgeNumber, updateWikiForAge, syncApprovedWikiToGitHub };
