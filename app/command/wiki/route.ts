@@ -1,6 +1,3 @@
-const WIKI_SOURCE =
-  "https://raw.githubusercontent.com/shadowjuice69/utopia-nexus/main/utopia-wiki.html";
-
 const WIKI_RETURN_BUTTON = `
 <a href="/" aria-label="Return to Command Center" style="
   position:fixed;top:16px;right:18px;z-index:99999;
@@ -97,8 +94,11 @@ const SPARTAN_THEME = `
   ::-webkit-scrollbar-thumb:hover { background: #4b5868; }
 </style>`;
 
-export async function GET() {
-  const response = await fetch(WIKI_SOURCE, { cache: "no-store" });
+export async function GET(request: Request) {
+  // Use Spartan's live wiki route, which serves the latest approved wiki from Supabase.
+  // This prevents this themed route from drifting behind on a separate repository copy.
+  const wikiUrl = new URL("/wiki", request.url);
+  const response = await fetch(wikiUrl, { cache: "no-store" });
 
   if (!response.ok) {
     return new Response("Utopia Wiki source is temporarily unavailable.", {
