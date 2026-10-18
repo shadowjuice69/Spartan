@@ -1,33 +1,68 @@
 const { EmbedBuilder } = require("discord.js");
 const { getKingdomInfo } = require("../../services/kingdomService");
+const supabaseService = require("../../services/supabase");
 
-const RACE_WPA_MODS = {
-  avian:    { off: 1.0,  def: 1.0,  name: "Avian" },
-  darkelf:  { off: 1.30, def: 1.0,  name: "Dark Elf" },
-  dryad:    { off: 1.0,  def: 1.0,  name: "Dryad" },
-  dwarf:    { off: 1.0,  def: 1.0,  name: "Dwarf" },
-  elf:      { off: 1.40, def: 1.0,  name: "Elf" },
-  faery:    { off: 1.20, def: 1.20, name: "Faery" },
-  halfling: { off: 1.0,  def: 1.0,  name: "Halfling" },
-  human:    { off: 1.0,  def: 1.0,  name: "Human" },
-  orc:      { off: 1.0,  def: 1.0,  name: "Orc" },
-  undead:   { off: 1.25, def: 1.0,  name: "Undead" },
-};
+function parseWpaModifiers(text) {
+  const match = String(text || "").match(/([+-])\s*(\d+(?:\.\d+)?)\s*%\s*(offensive\s+)?(?:wizards?\s+per\s+acre|wpa)/i);
+  if (!match) return { off: 1, def: 1 };
+  const amount = Number(match[2]) / 100;
+  const multiplier = match[1] === "-" ? 1 - amount : 1 + amount;
+  return match[3]
+    ? { off: multiplier, def: 1 }
+    : { off: multiplier, def: multiplier };
+}
 
-const PERS_WPA_MODS = {
-  none:        { off: 1.0,  name: "None" },
-  heretic:     { off: 1.15, name: "Heretic" },
-  mystic:      { off: 1.0,  name: "Mystic" },  // base; +20% WPA via Focused Channelling if above 40% mana
-  necromancer: { off: 1.35, name: "Necromancer" },
-  cleric:      { off: 1.0,  name: "Cleric" },
-  general:     { off: 1.0,  name: "General" },
-  artisan:     { off: 1.0,  name: "Artisan" },
-  rogue:       { off: 1.0,  name: "Rogue" },
-  sage:        { off: 1.0,  name: "Sage" },
-  tactician:   { off: 1.0,  name: "Tactician" },
-  warrior:     { off: 1.0,  name: "Warrior" },
-  warhero:     { off: 1.0,  name: "War Hero" },
-};
+async function loadCurrentAgeModifiers() {
+  const neutral = { off: 1, def: 1 };
+  const fallback = { age: null, races: {}, personalities: {} };
+  const supabase = supabaseService.getClient();
+  if (!supabase) return fallback;
+
+  try {
+    const [raceResult, personalityResult] = await Promise.all([
+      supabase.from("spartan_race_rules").select("age_number,race,bonuses,penalties"),
+      supabase.from("spartan_personality_rules").select("age_number,personality,bonuses")
+    ]);
+    if (raceResult.error || personalityResult.error) {
+      throw raceResult.error || personalityResult.error;
+    }
+
+    const allRows = [...(raceResult.data || []), ...(personalityResult.data || [])];
+    const ages = allRows.map(row => Number(row.age_number)).filter(Number.isFinite);
+    if (!ages.length) return fallback;
+    const age = Math.max(...ages);
+    const races = {};
+    const personalities = {};
+
+    for (const row of raceResult.data || []) {
+      if (Number(row.age_number) !== age) continue;
+      const name = String(row.race || "").toLowerCase().replace(/[^a-z]/g, "");
+      if (!name) continue;
+      races[name] = {
+        ...parseWpaModifiers([row.bonuses, row.penalties].filter(Boolean).join(" ")),
+        name: row.race
+      };
+    }
+    for (const row of personalityResult.data || []) {
+      if (Number(row.age_number) !== age) continue;
+      const name = String(row.personality || "").toLowerCase().replace(/^the\s+/, "").replace(/[^a-z]/g, "");
+      if (!name) continue;
+      personalities[name] = {
+        ...parseWpaModifiers(row.bonuses),
+        name: row.personality
+      };
+    }
+    races.darkelf ||= { ...neutral, name: "Dark Elf" };
+    races.darkelf.name = "Dark Elf";
+    races.darkelf.off ??= 1;
+    races.darkelf.def ??= 1;
+    personalities.none = { ...neutral, name: "None" };
+    return { age, races, personalities };
+  } catch (error) {
+    console.error("[SPARTAN SPELLCHECK] Could not load current-age WPA rules:", error.message);
+    return fallback;
+  }
+}
 
 const SPELL_DIFFICULTY = {
   fireball:      { tier: "standard", mult: 2.0, name: "Fireball" },
@@ -70,9 +105,10 @@ module.exports = async function spellcheckHandler(interaction) {
   const theirNW = interaction.options.getInteger("their_nw") || 0;
   const spell = interaction.options.getString("spell")?.toLowerCase().replace(/\s/g,"") || null;
 
-  const myRaceMod    = RACE_WPA_MODS[myRace]    || { off: 1.0, name: myRace };
-  const myPersMod    = PERS_WPA_MODS[myPers]    || { off: 1.0, name: myPers };
-  const theirRaceMod = RACE_WPA_MODS[theirRace] || { def: 1.0, name: theirRace };
+  const ageRules = await loadCurrentAgeModifiers();
+  const myRaceMod = ageRules.races[myRace.replace(/[^a-z]/g, "")] || { off: 1, def: 1, name: myRace };
+  const myPersMod = ageRules.personalities[myPers.replace(/[^a-z]/g, "")] || { off: 1, def: 1, name: myPers };
+  const theirRaceMod = ageRules.races[theirRace.replace(/[^a-z]/g, "")] || { off: 1, def: 1, name: theirRace };
 
   const myRawWPA    = myWizards / myLand;
   const theirRawWPA = theirWizards / theirLand;
@@ -80,7 +116,7 @@ module.exports = async function spellcheckHandler(interaction) {
   const focusedChannellingMod = (myPers === "mystic" && focusedChannelling) ? 1.20 : 1.0;
   const magicShieldMod = theirMagicShield ? 1.20 : 1.0;
   const myModWPA    = myRawWPA * myScience * myRaceMod.off * myPersMod.off * myHonor * magesFuryMod * focusedChannellingMod;
-  const theirModWPA = theirRawWPA * 1.0 * theirRaceMod.def * magicShieldMod;
+  const theirModWPA = theirRawWPA * theirRaceMod.def * magicShieldMod;
   const ratio = theirModWPA > 0 ? myModWPA / theirModWPA : 999;
 
   let nwWarning = "";
@@ -106,8 +142,9 @@ module.exports = async function spellcheckHandler(interaction) {
   }
 
   const embed = new EmbedBuilder()
-    .setTitle("🔮 Spellcheck Calculator")
+    .setTitle(`🔮 Spellcheck Calculator${ageRules.age != null ? ` — Age ${ageRules.age}` : ""}`)
     .setColor(ratingColor)
+    .setDescription(ageRules.age == null ? "⚠️ Current-age Spartan WPA rules could not be loaded. Neutral race/personality modifiers are used instead of stale hardcoded values." : `Race and personality WPA modifiers loaded from Spartan Age ${ageRules.age} rules.`)
     .addFields(
       {
         name: "🧙 Your WPA",
@@ -150,7 +187,8 @@ module.exports = async function spellcheckHandler(interaction) {
         inline: false
       }
     )
-    .setFooter({ text: kd.footer });
+    ;
+  if (kd?.footer) embed.setFooter({ text: kd.footer });
 
   return interaction.reply({ embeds: [embed], ephemeral: true });
 };
