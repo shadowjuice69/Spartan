@@ -2,6 +2,7 @@
 
 import { headers } from 'next/headers'
 import { revalidatePath } from 'next/cache'
+import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { registerSpartanAccount, resolveSpartanLoginEmail } from '@/lib/spartan/accounts'
 import { recordLoginCheckpoint } from '@/lib/spartan/security'
@@ -73,4 +74,5 @@ export async function logout() {
   const supabase = await createClient()
   await supabase.auth.signOut()
   revalidatePath('/', 'layout')
+  redirect('/login')
 }
