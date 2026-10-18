@@ -3,10 +3,10 @@ const { getKingdomInfo } = require("../../services/kingdomService");
 const supabaseService = require("../../services/supabase");
 
 function parseWpaModifiers(text) {
-  const match = String(text || "").match(/([+-])\s*(\d+(?:\.\d+)?)\s*%\s*(offensive\s+)?(?:wizards?\s+per\s+acre|wpa)/i);
+  const match = String(text || "").match(/([+−-])\s*(\d+(?:\.\d+)?)\s*%\s*(offensive\s+)?(?:wizards?\s+per\s+acre|wpa)/i);
   if (!match) return { off: 1, def: 1 };
   const amount = Number(match[2]) / 100;
-  const multiplier = match[1] === "-" ? 1 - amount : 1 + amount;
+  const multiplier = match[1] === "-" || match[1] === "−" ? 1 - amount : 1 + amount;
   return match[3]
     ? { off: multiplier, def: 1 }
     : { off: multiplier, def: multiplier };
