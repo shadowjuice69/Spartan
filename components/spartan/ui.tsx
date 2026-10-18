@@ -103,7 +103,7 @@ const CSS = `
 @keyframes sp-pulse{0%{box-shadow:0 0 0 0 rgba(103,240,176,.55)}70%{box-shadow:0 0 0 8px rgba(103,240,176,0)}100%{box-shadow:0 0 0 0 rgba(103,240,176,0)}}
 @keyframes sp-sheen{to{background-position:-200% 0}}
 @media(max-width:1100px){.sp-panel{grid-column:span 12}.sp-stat{grid-column:span 6}.sp-skel{grid-column:span 12}}
-@media(max-width:900px){.sp-root{flex-direction:column}.sp-side{position:relative;width:auto;height:auto;display:flex;flex-wrap:nowrap;overflow-x:auto;gap:4px;padding:10px;border-right:0;border-bottom:1px solid rgba(255,255,255,.07)}.sp-brand,.sp-navhead{display:none}.sp-nav{width:auto;white-space:nowrap;margin:0}.sp-main{padding:18px 14px 60px}.sp-title{font-size:24px}}
+@media(max-width:900px){.sp-root{flex-direction:column}.sp-side{position:fixed;z-index:50;left:0;right:0;bottom:0;top:auto;width:100%;height:auto;max-height:28vh;display:flex;flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;gap:4px;padding:10px 10px calc(10px + env(safe-area-inset-bottom));border-right:0;border-top:1px solid rgba(255,255,255,.12);border-bottom:0;box-sizing:border-box}.sp-side form{flex-shrink:0}.sp-brand,.sp-navhead{display:none}.sp-nav{flex-shrink:0;width:auto;white-space:nowrap;margin:0}.sp-main{padding:18px 14px calc(100px + env(safe-area-inset-bottom))}.sp-title{font-size:24px}}
 @media(max-width:520px){.sp-stat{grid-column:span 12}}
 `
 
