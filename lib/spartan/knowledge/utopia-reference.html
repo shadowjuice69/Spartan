@@ -668,6 +668,21 @@
 
     <div class="nav-section">
       <div class="nav-section-title">Current Age</div>
+      <button class="nav-link" onclick="showPage('age117')">📜 Age 117 Changes</button>
+      <button class="nav-link sub" onclick="showPage('age117','war-doctrines-117')">↳ War Doctrines</button>
+      <button class="nav-link sub" onclick="showPage('age117','general-117')">↳ General Changes</button>
+      <button class="nav-link sub" onclick="showPage('age117','buildings-117')">↳ Buildings</button>
+      <button class="nav-link sub" onclick="showPage('age117','science-117')">↳ Science</button>
+      <button class="nav-link sub" onclick="showPage('age117','spells-117')">↳ Spells</button>
+      <button class="nav-link sub" onclick="showPage('age117','thievery-117')">↳ Thievery</button>
+      <button class="nav-link sub" onclick="showPage('age117','dragons-117')">↳ Dragons</button>
+      <button class="nav-link sub" onclick="showPage('age117','rituals-117')">↳ Rituals</button>
+      <button class="nav-link sub" onclick="showPage('age117','races-117')">↳ Races (117)</button>
+      <button class="nav-link sub" onclick="showPage('age117','personalities-117')">↳ Personalities (117)</button>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-section-title">Previous Ages</div>
       <button class="nav-link" onclick="showPage('age116')">📜 Age 116 Changes</button>
       <button class="nav-link sub" onclick="showPage('age116','schedule-116')">↳ Schedule</button>
       <button class="nav-link sub" onclick="showPage('age116','war-doctrines-116')">↳ War Doctrines</button>
@@ -677,10 +692,6 @@
       <button class="nav-link sub" onclick="showPage('age116','rituals-116')">↳ Rituals</button>
       <button class="nav-link sub" onclick="showPage('age116','races-116')">↳ Races (116)</button>
       <button class="nav-link sub" onclick="showPage('age116','personalities-116')">↳ Personalities (116)</button>
-    </div>
-
-    <div class="nav-section">
-      <div class="nav-section-title">Previous Ages</div>
       <button class="nav-link" onclick="showPage('age115')">📜 Age 115 Changes</button>
       <button class="nav-link sub" onclick="showPage('age115','races-115')">↳ Races (115)</button>
       <button class="nav-link sub" onclick="showPage('age115','personalities-115')">↳ Personalities (115)</button>
@@ -792,14 +803,14 @@
       <div id="page-home" class="page active">
         <div class="home-hero">
           <h1>⚔ UTOPIA REFERENCE ⚔</h1>
-          <p>Your complete offline compendium — Age 116 · World of Legends</p>
+          <p>Your complete offline compendium — Age 117 · World of Legends</p>
         </div>
 
         <h3 class="section-title">Quick Access</h3>
         <div class="card-grid">
-          <button class="nav-card" onclick="showPage('age116')">
+          <button class="nav-card" onclick="showPage('age117')">
             <div class="card-icon">📜</div>
-            <h3>Age 116</h3>
+            <h3>Age 117</h3>
             <p>Current age changes, mechanics, dragons &amp; races</p>
           </button>
           <button class="nav-card" onclick="showPage('military')">
@@ -854,6 +865,22 @@
           </button>
         </div>
 
+        <h3 class="section-title" style="margin-top:36px;">Age 117 Highlights</h3>
+        <div class="info-box gold">
+          <p><strong>age117_general_1</strong> — Fanaticism spell will only be available as a Racial Spell</p>
+          <p><strong>age117_general_2</strong> — % Reduction Sciences Max Reductions Reduced from -95% to -75% (Bookkeeping, Artisan, Resilience, Shielding, Finesse)</p>
+          <p><strong>age117_general_3</strong> — All Doctrines give double bonus for the first province, then scale by the listed amount for each province up to the Max</p>
+          <p><strong>age117_general_4</strong> — Dragon Hitpoints Reduced by 10% to accomodate for lower Elite values, Recurring effects after 6 ticks have been removed</p>
+          <p><strong>Attack/Learn and Plunder in War</strong> — Successful Learn and Plunder attacks also capture land equal to 20% of the acres a Traditional March would have gained</p>
+          <p><strong>FCF Defender Conditions</strong> — Defender must be 30 points in-range or 15 points out-of-range below aggressor; not Hostile; no attacks for 3 ticks; lower in both Land and Networth</p>
+          <p><strong>FCF Duration</strong> — 96 hours out of range; 72 hours in range</p>
+          <p><strong>FCF War Range Penalty</strong> — -2% Honor and -2% Science within War Range</p>
+          <p><strong>Hostile Meter Decay</strong> — Changes revert back to before Age 111</p>
+          <p><strong>Hostile Meter Monthly Decay</strong> — 20% or 3 points, whichever is greater</p>
+          <p><strong>Hostile Meter Reset</strong> — No reset for Ceasefires or Entering Wars</p>
+          <p><strong>Massacre in War</strong> — Peasant Damage +5% additive</p>
+        </div>
+
         <h3 class="section-title" style="margin-top:36px;">Age 116 Highlights</h3>
         <div class="info-box gold">
           <p><strong>War Doctrine Rework</strong> — Default per-province increment drops to +1% (from +1.5%), but Elf, Faery &amp; Halfling now gain +2% per additional province instead. Cap stays 12.5%.</p>
@@ -864,6 +891,397 @@
           <p><strong>Out of War Attack Penalty</strong> — Gain penalty increased from 10% to 15%.</p>
         </div>
       </div>
+
+      <!-- ══ AGE 117 ══ -->
+      <div id="page-age117" class="page">
+        <h2 class="page-title">Age 117 — Final Changes</h2>
+
+        <div class="quick-nav">
+          <button onclick="scrollToId('war-doctrines-117')">War Doctrines</button>
+          <button onclick="scrollToId('general-117')">General Changes</button>
+          <button onclick="scrollToId('buildings-117')">Buildings</button>
+          <button onclick="scrollToId('science-117')">Science</button>
+          <button onclick="scrollToId('spells-117')">Spells</button>
+          <button onclick="scrollToId('thievery-117')">Thievery</button>
+          <button onclick="scrollToId('dragons-117')">Dragons</button>
+          <button onclick="scrollToId('rituals-117')">Rituals</button>
+          <button onclick="scrollToId('races-117')">Races (117)</button>
+          <button onclick="scrollToId('personalities-117')">Personalities (117)</button>
+        </div>
+
+        <h3 class="section-title" id="war-doctrines-117">War Doctrine Updates</h3>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Race</th><th>War Doctrine (In War)</th></tr></thead>
+            <tbody>
+              <tr><td><strong>Avian</strong></td><td>-7.5% Attack time (-0.75% each)</td></tr>
+              <tr><td><strong>Dark Elf</strong></td><td>+10% Combat Instant Spell Damage (1% each)</td></tr>
+              <tr><td><strong>Dryad</strong></td><td>+7.5% OME (0.75% each)</td></tr>
+              <tr><td><strong>Dwarf</strong></td><td>+10% Building Efficiency (1% each)</td></tr>
+              <tr><td><strong>Elf</strong></td><td>-20% Own casualities when defending (-2.0% each)</td></tr>
+              <tr><td><strong>Faery</strong></td><td>+7.5% DME (0.75% each)</td></tr>
+              <tr><td><strong>Gnome</strong></td><td>+25% Birth Rate (2.5% each)</td></tr>
+              <tr><td><strong>Halfling</strong></td><td>+5% Population (0.5% each)</td></tr>
+              <tr><td><strong>Human</strong></td><td>+15% Income (1.5% each)</td></tr>
+              <tr><td><strong>Orc</strong></td><td>+15% Enemy casualities when attacking (1.5% each)</td></tr>
+              <tr><td><strong>Undead</strong></td><td>-20% Own casualities when attacking (-2.0% each)</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 class="section-title" id="general-117">General Changes</h3>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Rule</th><th>Change</th></tr></thead>
+            <tbody>
+              <tr><td><strong>age117_general_1</strong></td><td>Fanaticism spell will only be available as a Racial Spell</td></tr>
+              <tr><td><strong>age117_general_2</strong></td><td>% Reduction Sciences Max Reductions Reduced from -95% to -75% (Bookkeeping, Artisan, Resilience, Shielding, Finesse)</td></tr>
+              <tr><td><strong>age117_general_3</strong></td><td>All Doctrines give double bonus for the first province, then scale by the listed amount for each province up to the Max</td></tr>
+              <tr><td><strong>age117_general_4</strong></td><td>Dragon Hitpoints Reduced by 10% to accomodate for lower Elite values, Recurring effects after 6 ticks have been removed</td></tr>
+              <tr><td><strong>Attack/Learn and Plunder in War</strong></td><td>Successful Learn and Plunder attacks also capture land equal to 20% of the acres a Traditional March would have gained</td></tr>
+              <tr><td><strong>FCF Defender Conditions</strong></td><td>Defender must be 30 points in-range or 15 points out-of-range below aggressor; not Hostile; no attacks for 3 ticks; lower in both Land and Networth</td></tr>
+              <tr><td><strong>FCF Duration</strong></td><td>96 hours out of range; 72 hours in range</td></tr>
+              <tr><td><strong>FCF War Range Penalty</strong></td><td>-2% Honor and -2% Science within War Range</td></tr>
+              <tr><td><strong>Hostile Meter Decay</strong></td><td>Changes revert back to before Age 111</td></tr>
+              <tr><td><strong>Hostile Meter Monthly Decay</strong></td><td>20% or 3 points, whichever is greater</td></tr>
+              <tr><td><strong>Hostile Meter Reset</strong></td><td>No reset for Ceasefires or Entering Wars</td></tr>
+              <tr><td><strong>Massacre in War</strong></td><td>Peasant Damage +5% additive</td></tr>
+              <tr><td><strong>Out of War Attack Penalty</strong></td><td>Gain penalty increased from 10% to 15%</td></tr>
+              <tr><td><strong>Thief and Wizard Damage</strong></td><td>Unchanged</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 class="section-title" id="buildings-117">Buildings</h3>
+        <ul class="wiki-list">
+          <li><strong>Watch Towers</strong> — Catch chance increased from 2.0% to 2.2%</li>
+        </ul>
+
+        <h3 class="section-title" id="science-117">Science</h3>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Science</th><th>Change</th></tr></thead>
+            <tbody>
+              <tr><td><strong>Arcana</strong></td><td>Cunning and Sorcery are moved back into one tree for instant spell and thief damage</td></tr>
+              <tr><td><strong>Shielding</strong></td><td>0.0314 -&gt; 0.0350</td></tr>
+              <tr><td><strong>Valor</strong></td><td>0.0582 -&gt; 0.0620</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 class="section-title" id="spells-117">Spells</h3>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Spell</th><th>Change</th></tr></thead>
+            <tbody>
+              <tr><td><strong>Chastity</strong></td><td>Base duration average reduced from 6 to 4 days</td></tr>
+              <tr><td><strong>Droughts</strong></td><td>Food Reduction 25% -&gt; 30%; Draft Rate reduction 15% -&gt; 20%</td></tr>
+              <tr><td><strong>Fireball</strong></td><td>Peasant damage increased from 4-7% to 5-7%</td></tr>
+              <tr><td><strong>Lightning Strike</strong></td><td>Removed from global access; Unfriendly/Hostile only</td></tr>
+              <tr><td><strong>Magic Ward</strong></td><td>Base duration average reduced from 6 to 4 days</td></tr>
+              <tr><td><strong>Sloth</strong></td><td>Base duration average reduced from 6 to 4 days</td></tr>
+              <tr><td><strong>Storms</strong></td><td>Peasant losses per tick increased from 1.5% to 1.75%</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 class="section-title" id="thievery-117">Thievery</h3>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Thievery</th><th>Change</th></tr></thead>
+            <tbody>
+              <tr><td><strong>Arson</strong></td><td>Damage increased by 5%</td></tr>
+              <tr><td><strong>Bribe Thieves</strong></td><td>TPA reduction increased from 10% to 12.5%</td></tr>
+              <tr><td><strong>Destabilise Guilds</strong></td><td>Spell duration reduction increased from 20% to 25%</td></tr>
+              <tr><td><strong>Free Prisoners</strong></td><td>Damage increased from 17% to 25%</td></tr>
+              <tr><td><strong>Incite Riots</strong></td><td>Income reduction increased from 15% to 20%</td></tr>
+              <tr><td><strong>Kidnap</strong></td><td>War Cap lifted to 5%</td></tr>
+              <tr><td><strong>Rob the Vaults</strong></td><td>War Cap lifted to 16%</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 class="section-title" id="dragons-117">Dragons (Age 117)</h3>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Dragon</th><th>Change</th></tr></thead>
+            <tbody>
+              <tr><td><strong>Emerald Dragon</strong></td><td>+25% Military Casualties, -25% Combat Gains, destroys 1% of all troops on arrival</td></tr>
+              <tr><td><strong>Ruby Dragon</strong></td><td>-10% Military Efficiency, +20% Military Wages, destroys 2% of troops home on arrival</td></tr>
+              <tr><td><strong>Sapphire Dragons</strong></td><td>-20% WPA and TPA, +15% Instant Spell and Sabotage Damage taken, destroys 3% of thieves and wizards on arrival</td></tr>
+              <tr><td><strong>Topaz Dragon</strong></td><td>-20% Building Efficiency, -25% Income, +20% Wages, destroys 10% of buildings on arrival</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 class="section-title" id="rituals-117">Rituals</h3>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Ritual</th><th>Change</th></tr></thead>
+            <tbody>
+              <tr><td><strong>Barrier</strong></td><td>-20% Damage from Enemy Instant Magic &amp; Thievery Operations, -20% Battle (Resource) Losses, -20% Massacre Damage</td></tr>
+              <tr><td><strong>Benediction</strong></td><td>+15% Building Efficiency, +15% Birth Rate, -20% Draft Costs, -20% Build Costs, +20% Draft Rate</td></tr>
+              <tr><td><strong>Haste</strong></td><td>-10% Attack Time, -25% Training Time, -25% Construction Time</td></tr>
+              <tr><td><strong>Havoc</strong></td><td>+25% Offensive WPA, +25% Offensive TPA, +15% Spell Damage, +15% Sabotage Damage</td></tr>
+              <tr><td><strong>Onslaught</strong></td><td>+10% Offensive Military Efficiency, +15% Enemy Military Casualties on Attacks</td></tr>
+              <tr><td><strong>Stalwart</strong></td><td>+5% Defensive Military Efficiency, -25% Military Casualties</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 class="section-title" id="races-117">Races — Age 117 Stats</h3>
+        <div class="race-grid">
+
+          <div class="race-card">
+            <div class="race-card-header"><h4>⚡ Avian</h4><span class="badge badge-available">Speed and Birth Rates</span></div>
+            <div class="race-card-body">
+              <div class="doctrine-box"><strong>War Doctrine (In War):</strong> -7.5% Attack time (-0.75% each)</div>
+              <div class="doctrine-box" style="background:rgba(42,157,143,0.06);border-color:var(--teal);"><strong>Unique Passive — Opportunistic Raiders:</strong> Learn and Plunder attacks return armies 1 tick faster (after modifiers).</div>
+              <div class="stat-row"><span class="stat-label">Bonuses</span><span class="stat-val pos">-20% Attack Travel Time · +25% Birth Rate</span></div>
+              <div class="stat-row"><span class="stat-label">Penalties</span><span class="stat-val neg">No Horses</span></div>
+              <div class="stat-row"><span class="stat-label">Units</span><span class="stat-val">Soldier 3/0 · Off Spec 12/0 (4.8nw) · Def Spec 0/10 (5nw) · Elite 14/3 (900gc, 6.25nw) · Merc 8/0 · Prisoner 8/0 · War Horse 2/0 (0.6nw)</span></div>
+              <div class="stat-row"><span class="stat-label">Spells</span><span class="stat-val">Town Watch</span></div>
+            </div>
+          </div>
+
+          <div class="race-card">
+            <div class="race-card-header"><h4>🌑 Dark Elf</h4><span class="badge badge-available">Magic / Attacker Hybrid</span></div>
+            <div class="race-card-body">
+              <div class="doctrine-box"><strong>War Doctrine (In War):</strong> +10% Combat Instant Spell Damage (1% each)</div>
+              <div class="doctrine-box" style="background:rgba(42,157,143,0.06);border-color:var(--teal);"><strong>Unique Passive — Mystic Enthusiasts:</strong> Successful offensive instant spells refund 30% of the rune cost.</div>
+              <div class="stat-row"><span class="stat-label">Bonuses</span><span class="stat-val pos">+20% Combat Instant Spell Damage · -25% Spell Rune Costs (excluding ritual) · Immune to Sabotage Wizards</span></div>
+              <div class="stat-row"><span class="stat-label">Penalties</span><span class="stat-val neg">-20% Sabotage Damage</span></div>
+              <div class="stat-row"><span class="stat-label">Units</span><span class="stat-val">Soldier 3/0 · Off Spec 11/0 (4.4nw) · Def Spec 0/11 (5.5nw) · Elite 13/4 (900gc, 6.25nw) · Merc 8/0 · Prisoner 8/0 · War Horse 2/0 (0.6nw)</span></div>
+              <div class="stat-row"><span class="stat-label">Spells</span><span class="stat-val">Blizzard · Mind Focus</span></div>
+            </div>
+          </div>
+
+          <div class="race-card">
+            <div class="race-card-header"><h4>🌳 Dryad</h4><span class="badge badge-available">Top End Attack Power</span></div>
+            <div class="race-card-body">
+              <div class="doctrine-box"><strong>War Doctrine (In War):</strong> +7.5% OME (0.75% each)</div>
+              <div class="doctrine-box" style="background:rgba(42,157,143,0.06);border-color:var(--teal);"><strong>Unique Passive — Interdiction:</strong> Successful Attacks in War destroy 15% of enemy gold, 15% of enemy runes, and 15% of enemy food.</div>
+              <div class="stat-row"><span class="stat-label">Bonuses</span><span class="stat-val pos">+25% Increased Dragon Slaying Strength</span></div>
+              <div class="stat-row"><span class="stat-label">Penalties</span><span class="stat-val neg">-10% Building Efficiency</span></div>
+              <div class="stat-row"><span class="stat-label">Units</span><span class="stat-val">Soldier 3/0 · Off Spec 10/0 (4nw) · Def Spec 0/9 (4.5nw) · Elite 15/3 (925gc, 6.75nw) · Merc 8/0 · Prisoner 8/0 · War Horse 2/0 (0.6nw)</span></div>
+              <div class="stat-row"><span class="stat-label">Spells</span><span class="stat-val">Fanaticism</span></div>
+            </div>
+          </div>
+
+          <div class="race-card">
+            <div class="race-card-header"><h4>⛏ Dwarf</h4><span class="badge badge-available">Buildings</span></div>
+            <div class="race-card-body">
+              <div class="doctrine-box"><strong>War Doctrine (In War):</strong> +10% Building Efficiency (1% each)</div>
+              <div class="doctrine-box" style="background:rgba(42,157,143,0.06);border-color:var(--teal);"><strong>Unique Passive — Construction Delays:</strong> For 3 ticks after a successful attack, the target's building efficiency is reduced by 10% (does not stack with multiple attacks).</div>
+              <div class="stat-row"><span class="stat-label">Bonuses</span><span class="stat-val pos">+20% Building Efficiency · -50% Building Construction Cost · +25% Building Credits Gained from Combat · -20% Damage Taken from Raze Attacks</span></div>
+              <div class="stat-row"><span class="stat-label">Penalties</span><span class="stat-val neg">+50% Food Consumption</span></div>
+              <div class="stat-row"><span class="stat-label">Units</span><span class="stat-val">Soldier 3/0 · Off Spec 10/0 (4nw) · Def Spec 0/10 (5nw) · Elite 13/5 (950gc, 6.5nw) · Merc 8/0 · Prisoner 8/0 · War Horse 2/0 (0.6nw)</span></div>
+              <div class="stat-row"><span class="stat-label">Spells</span><span class="stat-val">Miner's Mystique</span></div>
+            </div>
+          </div>
+
+          <div class="race-card">
+            <div class="race-card-header"><h4>🌿 Elf</h4><span class="badge badge-available">Magic Focus TM</span></div>
+            <div class="race-card-body">
+              <div class="doctrine-box"><strong>War Doctrine (In War):</strong> -20% Own casualities when defending (-2.0% each)</div>
+              <div class="doctrine-box" style="background:rgba(42,157,143,0.06);border-color:var(--teal);"><strong>Unique Passive — Arcane Respite:</strong> Once activated, for the next 6 days, regenerate +2 mana per day.</div>
+              <div class="stat-row"><span class="stat-label">Bonuses</span><span class="stat-val pos">+25% Wizards Per Acre · +50% Rune Production · +1% Extra Mana Per Tick</span></div>
+              <div class="stat-row"><span class="stat-label">Penalties</span><span class="stat-val neg">-20% Offensive Thievery Per Acre (TPA)</span></div>
+              <div class="stat-row"><span class="stat-label">Units</span><span class="stat-val">Soldier 3/0 · Off Spec 9/0 (3.6nw) · Def Spec 0/11 (5.5nw) · Elite 5/12 (1000gc, 7nw) · Merc 8/0 · Prisoner 8/0 · War Horse 2/0 (0.6nw)</span></div>
+              <div class="stat-row"><span class="stat-label">Spells</span><span class="stat-val">Greater Protection · Pitfalls</span></div>
+            </div>
+          </div>
+
+          <div class="race-card">
+            <div class="race-card-header"><h4>🧚 Faery</h4><span class="badge badge-available">Balanced TM</span></div>
+            <div class="race-card-body">
+              <div class="doctrine-box"><strong>War Doctrine (In War):</strong> +7.5% DME (0.75% each)</div>
+              <div class="doctrine-box" style="background:rgba(42,157,143,0.06);border-color:var(--teal);"><strong>Unique Passive — Arcane Overflow:</strong> (In War) Every successful offensive spell also reduces enemy ritual effectiveness by 0.15%.</div>
+              <div class="stat-row"><span class="stat-label">Bonuses</span><span class="stat-val pos">+25% Offensive-Spell Duration · +1% Extra Mana Per Tick (in war) · -1% Mana Self Spell Cost</span></div>
+              <div class="stat-row"><span class="stat-label">Penalties</span><span class="stat-val neg">-5% Max Population</span></div>
+              <div class="stat-row"><span class="stat-label">Units</span><span class="stat-val">Soldier 3/0 · Off Spec 9/0 (3.6nw) · Def Spec 0/10 (5nw) · Elite 4/13 (1000gc, 7.25nw) · Merc 8/0 · Prisoner 8/0 · War Horse 2/0 (0.6nw)</span></div>
+              <div class="stat-row"><span class="stat-label">Spells</span><span class="stat-val">Lightning Strike · Town Watch · Invisibility · Ghost Workers · Miner's Mystique</span></div>
+            </div>
+          </div>
+
+          <div class="race-card">
+            <div class="race-card-header"><h4>Gnome</h4><span class="badge badge-available">Thief / Attacker Hybrid</span></div>
+            <div class="race-card-body">
+              <div class="doctrine-box"><strong>War Doctrine (In War):</strong> +25% Birth Rate (2.5% each)</div>
+              <div class="doctrine-box" style="background:rgba(42,157,143,0.06);border-color:var(--teal);"><strong>Unique Passive — Cunning Assault:</strong> Each successful attack will provide one of the following thievery boosts, which last for 6 days: +25% offensive thievery effectiveness, -25% thief losses, or +10% sabotage damage. All of these can be active at the same time.</div>
+              <div class="stat-row"><span class="stat-label">Bonuses</span><span class="stat-val pos">Can Train Thieves with Specialist Credits · Immune to Expose Thieves</span></div>
+              <div class="stat-row"><span class="stat-label">Penalties</span><span class="stat-val neg">+20% Combat Instant Spell Damage Received</span></div>
+              <div class="stat-row"><span class="stat-label">Units</span><span class="stat-val">Soldier 3/0 · Off Spec 11/0 (4.4nw) · Def Spec 0/11 (5.5nw) · Elite 13/3 (850gc, 6nw) · Merc 8/0 · Prisoner 8/0 · War Horse 2/0 (0.6nw)</span></div>
+              <div class="stat-row"><span class="stat-label">Spells</span><span class="stat-val">Quick Feet</span></div>
+            </div>
+          </div>
+
+          <div class="race-card">
+            <div class="race-card-header"><h4>🌾 Halfling</h4><span class="badge badge-available">Thievery Focus TM</span></div>
+            <div class="race-card-body">
+              <div class="doctrine-box"><strong>War Doctrine (In War):</strong> +5% Population (0.5% each)</div>
+              <div class="doctrine-box" style="background:rgba(42,157,143,0.06);border-color:var(--teal);"><strong>Unique Passive — Overgrowth:</strong> Once activated, your maximum population increases by +25% for 5 days.</div>
+              <div class="stat-row"><span class="stat-label">Bonuses</span><span class="stat-val pos">+1% Extra Stealth Per Tick (in war) · +10% Max Population · +25% Thieves Per Acre</span></div>
+              <div class="stat-row"><span class="stat-label">Penalties</span><span class="stat-val neg">-20% Offensive Wizards Per Acre (WPA)</span></div>
+              <div class="stat-row"><span class="stat-label">Units</span><span class="stat-val">Soldier 3/0 · Off Spec 9/0 (3.6nw) · Def Spec 0/10 (5nw) · Elite 6/11 (1000gc, 6.75nw) · Merc 8/0 · Prisoner 8/0 · War Horse 2/0 (0.6nw)</span></div>
+              <div class="stat-row"><span class="stat-label">Spells</span><span class="stat-val">Invisibility</span></div>
+            </div>
+          </div>
+
+          <div class="race-card">
+            <div class="race-card-header"><h4>👤 Human</h4><span class="badge badge-available">Economy</span></div>
+            <div class="race-card-body">
+              <div class="doctrine-box"><strong>War Doctrine (In War):</strong> +15% Income (1.5% each)</div>
+              <div class="doctrine-box" style="background:rgba(42,157,143,0.06);border-color:var(--teal);"><strong>Unique Passive — Civil Administration:</strong> Prisoners generate an additional 2.0 gold coins per tick. Mercenary costs are reduced by 40%.</div>
+              <div class="stat-row"><span class="stat-label">Bonuses</span><span class="stat-val pos">+25% Income · -20% Military Training Cost · -20% Military Wages · Incite Riot Immunity</span></div>
+              <div class="stat-row"><span class="stat-label">Penalties</span><span class="stat-val neg">+1 mana self spell cost</span></div>
+              <div class="stat-row"><span class="stat-label">Units</span><span class="stat-val">Soldier 3/0 · Off Spec 10/0 (4nw) · Def Spec 0/10 (5nw) · Elite 13/4 (900gc, 6.25nw) · Merc 8/0 · Prisoner 8/0 · War Horse 2/0 (0.6nw)</span></div>
+              <div class="stat-row"><span class="stat-label">Spells</span><span class="stat-val">Tree of Gold</span></div>
+            </div>
+          </div>
+
+          <div class="race-card">
+            <div class="race-card-header"><h4>💀 Orc</h4><span class="badge badge-available">Kills and Gains</span></div>
+            <div class="race-card-body">
+              <div class="doctrine-box"><strong>War Doctrine (In War):</strong> +15% Enemy casualities when attacking (1.5% each)</div>
+              <div class="doctrine-box" style="background:rgba(42,157,143,0.06);border-color:var(--teal);"><strong>Unique Passive — Generals Authority:</strong> When attacking with 2 or more generals, enemy military casualties are increased by +15%.</div>
+              <div class="stat-row"><span class="stat-label">Bonuses</span><span class="stat-val pos">+20% Battle Gains · -50% Draft Cost</span></div>
+              <div class="stat-row"><span class="stat-label">Penalties</span><span class="stat-val neg">-5% Defensive Military Efficiency</span></div>
+              <div class="stat-row"><span class="stat-label">Units</span><span class="stat-val">Soldier 3/0 · Off Spec 11/0 (4.4nw) · Def Spec 0/10 (5nw) · Elite 14/3 (900gc, 6.25nw) · Merc 8/0 · Prisoner 8/0 · War Horse 2/0 (0.6nw)</span></div>
+              <div class="stat-row"><span class="stat-label">Spells</span><span class="stat-val">Bloodlust</span></div>
+            </div>
+          </div>
+
+          <div class="race-card">
+            <div class="race-card-header"><h4>☠ Undead</h4><span class="badge badge-available">Sustain and Plague</span></div>
+            <div class="race-card-body">
+              <div class="doctrine-box"><strong>War Doctrine (In War):</strong> -20% Own casualities when attacking (-2.0% each)</div>
+              <div class="doctrine-box" style="background:rgba(42,157,143,0.06);border-color:var(--teal);"><strong>Unique Passive — Plaguebearers:</strong> All successful attacks have a 33% chance to spread plague to the target province.</div>
+              <div class="stat-row"><span class="stat-label">Bonuses</span><span class="stat-val pos">-100% Food Consumption · -40% Own casualities when attacking and defending · Immune to the Plague</span></div>
+              <div class="stat-row"><span class="stat-label">Penalties</span><span class="stat-val neg">-15% Birth Rate</span></div>
+              <div class="stat-row"><span class="stat-label">Units</span><span class="stat-val">Soldier 3/0 · Off Spec 10/0 (4nw) · Def Spec 0/10 (5nw) · Elite 13/4 (900gc, 6.25nw) · Merc 8/0 · Prisoner 8/0 · War Horse 2/0 (0.6nw)</span></div>
+              <div class="stat-row"><span class="stat-label">Spells</span><span class="stat-val">Ghost Workers</span></div>
+            </div>
+          </div>
+
+        </div><!-- /race-grid -->
+
+        <h3 class="section-title" id="personalities-117">Personalities — Age 117</h3>
+        <div class="race-grid">
+
+          <div class="race-card">
+            <div class="race-card-header"><h4>🏗 The Artisan</h4></div>
+            <div class="race-card-body">
+              <div class="doctrine-box" style="background:rgba(42,157,143,0.06);border-color:var(--teal);"><strong>Unique Passive — Master Craftsmanship:</strong> When razing buildings, Artisans recover 25% of buildings razed as Building Credits.</div>
+              <div class="stat-row"><span class="stat-label">Bonuses</span><span class="stat-val pos">+25% Building Capacity (Homes/Stables/Dungeons) · +25% Building Production · −25% Construction Costs (incl. Raze) · Immune to Greed/Incite Riots/Fool's Gold · +25% Economy Science</span></div>
+              <div class="stat-row"><span class="stat-label">Start</span><span class="stat-val">+600 Soldiers · +600 Spec Credits · +200 Build Credits</span></div>
+              <div class="stat-row"><span class="stat-label">Spells</span><span class="stat-val">Ghost Workers · Greater Protection</span></div>
+            </div>
+          </div>
+
+          <div class="race-card">
+            <div class="race-card-header"><h4>⛪ The Cleric</h4></div>
+            <div class="race-card-body">
+              <div class="doctrine-box" style="background:rgba(42,157,143,0.06);border-color:var(--teal);"><strong>Unique Passive — Architect's Revenge:</strong> Incoming Raze damage is reduced by 15%. Your Raze attacks destroy 20% additional buildings.</div>
+              <div class="stat-row"><span class="stat-label">Bonuses</span><span class="stat-val pos">+15% Defensive Military Efficiency · -15% Battle (Resource) Losses · -15% Sabotage Damage Received · -15% Spell Damage Received · -15% Damage Taken From Massacre Attacks · Immune to the Plague</span></div>
+              <div class="stat-row"><span class="stat-label">Start</span><span class="stat-val">+800 Soldiers · +800 Training Credits</span></div>
+              <div class="stat-row"><span class="stat-label">Spells</span><span class="stat-val">Salvation</span></div>
+            </div>
+          </div>
+
+          <div class="race-card">
+            <div class="race-card-header"><h4>⚔️ The General</h4></div>
+            <div class="race-card-body">
+              <div class="doctrine-box" style="background:rgba(42,157,143,0.06);border-color:var(--teal);"><strong>Unique Passive — Undermining Assault:</strong> Your next successful attack applies Coordinated Strike to the target for 4 days, reducing their Watch Tower effectiveness by 15%.</div>
+              <div class="stat-row"><span class="stat-label">Bonuses</span><span class="stat-val pos">+1 Army generals · Offensive specialist gets +1 strength · Elite gets +1 offensive strength</span></div>
+              <div class="stat-row"><span class="stat-label">Start</span><span class="stat-val">+800 Soldiers · +800 Training Credits</span></div>
+              <div class="stat-row"><span class="stat-label">Spells</span><span class="stat-val">Righteous Aggressor</span></div>
+            </div>
+          </div>
+
+          <div class="race-card">
+            <div class="race-card-header"><h4>🔥 The Heretic</h4></div>
+            <div class="race-card-body">
+              <div class="doctrine-box" style="background:rgba(42,157,143,0.06);border-color:var(--teal);"><strong>Unique Passive — Silent Assault:</strong> 50% fewer thievery losses when performing sabotage operations.</div>
+              <div class="stat-row"><span class="stat-label">Bonuses</span><span class="stat-val pos">+50% Land Effect - Guilds · +10% Combat Instant Spell Damage · +10% Sabotage Damage · No Thieves lost on Failed Espionage Operations</span></div>
+              <div class="stat-row"><span class="stat-label">Start</span><span class="stat-val">+400 Wizards · +400 Thieves</span></div>
+              <div class="stat-row"><span class="stat-label">Spells</span><span class="stat-val">Nightmares · Fools Gold · Mages Fury</span></div>
+            </div>
+          </div>
+
+          <div class="race-card">
+            <div class="race-card-header"><h4>✨ The Mystic</h4></div>
+            <div class="race-card-body">
+              <div class="doctrine-box" style="background:rgba(42,157,143,0.06);border-color:var(--teal);"><strong>Unique Passive — Black Magic:</strong> Successful offensive instant spells also kill 1% of the target's peasant population.</div>
+              <div class="stat-row"><span class="stat-label">Bonuses</span><span class="stat-val pos">+100% Land Effect - Guilds · +25% Offensive Wizards Per Acre (WPA) · +1% Extra Mana Per Tick</span></div>
+              <div class="stat-row"><span class="stat-label">Start</span><span class="stat-val">+800 Wizards</span></div>
+              <div class="stat-row"><span class="stat-label">Spells</span><span class="stat-val">Meteor Showers · Pitfalls · Chastity</span></div>
+            </div>
+          </div>
+
+          <div class="race-card">
+            <div class="race-card-header"><h4>💀 The Necromancer</h4></div>
+            <div class="race-card-body">
+              <div class="doctrine-box" style="background:rgba(42,157,143,0.06);border-color:var(--teal);"><strong>Unique Passive — Dark Pact:</strong> After each successful attack, converts 7.5% of enemy killed units into Wizards, 17.5% into Soldiers, and 10% into Peasants.</div>
+              <div class="stat-row"><span class="stat-label">Bonuses</span><span class="stat-val pos">+25% WPA · +7.5% ME · −40% Rune Cost (not Ritual) · +40% Channeling Science</span></div>
+              <div class="stat-row"><span class="stat-label">Start</span><span class="stat-val">+400 Wizards · +400 Spec Credits</span></div>
+              <div class="stat-row"><span class="stat-label">Spells</span><span class="stat-val">Animate Dead · Mind Focus · Soul Blight · Nightmare · Guile · Lightning Strike</span></div>
+            </div>
+          </div>
+
+          <div class="race-card">
+            <div class="race-card-header"><h4>🗡 The Rogue</h4></div>
+            <div class="race-card-body">
+              <div class="doctrine-box" style="background:rgba(42,157,143,0.06);border-color:var(--teal);"><strong>Unique Passive — Shadow Persistence:</strong> You may perform thievery operations even while overpopulated.</div>
+              <div class="stat-row"><span class="stat-label">Bonuses</span><span class="stat-val pos">+25% Offensive Thievery Per Acre (TPA) · +75% Thieves' Den Effectiveness · +1% Extra Stealth Per Tick · Access all Thievery Operations</span></div>
+              <div class="stat-row"><span class="stat-label">Start</span><span class="stat-val">+800 Thieves</span></div>
+              <div class="stat-row"><span class="stat-label">Spells</span><span class="stat-val">Mystic Aura</span></div>
+            </div>
+          </div>
+
+          <div class="race-card">
+            <div class="race-card-header"><h4>📖 The Sage</h4></div>
+            <div class="race-card-body">
+              <div class="doctrine-box" style="background:rgba(42,157,143,0.06);border-color:var(--teal);"><strong>Unique Passive — Holy Inquisition:</strong> Successful attacks in War or Hostile temporarily suppress 15% of the target's Science Effectiveness and reduce Book Generation by 20% for 6-8 ticks.</div>
+              <div class="stat-row"><span class="stat-label">Bonuses</span><span class="stat-val pos">-50% Losses on Learn Attacks · +10 Starting Scientists</span></div>
+              <div class="stat-row"><span class="stat-label">Start</span><span class="stat-val">+800 Soldiers · +800 Training Credits</span></div>
+              <div class="stat-row"><span class="stat-label">Spells</span><span class="stat-val">Scientific Insight · Fountain of Knowledge</span></div>
+            </div>
+          </div>
+
+          <div class="race-card">
+            <div class="race-card-header"><h4>🗺 The Tactician</h4></div>
+            <div class="race-card-body">
+              <div class="doctrine-box" style="background:rgba(42,157,143,0.06);border-color:var(--teal);"><strong>Unique Passive — Dragon's Wrath:</strong> When attacking with a dragon, 3% of your raw offense from units will also deal damage to the dragon.</div>
+              <div class="stat-row"><span class="stat-label">Bonuses</span><span class="stat-val pos">-15% Attack Travel Time · +25% Specialist Training Credits · 100% successful espionage operations at 2x stealth</span></div>
+              <div class="stat-row"><span class="stat-label">Start</span><span class="stat-val">+800 Soldiers · +800 Training Credits</span></div>
+              <div class="stat-row"><span class="stat-label">Spells</span><span class="stat-val">Illuminate Shadows</span></div>
+            </div>
+          </div>
+
+          <div class="race-card">
+            <div class="race-card-header"><h4>🏆 The War Hero</h4></div>
+            <div class="race-card-body">
+              <div class="doctrine-box" style="background:rgba(42,157,143,0.06);border-color:var(--teal);"><strong>Unique Passive — Rising Renown:</strong> Successful attacks in War grant +5% Honour Effects for 6 ticks, stacking up to +15%. Each successful attack refreshes all stacks; resets after 6 ticks without a hit.</div>
+              <div class="stat-row"><span class="stat-label">Bonuses</span><span class="stat-val pos">+10% Battle Gains (War Only) · −25% Honor Loss · +100% Honor Effects · Off Specialist +2 strength (NW) · +40% Valor Science</span></div>
+              <div class="stat-row"><span class="stat-label">Start</span><span class="stat-val">+800 Soldiers · +800 Spec Credits</span></div>
+              <div class="stat-row"><span class="stat-label">Spells</span><span class="stat-val">Quick Feet · Righteous Aggressor · Hero's Inspiration</span></div>
+            </div>
+          </div>
+
+          <div class="race-card">
+            <div class="race-card-header"><h4>🪓 The Warrior</h4></div>
+            <div class="race-card-body">
+              <div class="doctrine-box" style="background:rgba(42,157,143,0.06);border-color:var(--teal);"><strong>Unique Passive — Indomitable Spirit:</strong> Once activated Warriors gain 5% Offensive Military Efficiency for 6 days.</div>
+              <div class="stat-row"><span class="stat-label">Bonuses</span><span class="stat-val pos">+15% Offensive Military Efficiency · +15% Damage Dealt with Massacre Attacks</span></div>
+              <div class="stat-row"><span class="stat-label">Start</span><span class="stat-val">+800 Soldiers · +800 Training Credits</span></div>
+              <div class="stat-row"><span class="stat-label">Spells</span><span class="stat-val">Heroes Inspiration</span></div>
+            </div>
+          </div>
+
+        </div><!-- /personality grid -->
+      </div><!-- /age117 -->
+
 
       <!-- ══ AGE 116 ══ -->
       <div id="page-age116" class="page">
@@ -4071,7 +4489,8 @@
 <script>
   const pages = {
     home: 'Home',
-    age116: 'Age 116 Changes',
+    age117: 'Age 117 Changes',
+    age116: 'Age 116 Changes (Previous)',
     age115: 'Age 115 Changes (Previous)',
     military: 'Military',
     mystics: 'Mystics & Spells',
@@ -4163,67 +4582,5 @@
   });
 </script>
 
-        <div class="note-box" style="border-color:#f87171;margin-top:16px"><strong>⚠ Overpopulation:</strong> When population exceeds max living space, peasants leave (Level 1), troops desert and army refuses to attack (+15% over, Level 2), riots cut income 50% (+30% over, Level 3), thieves strike no ops (+40% over, Level 4). See <a href="#" onclick="showPage('page-overpop')">Overpopulation</a> page for full details.</div>
-        <h3 class="section-title">Science Multipliers (Age 116)</h3>
-        <div class="tbl-wrap"><table>
-          <thead><tr><th>Science</th><th>Type</th><th>Multiplier</th></tr></thead>
-          <tbody>
-            <tr><td>Alchemy</td><td>Economy</td><td>0.0724</td></tr>
-            <tr><td>Tools</td><td>Economy</td><td>0.0524</td></tr>
-            <tr><td>Housing</td><td>Economy</td><td>0.0262</td></tr>
-            <tr><td>Production</td><td>Economy</td><td>0.2172</td></tr>
-            <tr><td>Bookkeeping</td><td>Economy</td><td>0.0680</td></tr>
-            <tr><td>Artisan</td><td>Economy</td><td>0.0478</td></tr>
-            <tr><td>Strategy</td><td>Military</td><td>0.0367</td></tr>
-            <tr><td>Siege</td><td>Military</td><td>0.0262</td></tr>
-            <tr><td>Tactics</td><td>Military</td><td>0.0367</td></tr>
-            <tr><td>Valor</td><td>Military</td><td>0.0582</td></tr>
-            <tr><td>Heroism</td><td>Military</td><td>0.0418</td></tr>
-            <tr><td>Resilience</td><td>Military</td><td>0.0489</td></tr>
-            <tr><td>Crime</td><td>Arcane</td><td>0.1557</td></tr>
-            <tr><td>Channeling</td><td>Arcane</td><td>0.1875</td></tr>
-            <tr><td>Shielding</td><td>Arcane</td><td>0.0314</td></tr>
-            <tr><td>Sorcery</td><td>Arcane</td><td>0.0314</td></tr>
-            <tr><td>Cunning</td><td>Arcane</td><td>0.0314</td></tr>
-            <tr><td>Finesse</td><td>Arcane</td><td>0.0965</td></tr>
-          </tbody>
-        </table></div>
-
-        <h3 class="section-title">Scientist Ranks &amp; Book Production</h3>
-        <div class="tbl-wrap"><table>
-          <thead><tr><th>Rank</th><th>XP Required</th><th>Books/Tick</th></tr></thead>
-          <tbody>
-            <tr><td>Recruit</td><td>0–1,439</td><td>60</td></tr>
-            <tr><td>Novice</td><td>1,440–5,279</td><td>80</td></tr>
-            <tr><td>Graduate</td><td>5,280–12,479</td><td>100</td></tr>
-            <tr><td>Professor</td><td>12,480+</td><td>120</td></tr>
-          </tbody>
-        </table></div>
-        <p class="note">Scientists have <strong>no NW value</strong>. Re-assigning a scientist resets them to Recruit. Inactive provinces do not produce books. Valor science also increases Dragon Slaying Strength.</p>
-        <div class="formula-box">
-          Scientist Spawn Rate = 2 × Race Mod × Universities% × Revelation Mod
-        </div>
-        <h3 class="section-title">Attack Type War Modifiers</h3>
-        <div class="tbl-wrap"><table>
-          <thead><tr><th>Attack Type</th><th>Normal</th><th>In War</th></tr></thead>
-          <tbody>
-            <tr><td>Traditional March</td><td>12% base, 20% cap</td><td>Same</td></tr>
-            <tr><td>Raze</td><td>~5% land destroyed</td><td>~30% buildings destroyed instead of land</td></tr>
-            <tr><td>Massacre</td><td>9.5% peasants, 7.5% thieves, 5% wizards</td><td>~3× efficiency</td></tr>
-            <tr><td>Learn</td><td>~2% books taken</td><td>~35% books temporarily removed over 48 ticks</td></tr>
-            <tr><td>Plunder</td><td>50% gold, 60% food/runes (max 1.75×)</td><td>Same</td></tr>
-            <tr><td>Conquest</td><td>6.8% base (±5% NW range restriction)</td><td>No NW range restriction</td></tr>
-          </tbody>
-        </table></div>
-
-        <div class="note-box">
-          <strong>Modifier Exceptions:</strong>
-          <ul>
-            <li><strong>Raze:</strong> Ignores ALL modifiers EXCEPT Relations, MAP, Attack Time Adjustment</li>
-            <li><strong>Massacre:</strong> Ignores most modifiers EXCEPT RPNW, RKNW, Relations, MAP, Attack Time</li>
-            <li><strong>Ambush:</strong> Ignores ALL modifiers except Battle Losses modifier</li>
-            <li><strong>Failed attack:</strong> Reduces DEFENDER casualties by 35%</li>
-          </ul>
-        </div>
 </body>
 </html>
