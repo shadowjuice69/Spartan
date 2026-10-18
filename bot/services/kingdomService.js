@@ -30,7 +30,7 @@ async function getKingdomInfo() {
     code: settings.kingdom_code,
     age: settings.current_age,
     personality: settings.kingdom_personality,
-    footer: `${settings.kingdom_name} Kingdom (${settings.kingdom_code}) • WoL Age ${settings.current_age} • Utopia Nexus`,
+    footer: `${settings.kingdom_name} Kingdom (${settings.kingdom_code}) • WoL Age ${settings.current_age} • Spartan`,
   };
 
   cacheTime = Date.now();

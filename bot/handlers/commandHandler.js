@@ -33,7 +33,7 @@ const setkingdomHandler=require('./commands/setkingdomHandler');
 const COMMANDS={
  spartan:{register:spartanRegister,status:spartanStatus,ask:spartanHandler,access:spartanAccessHandler,help:helpHandler,wiki:wikiHandler},
  'spartan-music':{join:musicHandler,play:musicHandler,pause:musicHandler,resume:musicHandler,skip:musicHandler,stop:musicHandler,queue:musicHandler,nowplaying:musicHandler,volume:musicHandler},
- 'spartan-intel':{check:intelOpsHandler,capturehealth:intelOpsHandler,incoming:intelOpsHandler,eta:intelOpsHandler,status:intelOpsHandler,left:intelOpsHandler,plunders:intelOpsHandler,survey:intelOpsHandler,oprate:intelOpsHandler,kdecon:intelOpsHandler,econ:intelOpsHandler,tppa:intelOpsHandler},
+ 'spartan-intel':{check:intelOpsHandler,capturehealth:intelOpsHandler,incoming:intelOpsHandler,eta:intelOpsHandler,status:intelOpsHandler,left:intelOpsHandler,plunders:intelOpsHandler,survey:intelOpsHandler,oprate:intelOpsHandler,kdecon:intelOpsHandler,econ:intelOpsHandler,tppa:intelOpsHandler,canonical:intelOpsHandler},
  'spartan-calc':{thievery:thieveryHandler,attack:attackHandler,invest:investHandler,declare:declareLegalityHandler,spellcheck:spellcheckHandler,science:scienceHandler,'science-summary':scienceSummaryHandler},
  'spartan-war':{analyze:analyzeWarHandler,summary:warSummaryHandler,board:warBoardHandler,status:warHandler,target:targetHandler,ambush:ambushHandler,intel:intelHandler},
  'spartan-admin':{panel:adminHandler,logs:logsHandler,admins:adminsHandler,access:spartanAccessHandler,alerts:alertsHandler,broadcast:broadcastHandler,setkingdom:setkingdomHandler}

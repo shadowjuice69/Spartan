@@ -2,7 +2,7 @@
  * Central command access policy.
  *
  * Keeps permission semantics separate from command dispatch so command metadata
- * can describe access requirements consistently as Nexus grows.
+ * can describe access requirements consistently as Spartan grows.
  */
 
 function normalizeAccess(entry) {

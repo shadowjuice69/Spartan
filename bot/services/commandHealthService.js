@@ -1,5 +1,5 @@
 /**
- * Read-only diagnostics for the Nexus command registry.
+ * Read-only diagnostics for the Spartan command registry.
  *
  * Keeps operational reporting separate from registration/dispatch logic.
  */

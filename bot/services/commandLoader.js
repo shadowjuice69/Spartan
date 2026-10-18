@@ -1,8 +1,7 @@
 /**
- * Automatic command discovery for Nexus.
+ * Automatic command discovery for Spartan.
  *
- * Existing command modules can opt in through module metadata while legacy
- * handlers remain compatible. The loader is intentionally deterministic and
+ * Spartan command modules can opt in through module metadata. The loader is intentionally deterministic and
  * fails on duplicate command keys.
  */
 
