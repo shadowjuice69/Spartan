@@ -194,7 +194,7 @@ function NewBuildForm({ races, personalities, onSaved }: { races: RaceRule[]; pe
       <p style={{ color: "#8993a1", fontSize: 11, marginTop: 0 }}>Type a building name and its percentage on each row. Add as many rows as you need.</p>
       <div style={{ display: "grid", gap: 8 }}>
         {buildings.map((row, index) => (
-          <div key={row.id} style={{ display: "grid", gridTemplateColumns: "minmax(130px, 2fr) minmax(100px, 1fr) auto", gap: 8, alignItems: "end" }}>
+          <div key={row.id} style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 8, alignItems: "end" }}>
             <label style={fieldLabel}>Building {index + 1}
               <input style={fieldInput} value={row.name} onChange={(e) => updateBuilding(row.id, "name", e.target.value)} placeholder="e.g. Farms" />
             </label>
@@ -226,8 +226,8 @@ function NewBuildForm({ races, personalities, onSaved }: { races: RaceRule[]; pe
       <h3 style={sectionHeading}>SCIENCE TARGETS &amp; WEIGHTS</h3>
       <p style={{ color: "#8993a1", fontSize: 11, marginTop: 0 }}>Add each science separately. Choose Economy, Military, or Arcane, then enter the science name and either a priority weight (such as 4x) or a target percentage.</p>
       <div style={{ display: "grid", gap: 8 }}>
-        {scienceEntries.map((row, index) => (
-          <div key={row.id} style={{ display: "grid", gridTemplateColumns: "minmax(115px, 1fr) minmax(120px, 1.4fr) minmax(115px, 1fr) minmax(90px, .7fr) auto", gap: 8, alignItems: "end" }}>
+        {scienceEntries.map((row) => (
+          <div key={row.id} style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 8, alignItems: "end" }}>
             <label style={fieldLabel}>Category
               <select style={fieldInput} value={row.category} onChange={(e) => updateScience(row.id, "category", e.target.value)}>
                 <option value="economy">Economy</option>
