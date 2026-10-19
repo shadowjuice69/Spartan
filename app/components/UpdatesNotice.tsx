@@ -21,6 +21,7 @@ export default function UpdatesNotice() {
       <button
         type="button"
         aria-label="Open Spartan site updates"
+        className="sp-updates-trigger"
         onClick={() => { setOpen(true); setSeen(true); }}
         style={{ position: "fixed", right: 18, bottom: 18, zIndex: 900, border: "1px solid rgba(216,255,84,.35)", background: "rgba(7,16,24,.94)", color: "#d8ff54", borderRadius: 999, padding: "10px 14px", fontSize: 10, fontWeight: 900, letterSpacing: ".12em", cursor: "pointer", boxShadow: "0 12px 35px rgba(0,0,0,.35)", backdropFilter: "blur(10px)" }}
         title="What's new in Spartan"
