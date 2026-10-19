@@ -11,3 +11,5 @@
 @media(max-width:700px){.topbar{padding:0 16px}.content{padding:25px 14px 40px}.hero{display:block}.hero-status{text-align:left;margin-top:15px}.stat-grid{grid-template-columns:repeat(2,1fr)}.intel-banner{align-items:flex-start}.intel-banner button{display:none}.chart-wrap{padding-left:38px}.systems-panel{min-height:0}.crumb{font-size:8px}.sync{display:none}.login-panel{padding:27px 22px}.login-brand{margin-bottom:40px}.login-heading h1{font-size:27px}}
 /* Keep the floating updates control away from the mobile sidebar. */
 @media(max-width:900px){.sp-updates-trigger{top:calc(8px + env(safe-area-inset-top))!important;right:8px!important;bottom:auto!important;z-index:40!important;padding:8px 10px!important;font-size:9px!important;max-width:calc(100vw - 180px)}}
+/* Allow normal touch panning and page scrolling on mobile throughout Spartan. */
+@media(max-width:900px){html,body{width:100%;min-height:100%;height:auto;overflow-x:auto;overflow-y:auto;touch-action:pan-x pan-y;-webkit-overflow-scrolling:touch}body{overscroll-behavior:auto}.app-shell,.sp-root{min-height:100dvh;overflow:visible;touch-action:pan-x pan-y}.sp-main{overflow:visible;overscroll-behavior:auto}}
