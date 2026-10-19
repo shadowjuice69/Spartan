@@ -24,7 +24,7 @@ export async function GET(req:NextRequest){
 
   const pv=await sb.from("spartan_province_registry")
     .select("province_id,province_name,kingdom_code,metadata")
-    .ilike("province_name","%"+province+"%")
+    .eq("province_name",province)
     .limit(1)
 
   if(pv.error||!pv.data?.length)return NextResponse.json({error:"Province not found in Spartan's current province registry."},{status:404})
