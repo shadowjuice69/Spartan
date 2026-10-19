@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import { NAV_COMMAND as nav, NAV_INTEL as intel } from '@/lib/spartan/nav'
 
@@ -91,6 +91,76 @@ function Thievery(){
 }
 function Declare(){const [on,setOn]=useState(100000),[tn,setTn]=useState(100000),[ol,setOl]=useState(1000),[tl,setTl]=useState(1000),[om,setOm]=useState(15),[tm,setTm]=useState(30),[q,setQ]=useState(3);const r=useMemo(function(){const nw=tn/Math.max(on,1),land=tl/Math.max(ol,1),nwi=nw>=.85&&nw<=1.1765,li=land>=.85&&land<=1.1765,small=tn<on||tl<ol,range=small?nwi&&li:nwi||li,we=om>=15&&tm>=30&&tm>om&&range,they=tm>=15&&om>=30&&om>tm&&range,fcf=tm-om>=15&&om<30&&q>=3&&on<tn&&ol<tl;return {nw,land,nwi,li,range,we,they,fcf}},[on,tn,ol,tl,om,tm,q]);return <Card title="⚖️ Declare Calculator" subtitle="War range, declare legality, and FCF checks"><Grid><Field name="Our NW" value={on} setValue={setOn}/><Field name="Their NW" value={tn} setValue={setTn}/><Field name="Our land" value={ol} setValue={setOl}/><Field name="Their land" value={tl} setValue={setTl}/><Field name="Our meter" value={om} setValue={setOm}/><Field name="Their meter" value={tm} setValue={setTm}/><Field name="Quiet ticks" value={q} setValue={setQ}/></Grid><Results rows={[["NW range",r.nwi?"PASS":"FAIL",(r.nw*100).toFixed(1)+"%"],["Land range",r.li?"PASS":"FAIL",(r.land*100).toFixed(1)+"%"],["Overall range",r.range?"IN RANGE":"OUT OF RANGE"],["Can we declare",r.we?"YES":"NO"],["Can they declare",r.they?"YES":"NO"],["FCF available",r.fcf?"YES":"NO"]]}/></Card>}
 
-function Science(){const [province,setProvince]=useState(""),[libraries,setLibraries]=useState(0),[books,setBooks]=useState("alchemy:1000\nstrategy:1000\nchanneling:500"),[result,setResult]=useState<any>(null),[loading,setLoading]=useState(false);async function run(){setLoading(true);try{const parsed:any={};books.split("\n").forEach(function(line){const p=line.split(":");if(p.length===2)parsed[p[0].trim()]=Number(p[1])||0});const q=new URLSearchParams({province:province,libraries:String(libraries),books:JSON.stringify(parsed)});const res=await fetch("/api/tools/science-summary?"+q.toString());setResult(await res.json())}finally{setLoading(false)}}return <Card title="🔬 Science / Science Summary" subtitle="Science reference and summary. Investment remains in Build Library."><Grid><label><span style={label}>Province (optional)</span><input style={input} value={province} onChange={e=>setProvince(e.target.value)} placeholder="Province name"/></label><Field name="Libraries %" value={libraries} setValue={setLibraries} step=".1"/></Grid><label style={{display:"block",marginTop:12}}><span style={label}>Books — science:value per line</span><textarea style={{...input,minHeight:130,fontFamily:"monospace"}} value={books} onChange={e=>setBooks(e.target.value)}/></label><button style={{...primary,marginTop:12}} onClick={run} disabled={loading}>{loading?"Loading…":"Build Science Summary"}</button>{result&&<div>{result.error?<p style={{color:"#ff9b9b",fontSize:11}}>{result.error}</p>:<Results rows={Object.entries(result.summary||{}).map(function(x:any){return [x[0],x[1].bonus+"%",x[1].books+" books"]})}/>}</div>}</Card>}
+function Science(){
+  const [province,setProvince]=useState("")
+  const [provinces,setProvinces]=useState<Array<{province_name:string;kingdom_code:string|null}>>([])
+  const [provinceLoading,setProvinceLoading]=useState(true)
+  const [provinceError,setProvinceError]=useState("")
+  const [libraries,setLibraries]=useState(0)
+  const [books,setBooks]=useState("alchemy:1000\nstrategy:1000\nchanneling:500")
+  const [result,setResult]=useState<any>(null)
+  const [loading,setLoading]=useState(false)
+
+  useEffect(()=>{
+    let active=true
+    fetch("/api/tools/science-summary/provinces")
+      .then(async res=>{
+        const data=await res.json()
+        if(!res.ok) throw new Error(data.error||"Could not load Spartan provinces.")
+        return data
+      })
+      .then(data=>{
+        if(!active)return
+        const list=Array.isArray(data.provinces)?data.provinces:[]
+        setProvinces(list)
+        setProvinceError(list.length?"":"No provinces were found in Spartan's province registry.")
+        if(list.length)setProvince(list[0].province_name)
+      })
+      .catch(err=>{if(active)setProvinceError(err.message||"Could not load Spartan provinces.")})
+      .finally(()=>{if(active)setProvinceLoading(false)})
+    return ()=>{active=false}
+  },[])
+
+  async function run(){
+    if(!province){setProvinceError("Choose a province first.");return}
+    setLoading(true)
+    try{
+      const parsed:any={}
+      books.split("\n").forEach(function(line){
+        const p=line.split(":")
+        if(p.length===2)parsed[p[0].trim()]=Number(p[1])||0
+      })
+      const q=new URLSearchParams({province,libraries:String(libraries),books:JSON.stringify(parsed)})
+      const res=await fetch("/api/tools/science-summary?"+q.toString())
+      const data=await res.json()
+      setResult(data)
+    }catch(e:any){
+      setResult({error:e?.message||"Science summary failed."})
+    }finally{
+      setLoading(false)
+    }
+  }
+
+  return <Card title="🔬 Science / Science Summary" subtitle="Estimate science effects using a province's latest captured science as the baseline. Choose any province registered in Spartan.">
+    <Grid>
+      <label>
+        <span style={label}>Spartan province</span>
+        <select style={input} value={province} onChange={e=>{setProvince(e.target.value);setResult(null)}} disabled={provinceLoading||provinces.length===0}>
+          <option value="">{provinceLoading?"Loading Spartan provinces…":"Choose a province…"}</option>
+          {provinces.map(p=><option key={p.province_name} value={p.province_name}>{p.province_name}{p.kingdom_code?" — "+p.kingdom_code:""}</option>)}
+        </select>
+        {provinceError&&<span style={{display:"block",fontSize:10,color:"#ff9b9b",marginTop:5}}>{provinceError}</span>}
+        {!provinceError&&<span style={{display:"block",fontSize:10,color:"#718091",marginTop:5}}>{provinces.length} province{provinces.length===1?"":"s"} loaded from Spartan's registry.</span>}
+      </label>
+      <Field name="Libraries %" value={libraries} setValue={setLibraries} step="0.1"/>
+    </Grid>
+    <label style={{display:"block",marginTop:12}}>
+      <span style={label}>Books — science:value per line</span>
+      <textarea style={{...input,minHeight:130,fontFamily:"monospace"}} value={books} onChange={e=>setBooks(e.target.value)}/>
+    </label>
+    <button style={{...primary,marginTop:12}} onClick={run} disabled={loading||provinceLoading||!province}>{loading?"Loading…":"Build Science Summary"}</button>
+    {result&&<div>{result.error?<p style={{color:"#ff9b9b",fontSize:11}}>{result.error}</p>:<Results rows={Object.entries(result.summary||{}).map(function(x:any){return [x[0],x[1].bonus+"%",x[1].books+" books"]})}/>}</div>}
+  </Card>
+}
 
 export default function Calcs(){const [tab,setTab]=useState("Attack"),items=["Thievery","Attack","Declare","Science / Summary"];return <main style={shell}><Sidebar/><section style={{flex:1,padding:"30px 34px",maxWidth:1300,minWidth:0}}><div style={{fontSize:9,color:"#67f0b0",letterSpacing:".2em"}}>SPARTAN // CALCULATORS</div><h1 style={{fontSize:34,margin:"7px 0 5px"}}>Calculators</h1><p style={{fontSize:11,color:"#7e8a99"}}>Thievery, attack, declare, and science tools live here. Build Library remains the home for science investment.</p><div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:18}}>{items.map(x=><button key={x} style={tab===x?primary:ghost} onClick={()=>setTab(x)}>{x}</button>)}</div>{tab==="Thievery"&&<Thievery/>}{tab==="Attack"&&<Attack/>}{tab==="Declare"&&<Declare/>}{tab==="Science / Summary"&&<Science/>}</section></main>}
