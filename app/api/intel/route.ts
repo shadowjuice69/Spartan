@@ -108,7 +108,7 @@ export async function POST(request: Request) {
       source: 'utopiaintel',
       sourceId: fingerprint,
       pageKind: inferPageKind(sourceUrl),
-      url: sourceUrl || null,
+      url: sourceUrl || undefined,
       provinceName: account.province_name,
       province: account.province_name,
       provinceId: account.id,
