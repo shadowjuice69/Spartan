@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useMemo, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { parseBuildText, parseMilitaryRequirementText, parseScienceText, ParsedBuild, ParsedMilitaryRequirement, ParsedScience } from "@/lib/spartan/build-parser"
+import type { ParsedScience } from "@/lib/spartan/build-parser"
 import { buildPlan, type LiveCategory } from "@/lib/spartan/science-plan"
 import { NAV_COMMAND as navCommand, NAV_INTEL as navIntel } from '@/lib/spartan/nav'
 
@@ -71,94 +71,195 @@ function PersonalityRuleCard({ p }: { p: PersonalityRule }) {
 }
 
 function NewBuildForm({ races, personalities, onSaved }: { races: RaceRule[]; personalities: PersonalityRule[]; onSaved: () => void }) {
-  const [buildText, setBuildText] = useState("")
-  const [militaryText, setMilitaryText] = useState("")
-  const [scienceText, setScienceText] = useState("")
-  const [parsedBuild, setParsedBuild] = useState<ParsedBuild | null>(null)
-  const [parsedMilitary, setParsedMilitary] = useState<ParsedMilitaryRequirement | null>(null)
-  const [parsedScience, setParsedScience] = useState<ParsedScience | null>(null)
+  type BuildingEntry = { id: string; name: string; percent: string }
+  type ScienceEntryInput = { id: string; category: "economy" | "military" | "arcane"; name: string; kind: "weight" | "actual_pct"; value: string }
+  const makeId = () => String(Date.now()) + "-" + Math.random().toString(36).slice(2, 8)
+  const [name, setName] = useState("")
+  const [author, setAuthor] = useState("")
   const [race, setRace] = useState("")
   const [personality, setPersonality] = useState("")
+  const [buildings, setBuildings] = useState<BuildingEntry[]>([{ id: makeId(), name: "", percent: "" }])
+  const [military, setMilitary] = useState({ ppa: "", tpa: "", wpa: "", dspa: "", epa_ospa: "", epa_dspa: "", ospa: "", gcpa: "", notes: "" })
+  const [scienceEntries, setScienceEntries] = useState<ScienceEntryInput[]>([
+    { id: makeId(), category: "economy", name: "", kind: "weight", value: "" },
+    { id: makeId(), category: "military", name: "", kind: "weight", value: "" },
+    { id: makeId(), category: "arcane", name: "", kind: "weight", value: "" },
+  ])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  function updateBuilding(id: string, key: "name" | "percent", value: string) {
+    setBuildings((rows) => rows.map((row) => row.id === id ? { ...row, [key]: value } : row))
+  }
+  function updateScience(id: string, key: keyof ScienceEntryInput, value: string) {
+    setScienceEntries((rows) => rows.map((row) => row.id === id ? { ...row, [key]: value } as ScienceEntryInput : row))
+  }
+
   async function save() {
-    if (!parsedBuild?.name) { setError("Parse Box 1 first — a build name is required."); return }
+    if (!name.trim()) { setError("Enter a build name before saving."); return }
+    const buildingData: Record<string, number> = {}
+    for (const row of buildings) {
+      const buildingName = row.name.trim()
+      if (!buildingName) continue
+      const percent = Number(row.percent)
+      if (row.percent.trim() === "" || !Number.isFinite(percent) || percent < 0) {
+        setError("Enter a valid percentage for " + buildingName + "."); return
+      }
+      buildingData[buildingName] = percent
+    }
+
+    const science: ParsedScience = { economy: {}, military: {}, arcane: {} }
+    for (const row of scienceEntries) {
+      const scienceName = row.name.trim()
+      if (!scienceName && !row.value.trim()) continue
+      if (!scienceName || !row.value.trim()) {
+        setError("For each science entry, fill in both the science name and its value."); return
+      }
+      const value = Number(row.value)
+      if (!Number.isFinite(value) || value < 0) {
+        setError("Enter a valid value for " + scienceName + "."); return
+      }
+      science[row.category][scienceName] = row.kind === "actual_pct"
+        ? { type: "actual_pct", value }
+        : { type: "weight", value }
+    }
+
+    const militaryRequirement: Record<string, string | number> = { notes: military.notes.trim() }
+    for (const key of ["ppa", "tpa", "wpa", "dspa", "epa_ospa", "epa_dspa", "ospa", "gcpa"] as const) {
+      if (military[key].trim() !== "") {
+        const value = Number(military[key])
+        if (!Number.isFinite(value) || value < 0) {
+          setError("Enter a valid non-negative number for " + key.toUpperCase().replace("_", "/") + "."); return
+        }
+        militaryRequirement[key] = value
+      }
+    }
+
     setSaving(true); setError(null)
     try {
       const res = await fetch("/api/builds", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: parsedBuild.name, author: parsedBuild.author, race: race || null, personality: personality || null,
-          buildings: parsedBuild.buildings, science: parsedScience || { economy:{}, military:{}, arcane:{} },
-          military_requirement: parsedMilitary || {}, raw_build_text: buildText, raw_military_text: militaryText, raw_science_text: scienceText,
+          name: name.trim(),
+          author: author.trim() || null,
+          race: race || null,
+          personality: personality || null,
+          buildings: buildingData,
+          science,
+          military_requirement: militaryRequirement,
         }),
       })
-      if (!res.ok) throw new Error((await res.json()).error || "Save failed.")
+      const body = await res.json()
+      if (!res.ok) throw new Error(body?.error || "Save failed.")
       onSaved()
-    } catch (e: any) { setError(e.message) } finally { setSaving(false) }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to save build.")
+    } finally {
+      setSaving(false)
+    }
   }
+
+  const fieldLabel: any = { display: "flex", flexDirection: "column", gap: 6, fontSize: 11, color: "#b7c2cc" }
+  const fieldInput: any = { ...input, width: "100%", boxSizing: "border-box", minHeight: 36, fontSize: 13 }
+  const sectionHeading: any = { margin: "22px 0 10px", color: "#67f0b0", fontSize: 11, letterSpacing: ".1em" }
 
   return (
     <div style={{ ...card, marginBottom: 20 }}>
-      <h2 style={{ marginTop: 0 }}>Add a Build</h2>
+      <h2 style={{ marginTop: 0, marginBottom: 6 }}>Create a Build</h2>
+      <p style={{ color: "#8993a1", fontSize: 12, marginTop: 0 }}>Type each value into its own field. No special formatting or Parse buttons needed.</p>
 
-      <p style={{ fontSize:10, color:"#67f0b0", letterSpacing:".1em", marginBottom:4 }}>1 — BUILD (name + buildings)</p>
-      <textarea style={textarea} placeholder={"🏗 **orc cleric** build — set by Savage\n  Farms 7%\n  Guilds 13%\n  ..."} value={buildText} onChange={(e) => setBuildText(e.target.value)} />
-      <button style={{ ...btnGhost, marginTop: 8 }} onClick={() => setParsedBuild(parseBuildText(buildText))}>Parse</button>
-      {parsedBuild && (
-        <div style={{ fontSize: 11, marginTop: 10, color: "#b7c2cc" }}>
-          <p>Name: <b style={{ color:"#e7eef5" }}>{parsedBuild.name || "—"}</b> · By: {parsedBuild.author || "—"}</p>
-          <div style={{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:2 }}>
-            {Object.entries(parsedBuild.buildings).map(([k, v]) => <span key={k}>{k}: <b style={{color:"#d8ff54"}}>{v}%</b></span>)}
+      <h3 style={sectionHeading}>BUILD DETAILS</h3>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12 }}>
+        <label style={fieldLabel}>Build name *
+          <input style={fieldInput} value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Orc War Build" />
+        </label>
+        <label style={fieldLabel}>Build by
+          <input style={fieldInput} value={author} onChange={(e) => setAuthor(e.target.value)} placeholder="Your name" />
+        </label>
+        <label style={fieldLabel}>Race
+          <select style={fieldInput} value={race} onChange={(e) => setRace(e.target.value)}>
+            <option value="">Choose race…</option>
+            {races.map((r) => <option key={r.race} value={r.race}>{r.emoji} {r.race}</option>)}
+          </select>
+        </label>
+        <label style={fieldLabel}>Personality
+          <select style={fieldInput} value={personality} onChange={(e) => setPersonality(e.target.value)}>
+            <option value="">Choose personality…</option>
+            {personalities.map((p) => <option key={p.personality} value={p.personality}>{p.emoji} {p.personality}</option>)}
+          </select>
+        </label>
+      </div>
+
+      <h3 style={sectionHeading}>BUILDINGS</h3>
+      <p style={{ color: "#8993a1", fontSize: 11, marginTop: 0 }}>Type a building name and its percentage on each row. Add as many rows as you need.</p>
+      <div style={{ display: "grid", gap: 8 }}>
+        {buildings.map((row, index) => (
+          <div key={row.id} style={{ display: "grid", gridTemplateColumns: "minmax(130px, 2fr) minmax(100px, 1fr) auto", gap: 8, alignItems: "end" }}>
+            <label style={fieldLabel}>Building {index + 1}
+              <input style={fieldInput} value={row.name} onChange={(e) => updateBuilding(row.id, "name", e.target.value)} placeholder="e.g. Farms" />
+            </label>
+            <label style={fieldLabel}>Percent (%)
+              <input style={fieldInput} type="number" min="0" step="any" value={row.percent} onChange={(e) => updateBuilding(row.id, "percent", e.target.value)} placeholder="7" />
+            </label>
+            <button type="button" style={{ ...btnGhost, minHeight: 36 }} disabled={buildings.length === 1} onClick={() => setBuildings((rows) => rows.filter((item) => item.id !== row.id))}>Remove</button>
           </div>
-          <div style={{ display:"flex", gap:8, marginTop:8 }}>
-            <select style={select} value={race} onChange={(e) => setRace(e.target.value)}>
-              <option value="">Race…</option>
-              {races.map((r) => <option key={r.race} value={r.race}>{r.emoji} {r.race}</option>)}
-            </select>
-            <select style={select} value={personality} onChange={(e) => setPersonality(e.target.value)}>
-              <option value="">Personality…</option>
-              {personalities.map((p) => <option key={p.personality} value={p.personality}>{p.emoji} {p.personality}</option>)}
-            </select>
+        ))}
+      </div>
+      <button type="button" style={{ ...btnGhost, marginTop: 10 }} onClick={() => setBuildings((rows) => [...rows, { id: makeId(), name: "", percent: "" }])}>+ Add building</button>
+
+      <h3 style={sectionHeading}>MILITARY REQUIREMENTS</h3>
+      <p style={{ color: "#8993a1", fontSize: 11, marginTop: 0 }}>Enter only the requirements this build uses. Leave the rest blank.</p>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 12 }}>
+        {([
+          ["ppa", "PPA"], ["tpa", "TPA"], ["wpa", "WPA"], ["dspa", "DSPA"],
+          ["epa_ospa", "EPA / OSPA"], ["epa_dspa", "EPA / DSPA"], ["ospa", "OSPA"], ["gcpa", "GCPA"],
+        ] as const).map(([key, label]) => (
+          <label key={key} style={fieldLabel}>{label}
+            <input style={fieldInput} type="number" min="0" step="any" value={military[key]} onChange={(e) => setMilitary((current) => ({ ...current, [key]: e.target.value }))} placeholder="Optional" />
+          </label>
+        ))}
+      </div>
+      <label style={{ ...fieldLabel, marginTop: 12 }}>Military notes
+        <textarea style={{ ...textarea, height: 90, boxSizing: "border-box", fontSize: 12 }} value={military.notes} onChange={(e) => setMilitary((current) => ({ ...current, notes: e.target.value }))} placeholder="Any extra requirements or reminders" />
+      </label>
+
+      <h3 style={sectionHeading}>SCIENCE TARGETS &amp; WEIGHTS</h3>
+      <p style={{ color: "#8993a1", fontSize: 11, marginTop: 0 }}>Add each science separately. Choose Economy, Military, or Arcane, then enter the science name and either a priority weight (such as 4x) or a target percentage.</p>
+      <div style={{ display: "grid", gap: 8 }}>
+        {scienceEntries.map((row, index) => (
+          <div key={row.id} style={{ display: "grid", gridTemplateColumns: "minmax(115px, 1fr) minmax(120px, 1.4fr) minmax(115px, 1fr) minmax(90px, .7fr) auto", gap: 8, alignItems: "end" }}>
+            <label style={fieldLabel}>Category
+              <select style={fieldInput} value={row.category} onChange={(e) => updateScience(row.id, "category", e.target.value)}>
+                <option value="economy">Economy</option>
+                <option value="military">Military</option>
+                <option value="arcane">Arcane</option>
+              </select>
+            </label>
+            <label style={fieldLabel}>Science name
+              <input style={fieldInput} value={row.name} onChange={(e) => updateScience(row.id, "name", e.target.value)} placeholder="e.g. Alchemy" />
+            </label>
+            <label style={fieldLabel}>Value type
+              <select style={fieldInput} value={row.kind} onChange={(e) => updateScience(row.id, "kind", e.target.value)}>
+                <option value="weight">Priority weight (x)</option>
+                <option value="actual_pct">Target percent (%)</option>
+              </select>
+            </label>
+            <label style={fieldLabel}>{row.kind === "weight" ? "Weight" : "Target (%)"}
+              <input style={fieldInput} type="number" min="0" step="any" value={row.value} onChange={(e) => updateScience(row.id, "value", e.target.value)} placeholder={row.kind === "weight" ? "4" : "4.2"} />
+            </label>
+            <button type="button" style={{ ...btnGhost, minHeight: 36 }} disabled={scienceEntries.length === 1} onClick={() => setScienceEntries((rows) => rows.filter((item) => item.id !== row.id))}>Remove</button>
           </div>
-        </div>
-      )}
+        ))}
+      </div>
+      <button type="button" style={{ ...btnGhost, marginTop: 10 }} onClick={() => setScienceEntries((rows) => [...rows, { id: makeId(), category: "economy", name: "", kind: "weight", value: "" }])}>+ Add science</button>
 
-      <p style={{ fontSize:10, color:"#67f0b0", letterSpacing:".1em", margin:"18px 0 4px" }}>2 — MILITARY REQUIREMENT (ppa/tpa/wpa/dspa/epa-ospa + notes)</p>
-      <textarea style={textarea} placeholder={"Military\n\n6ppa\n3tpa\n1.5 wpa\n6 dspa\n10.5 epa/ospa\n\nKeep in mind you need 350 GCPA for drake reserves."} value={militaryText} onChange={(e) => setMilitaryText(e.target.value)} />
-      <button style={{ ...btnGhost, marginTop: 8 }} onClick={() => setParsedMilitary(parseMilitaryRequirementText(militaryText))}>Parse</button>
-      {parsedMilitary && (
-        <div style={{ fontSize: 11, marginTop: 10, color: "#b7c2cc" }}>
-          <p style={{ display:"flex", gap:14, flexWrap:"wrap" }}>
-            <span>PPA: {parsedMilitary.ppa ?? "—"}</span><span>TPA: {parsedMilitary.tpa ?? "—"}</span><span>WPA: {parsedMilitary.wpa ?? "—"}</span>
-            <span>DSPA: {parsedMilitary.dspa ?? "—"}</span><span>OSPA: {parsedMilitary.ospa ?? "—"}</span><span>EPA/DSPA: {parsedMilitary.epa_dspa ?? "—"}</span>
-            {parsedMilitary.gcpa != null && <span>GCPA: {parsedMilitary.gcpa}</span>}
-          </p>
-          {parsedMilitary.notes && <p style={{ fontStyle:"italic", color:"#8993a1" }}>{parsedMilitary.notes}</p>}
-        </div>
-      )}
-
-      <p style={{ fontSize:10, color:"#67f0b0", letterSpacing:".1em", margin:"18px 0 4px" }}>3 — SCIENCE (Economy / Military / Arcane)</p>
-      <textarea style={textarea} placeholder={"ECONOMY SCIENCE\n\n4x Alchemy\n4.2% Artisan (actual % needed)\n\nMILITARY SCIENCE\n\n5x Strategy\n...\n\nARCANE\n\n10x Crime\n..."} value={scienceText} onChange={(e) => setScienceText(e.target.value)} />
-      <button style={{ ...btnGhost, marginTop: 8 }} onClick={() => setParsedScience(parseScienceText(scienceText))}>Parse</button>
-      {parsedScience && (
-        <div style={{ fontSize: 11, marginTop: 10, display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:12, color: "#b7c2cc" }}>
-          {(["economy","military","arcane"] as const).map((cat) => (
-            <div key={cat}>
-              <p style={{ color:"#687686", textTransform:"uppercase", fontSize:9 }}>{cat}</p>
-              {Object.entries(parsedScience[cat]).map(([name, e]) => <p key={name}>{name}: <b style={{color:"#d8ff54"}}>{e.type === "weight" ? `${e.value}x` : `${e.value}%*`}</b></p>)}
-            </div>
-          ))}
-        </div>
-      )}
-
-      {error && <p style={{ color:"#ff9b9b", fontSize:11, marginTop:10 }}>{error}</p>}
-      <button style={{ ...btnPrimary, marginTop:16 }} disabled={saving} onClick={save}>{saving ? "Saving…" : "Save Build"}</button>
+      {error && <p role="alert" style={{ color: "#ff9b9b", fontSize: 12, marginTop: 14 }}>{error}</p>}
+      <div style={{ display: "flex", gap: 10, marginTop: 18, flexWrap: "wrap" }}>
+        <button type="button" style={btnPrimary} disabled={saving} onClick={save}>{saving ? "Saving build…" : "Save Build"}</button>
+      </div>
     </div>
   )
 }
-
 function BuildDetail({ id, races, personalities, onBack, onDeleted }: { id: string; races: RaceRule[]; personalities: PersonalityRule[]; onBack: () => void; onDeleted: () => void }) {
   const [build, setBuild] = useState<any>(null)
   const [error, setError] = useState("")
