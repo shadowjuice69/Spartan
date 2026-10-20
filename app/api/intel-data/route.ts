@@ -75,7 +75,7 @@ export async function GET(request: Request) {
     if (summary && section === 'intel') {
       const result = await db
         .from('spartan_intel_records')
-        .select('id,capture_id,province_id,kingdom_id,target_province_id,target_kingdom_id,captured_at,created_at,source,url,page_kind,classification_confidence,classification_reason,classification_source,intel_type,visibility,metrics,parsed_payload')
+        .select('id,capture_id,user_id,province_id,kingdom_id,target_province_id,target_kingdom_id,captured_at,created_at,source,url,page_kind,classification_confidence,classification_reason,classification_source,intel_type,visibility,metrics,parsed_payload')
         .in('page_kind', selectedKinds)
         .or(recordScope)
         .order('created_at', { ascending: false })
@@ -95,7 +95,7 @@ export async function GET(request: Request) {
     }
     if (error) throw error
 
-    const rows = data || []
+    const rows = (data || []).filter((row: any) => !(sharedSections.has(section) && row.visibility === 'own' && row.user_id !== user.id))
     const provinceIds = [...new Set(rows.map((row: any) => row.province_id).filter(Boolean))]
     const registryById = new Map<string, { name: string | null; kingdom: string | null; slot: number | null }>()
 
