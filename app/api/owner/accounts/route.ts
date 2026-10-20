@@ -2,7 +2,7 @@ import { createClient as createSupabaseAdmin } from '@supabase/supabase-js'
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 import { cookies } from 'next/headers'
-import { extractDiscordId, isOwner, resolveDashboardIdentity } from '@/lib/spartan/security'
+import { canAccessOwnerConsole, extractDiscordId, resolveDashboardIdentity } from '@/lib/spartan/security'
 
 async function getOwnerUser(request: NextRequest) {
   const cookieStore = await cookies()
@@ -16,7 +16,7 @@ async function getOwnerUser(request: NextRequest) {
   if (!user) return null
   const identity = await resolveDashboardIdentity(user.id, extractDiscordId(user))
   const discordId = identity.discordUserId
-  return isOwner(discordId) ? { user, discordId } : null
+  return canAccessOwnerConsole(discordId) ? { user, discordId } : null
 }
 
 function admin() {
