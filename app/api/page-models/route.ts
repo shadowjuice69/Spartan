@@ -118,7 +118,7 @@ async function buildCommandModel(db: any, userId: string, account: { id: string;
     grab('military', KINDS.military, '%/wol/game/council_military%', '/wol/game/council_military'),
     grab('science', KINDS.science, '%/wol/game/council_science%', '/wol/game/council_science'),
     grab('buildings', KINDS.buildings, '%/wol/game/council_internal%', '/wol/game/council_internal'),
-    latestOf(db, KINDS.kingdom, '%/wol/game/kingdom_details%', '/wol/game/kingdom_details', kingdomScope, 8),
+    latestOf(db, KINDS.kingdom, '%/wol/game/kingdom_details%', '/wol/game/kingdom_details', kingdomScope, 8).then(rows => rows || []),
     db.from('spartan_province_history')
       .select('observed_at,acres,networth,population,peons,soldiers,off_specs,def_specs,elites,thieves,wizards,generals,war_horses,offense,defense,defense_home,build_efficiency,wages')
       .eq('user_id', userId).order('observed_at', { ascending: true }).limit(240),
