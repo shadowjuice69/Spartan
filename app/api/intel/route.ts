@@ -131,8 +131,9 @@ export async function POST(request: Request) {
       },
     }
 
-    const knowledge = await resolveWikiKnowledge(supabase, { provinceId: account.id })
-    const stewardship = runCaptureStewards(capture, knowledge)
+    // Register the receipt in the vault before running any downstream stewards.
+    // This preserves the original UtopiaIntel payload even if validation or a later
+    // processing step fails, and gives us a reliable receipt record to verify.
     const rawText = capture.rawText
     const rawPayload = capture.rawPayload
     const parsedPayload = capture.parsedPayload
@@ -164,6 +165,15 @@ export async function POST(request: Request) {
 
     if (vaultError) throw new Error(vaultError.message)
 
+    console.info('[UTOPIAINTEL] Receipt stored in spartan_capture_vault', {
+      captureId: capture.captureId,
+      province: account.province_name,
+      pageKind: capture.pageKind,
+      contentHash,
+    })
+
+    const knowledge = await resolveWikiKnowledge(supabase, { provinceId: account.id })
+    const stewardship = runCaptureStewards(capture, knowledge)
     const failed = stewardship.results.filter((result) => !result.ok && result.severity !== 'medium')
     if (failed.length) {
       const { error } = await supabase.from('spartan_data_quarantine').insert({
