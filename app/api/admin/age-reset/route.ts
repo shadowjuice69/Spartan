@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
-import { isOwner } from '@/lib/spartan/security'
+import { canAccessOwnerConsole } from '@/lib/spartan/security'
 
 export const dynamic = 'force-dynamic'
 
@@ -11,7 +11,7 @@ async function owner() {
   const db = createServiceClient()
   const { data: account } = await db.from('spartan_accounts').select('discord_user_id,role').eq('auth_user_id', user.id).maybeSingle()
   const discordId = account?.discord_user_id ? String(account.discord_user_id) : null
-  return isOwner(discordId) || String(account?.role ?? '') === 'owner' ? { db } : null
+  return canAccessOwnerConsole(discordId) ? { db } : null
 }
 
 export async function GET() {
