@@ -6,7 +6,9 @@ export const SPARTAN_TRUSTED_ADMIN_ID = '262745631829786624' // Riven — unrest
 
 export function isOwner(discordId: string | null | undefined) { return String(discordId ?? '') === SPARTAN_OWNER_ID }
 export function isTrustedAdmin(discordId: string | null | undefined) { return String(discordId ?? '') === SPARTAN_TRUSTED_ADMIN_ID }
-export function isProtectedIdentity(discordId: string | null | undefined) { return isOwner(discordId) || isTrustedAdmin(discordId) }
+// Owner Console access is shared with Riven, while primary-owner identity remains distinct.
+export function canAccessOwnerConsole(discordId: string | null | undefined) { return isOwner(discordId) || isTrustedAdmin(discordId) }
+export function isProtectedIdentity(discordId: string | null | undefined) { return canAccessOwnerConsole(discordId) }
 
 export function extractDiscordId(user: any): string | null {
   const candidates = [user?.user_metadata?.discord_user_id, user?.app_metadata?.discord_user_id, user?.user_metadata?.provider_id, user?.user_metadata?.sub, user?.identities?.find((identity: any) => identity.provider === 'discord')?.identity_data?.provider_id, user?.identities?.find((identity: any) => identity.provider === 'discord')?.identity_data?.sub]
