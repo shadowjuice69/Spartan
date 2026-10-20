@@ -105,10 +105,10 @@ async function latestOf(db: any, kinds: string[], like: string, path: string, sc
   return ((r.data || []) as Rec[]).filter(x => pathOf(x.url) === path)
 }
 
-async function buildCommandModel(db: any, userId: string, account: { province_name: string; province_location: string }, scope: string) {
+async function buildCommandModel(db: any, userId: string, account: { id: string; province_name: string; province_location: string }, ownScope: string, kingdomScope: string) {
   const unavailable: string[] = []
   const grab = async (label: string, kinds: string[], like: string, path: string, limit = 3) => {
-    const rows = await latestOf(db, kinds, like, path, scope, limit)
+    const rows = await latestOf(db, kinds, like, path, ownScope, limit)
     if (rows === null) { unavailable.push(label); return [] as Rec[] }
     return rows
   }
@@ -118,7 +118,7 @@ async function buildCommandModel(db: any, userId: string, account: { province_na
     grab('military', KINDS.military, '%/wol/game/council_military%', '/wol/game/council_military'),
     grab('science', KINDS.science, '%/wol/game/council_science%', '/wol/game/council_science'),
     grab('buildings', KINDS.buildings, '%/wol/game/council_internal%', '/wol/game/council_internal'),
-    grab('kingdom', KINDS.kingdom, '%/wol/game/kingdom_details%', '/wol/game/kingdom_details', 8),
+    latestOf(db, KINDS.kingdom, '%/wol/game/kingdom_details%', '/wol/game/kingdom_details', kingdomScope, 8),
     db.from('spartan_province_history')
       .select('observed_at,acres,networth,population,peons,soldiers,off_specs,def_specs,elites,thieves,wizards,generals,war_horses,offense,defense,defense_home,build_efficiency,wages')
       .eq('user_id', userId).order('observed_at', { ascending: true }).limit(240),
@@ -191,16 +191,20 @@ export async function GET(request: Request) {
     if (hit && Date.now() - hit.at < TTL_MS) return NextResponse.json(hit.body)
 
     const db = createServiceClient()
-    const accountResult = await db.from('spartan_accounts').select('province_name,province_location').eq('auth_user_id', user.id).maybeSingle()
+    const accountResult = await db.from('spartan_accounts').select('id,auth_user_id,province_name,province_location').eq('auth_user_id', user.id).maybeSingle()
     if (accountResult.error) fail(accountResult.error)
     const account = accountResult.data
     if (!account?.province_name || !account?.province_location) {
       return NextResponse.json({ error: 'Your Spartan account identity is not linked.' }, { status: 403 })
     }
-    const scope = `kingdom_id.eq.${account.province_location},kingdom_id.is.null`
+    const kingdomScope = `kingdom_id.eq.${account.province_location},kingdom_id.is.null`
+    const ownScope = `province_id.eq.${account.id},user_id.eq.${account.id},user_id.eq.${user.id}`
+    // Personal pages are account-scoped. Only explicitly shared pages read the kingdom-wide feed.
+    const sharedPages = new Set(['kingdom', 'intel', 'news'])
+    const scope = sharedPages.has(page) ? kingdomScope : ownScope
 
     if (page === 'command') {
-      const commandBody = await buildCommandModel(db, user.id, { province_name: account.province_name, province_location: account.province_location }, scope)
+      const commandBody = await buildCommandModel(db, user.id, { id: account.id, province_name: account.province_name, province_location: account.province_location }, ownScope, kingdomScope)
       CACHE.set(cacheKey, { at: Date.now(), body: commandBody })
       return NextResponse.json(commandBody)
     }
@@ -424,7 +428,8 @@ export async function GET(request: Request) {
       events.sort((a: any, b: any) => Date.parse(b.at) - Date.parse(a.at))
       const militaryRec = allByPath(records, '/wol/game/council_military')[0] || null
       let kingdom: any = null
-      for (const r of allByPath(records, '/wol/game/kingdom_details')) {
+      const sharedKingdomRows = await db.from('spartan_intel_records').select(COLUMNS).eq('page_kind', 'kingdom').or(kingdomScope).order('created_at', { ascending: false }).limit(20)
+      for (const r of ((sharedKingdomRows.data || []) as Rec[]).filter(x => pathOf(x.url) === '/wol/game/kingdom_details')) {
         const d = parseKingdomDetails(r.raw_text || '')
         if (d.code === account.province_location) { kingdom = { ...d, capturedAt: when(r) }; break }
       }
