@@ -57,7 +57,7 @@ export async function GET(request: Request) {
     const db = adminClient()
     const { data: account, error: accountError } = await db
       .from('spartan_accounts')
-      .select('province_name,province_location')
+      .select('id,province_name,province_location')
       .eq('auth_user_id', user.id)
       .maybeSingle()
     if (accountError) throw accountError
@@ -71,7 +71,7 @@ export async function GET(request: Request) {
         .from('spartan_intel_records')
         .select('id,capture_id,province_id,kingdom_id,target_province_id,target_kingdom_id,captured_at,created_at,source,url,page_kind,classification_confidence,classification_reason,classification_source,intel_type,visibility,metrics,parsed_payload')
         .in('page_kind', selectedKinds)
-        .or(`kingdom_id.eq.${account.province_location},kingdom_id.is.null`)
+        .or(`province_id.eq.${account.id},user_id.eq.${account.id}`)
         .order('created_at', { ascending: false })
         .limit(120)
       data = result.data as any[] | null
@@ -81,7 +81,7 @@ export async function GET(request: Request) {
         .from('spartan_intel_records')
         .select('id,capture_id,source_vault_id,user_id,province_id,kingdom_id,captured_at,created_at,updated_at,source,source_id,url,page_kind,classification_confidence,classification_reason,age,game_year,game_tick,retention_class,expires_at,raw_text,classification_source,parsed_payload,raw_payload,target_province_id,target_kingdom_id,intel_type,visibility,metrics')
         .in('page_kind', selectedKinds)
-        .or(`kingdom_id.eq.${account.province_location},kingdom_id.is.null`)
+        .or(`province_id.eq.${account.id},user_id.eq.${account.id}`)
         .order('created_at', { ascending: false })
         .limit(500)
       data = result.data as any[] | null
