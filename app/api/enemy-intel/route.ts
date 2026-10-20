@@ -33,14 +33,15 @@ export async function GET(request: Request) {
     const { data, error } = await db
       .from('spartan_intel_records')
       .select(summary
-        ? 'id,capture_id,province_id,kingdom_id,target_province_id,target_kingdom_id,captured_at,created_at,source,url,page_kind,classification_source,classification_confidence,intel_type,visibility,metrics'
-        : 'id,capture_id,province_id,kingdom_id,target_province_id,target_kingdom_id,captured_at,created_at,source,url,page_kind,classification_source,classification_confidence,parsed_payload,raw_payload,intel_type,visibility,metrics')
+        ? 'id,capture_id,user_id,province_id,kingdom_id,target_province_id,target_kingdom_id,captured_at,created_at,source,url,page_kind,classification_source,classification_confidence,intel_type,visibility,metrics'
+        : 'id,capture_id,user_id,province_id,kingdom_id,target_province_id,target_kingdom_id,captured_at,created_at,source,url,page_kind,classification_source,classification_confidence,parsed_payload,raw_payload,intel_type,visibility,metrics')
       .order('captured_at', { ascending: false })
       .limit(1000)
     if (error) throw error
 
     const ownKingdom = String(account.province_location).trim().toLowerCase()
     const enemyRows = (data || []).filter((row: any) => {
+      if (row.visibility === 'own' && row.user_id !== user.id) return false
       const targetKingdom = String(row.target_kingdom_id ?? '').trim().toLowerCase()
       return row.visibility === 'enemy' || (targetKingdom && targetKingdom !== ownKingdom)
     }).map((row: any) => ({
