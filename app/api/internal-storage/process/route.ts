@@ -23,13 +23,15 @@ async function authorized(request: Request) {
 function jsonObject(value: unknown) { return value && typeof value === 'object' ? value : {} }
 function numberValue(value: unknown) { const n = Number(value); return Number.isFinite(n) ? Math.trunc(n) : null }
 
-async function stageVault(db: any, limit: number) {
+async function stageVault(db: any, limit: number, captureId?: string) {
   // Discord-bot captures have their own Spartan processing queue. Keep them in
   // the capture vault until that queue has projected them; the Storage Steward
   // must not race the bot processor and delete its source capture first.
-  const { data: vaultRows, error } = await db.from('spartan_capture_vault')
+  let vaultQuery = db.from('spartan_capture_vault')
     .select('*')
     .neq('source', 'discord-bot')
+  if (captureId) vaultQuery = vaultQuery.eq('capture_id', captureId)
+  const { data: vaultRows, error } = await vaultQuery
     .order('created_at', { ascending: true })
     .limit(limit)
   if (error) throw new Error(error.message)
@@ -91,12 +93,15 @@ async function processOne(db: any, item: any) {
 export async function POST(request: Request) {
   const auth = await authorized(request)
   if (!auth.ok) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-  const body = await request.json().catch(() => ({})) as { limit?: number }
+  const body = await request.json().catch(() => ({})) as { limit?: number; captureId?: string }
   const limit = Math.min(Math.max(numberValue(body.limit) ?? 10, 1), 25)
+  const captureId = typeof body.captureId === 'string' ? body.captureId.trim() : ''
   const db = auth.db
   let staged = 0
-  try { staged = await stageVault(db, limit) } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 }) }
-  const { data: items, error } = await db.from('spartan_internal_storage').select('*').eq('processing_status', 'stored').order('created_at', { ascending: true }).limit(limit)
+  try { staged = await stageVault(db, limit, captureId || undefined) } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 }) }
+  let itemsQuery = db.from('spartan_internal_storage').select('*').eq('processing_status', 'stored')
+  if (captureId) itemsQuery = itemsQuery.eq('capture_id', captureId)
+  const { data: items, error } = await itemsQuery.order('created_at', { ascending: true }).limit(limit)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   const results: any[] = []; const failures: any[] = []
   for (const item of items ?? []) {
