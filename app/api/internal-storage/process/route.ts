@@ -35,8 +35,16 @@ async function stageVault(db: any, limit: number, captureId?: string) {
     .order('created_at', { ascending: true })
     .limit(limit)
   if (error) throw new Error(error.message)
+  const candidateIds = (vaultRows ?? []).map((vault: any) => vault.capture_id).filter(Boolean)
+  const quarantinedIds = new Set<string>()
+  if (candidateIds.length) {
+    const quarantined = await db.from('spartan_data_quarantine').select('capture_id').in('capture_id', candidateIds)
+    if (quarantined.error) throw new Error(quarantined.error.message)
+    for (const row of quarantined.data ?? []) if (row.capture_id) quarantinedIds.add(String(row.capture_id))
+  }
   let staged = 0
   for (const vault of vaultRows ?? []) {
+    if (vault.capture_id && quarantinedIds.has(String(vault.capture_id))) continue
     const captureId = vault.capture_id || `vault-${vault.id}`
     const result = await db.from('spartan_internal_storage').upsert({
       capture_id: captureId, source_vault_id: vault.id, user_id: vault.user_id, province_id: vault.province_id, kingdom_id: vault.kingdom_id,
