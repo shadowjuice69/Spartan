@@ -285,7 +285,9 @@ export async function POST(request: Request) {
                 'Content-Type': 'application/json',
                 'x-spartan-steward-key': stewardKey,
               },
-              body: JSON.stringify({ limit: 1, captureId: capture.captureId }),
+              // Drain the accepted-capture queue so this run also catches up any
+              // earlier captures that were saved but never routed into Intel records.
+              body: JSON.stringify({ limit: 25 }),
               cache: 'no-store',
             })
             if (!processResponse.ok) {
