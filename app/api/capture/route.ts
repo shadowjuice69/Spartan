@@ -272,6 +272,42 @@ export async function POST(request: Request) {
       })
       if (stewardError) return NextResponse.json({ error: stewardError.message }, { status: 500 })
 
+      // Accepted captures must be routed into the durable Intel feed immediately.
+      // The capture vault is the safety copy; without this handoff, pages only see
+      // the vault receipt and never see the new intel record.
+      if (captureSteward.decision === 'accept' && typeof capture.captureId === 'string' && capture.captureId.trim()) {
+        const stewardKey = process.env.SPARTAN_STEWARD_KEY?.trim()
+        if (stewardKey) {
+          try {
+            const processResponse = await fetch(new URL('/api/internal-storage/process', request.url), {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'x-spartan-steward-key': stewardKey,
+              },
+              body: JSON.stringify({ limit: 1, captureId: capture.captureId }),
+              cache: 'no-store',
+            })
+            if (!processResponse.ok) {
+              console.error('[SPARTAN CAPTURE] Automatic storage processing failed', {
+                captureId: capture.captureId,
+                status: processResponse.status,
+                detail: (await processResponse.text()).slice(0, 500),
+              })
+            }
+          } catch (processingError) {
+            console.error('[SPARTAN CAPTURE] Automatic storage processing request failed', {
+              captureId: capture.captureId,
+              error: processingError instanceof Error ? processingError.message : String(processingError),
+            })
+          }
+        } else {
+          console.error('[SPARTAN CAPTURE] Automatic storage processing skipped: SPARTAN_STEWARD_KEY is missing', {
+            captureId: capture.captureId,
+          })
+        }
+      }
+
       if (captureSteward.decision === 'quarantine') return NextResponse.json({ ok: true, captured: true, storedInVault: true, stewardDecision: 'quarantine', historyWritten: false }, { status: 202 })
 
       if (['throne', 'throne-room', 'province', 'overview', 'state'].includes(String(capture.pageKind ?? '').toLowerCase())) {
