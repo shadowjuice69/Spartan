@@ -574,46 +574,81 @@ function BuildInstructions() {
 
       <div style={{ marginTop:20, paddingTop:14, borderTop:"1px solid rgba(255,255,255,.06)" }}>
         <div style={{ fontSize:9, color:"#d8ff54", letterSpacing:".12em" }}>HOW TO MAKE A BUILD</div>
-        <h3 style={{ margin:"7px 0 6px", fontSize:18 }}>Create a Build in Spartan</h3>
-        <p style={muted}>A Spartan build is a complete province plan: <b>race + personality, buildings, military requirements, and science priorities</b>. The New Build form is split into three boxes so Spartan can parse each part and show you exactly what it understood before you save it.</p>
-        <h3 style={sectionTitle}>1 — CHOOSE RACE &amp; PERSONALITY</h3>
-        <p style={muted}>Start by deciding which race and personality the build is for. After Spartan parses Box 1, select the matching <b>Race</b> and <b>Personality</b> from the menus. These are saved with the build and the applicable rules are pinned to the build so you can review what the build was designed around.</p>
-        <h3 style={sectionTitle}>2 — WRITE THE BUILDING PLAN</h3>
-        <p style={muted}>In <b>1 — BUILD</b>, enter the build name and building percentages. You can paste the build in the same style you normally use.</p>
-        <div style={{ ...card, marginTop:8, background:"rgba(255,255,255,.02)", fontFamily:"monospace", fontSize:10, color:"#b7c2cc", whiteSpace:"pre-wrap" }}>🏗 **orc cleric** build — set by Savage\n  Farms 7%\n  Guilds 13%\n  ...</div>
-        <p style={muted}>Press <b>Parse</b>. Check the preview for the build name, author, and every building percentage. If Spartan did not understand something correctly, fix the text and parse it again before moving on.</p>
-        <h3 style={sectionTitle}>3 — SET THE MILITARY REQUIREMENT</h3>
-        <p style={muted}>In <b>2 — MILITARY REQUIREMENT</b>, enter the minimum military requirements the build is meant to maintain. Spartan reads the requirement values and keeps additional notes with the build.</p>
-        <div style={{ ...card, marginTop:8, background:"rgba(255,255,255,.02)", fontFamily:"monospace", fontSize:10, color:"#b7c2cc", whiteSpace:"pre-wrap" }}>Military\n\n6ppa\n3tpa\n1.5 wpa\n6 dspa\n10.5 epa/ospa\n\nKeep in mind you need 350 GCPA for drake reserves.</div>
-        <p style={muted}>Review the parsed <b>PPA, TPA, WPA, DSPA, OSPA, EPA/DSPA, GCPA</b> values and the notes. The military section describes the requirements of the build; it does not train troops or change your province.</p>
-        <h3 style={sectionTitle}>4 — SET THE SCIENCE PRIORITIES</h3>
-        <p style={muted}>In <b>3 — SCIENCE</b>, enter the sciences and their priorities. You can use either a weight such as <b>4x</b> or an actual percentage such as <b>4.2%</b>, depending on what the build specifies. Keep the three categories separated as <b>Economy</b>, <b>Military</b>, and <b>Arcane</b>.</p>
-        <div style={{ ...card, marginTop:8, background:"rgba(255,255,255,.02)", fontFamily:"monospace", fontSize:10, color:"#b7c2cc", whiteSpace:"pre-wrap" }}>ECONOMY SCIENCE\n\n4x Alchemy\n4.2% Artisan (actual % needed)\n\nMILITARY SCIENCE\n\n5x Strategy\n...\n\nARCANE\n\n10x Crime\n...</div>
-        <p style={muted}><b>Important:</b> a science weight is a priority, not a book count. Spartan uses the saved priorities to calculate the Science Plan target when you view the finished build.</p>
-        <h3 style={sectionTitle}>5 — PARSE &amp; CHECK EVERYTHING</h3>
-        <p style={muted}>Do not save blindly. Parse each box and inspect the preview. Make sure the name, buildings, military numbers, science entries, race, and personality all match the build you intended. This is the best point to catch a typo or a line Spartan did not understand.</p>
-        <h3 style={sectionTitle}>6 — SAVE THE BUILD</h3>
-        <p style={muted}>Once the parsed information looks correct, select the race and personality and press <b>Save Build</b>. Spartan stores the parsed build data along with the original text, so the build can be opened and reviewed later.</p>
-        <h3 style={sectionTitle}>7 — OPEN THE SAVED BUILD &amp; VERIFY</h3>
-        <p style={muted}>Open the build from the Library after saving. Verify the <b>RACE &amp; PERSONALITY</b>, <b>BUILDINGS</b>, <b>MILITARY REQUIREMENT</b>, and <b>SCIENCE PLAN</b> sections. If the build is tied to a race/personality and the rules change, Spartan can resync the build to the latest rules.</p>
-        <h3 style={sectionTitle}>8 — USE THE SCIENCE PLAN</h3>
-        <p style={muted}>Once the build is saved, the Science Plan turns its science priorities into targets. Compare <b>NOW</b> against <b>TARGET</b> and use <b>MOVE</b> as your guide. A positive number means invest more books; a negative number means you are already over that target. Spartan does not move books for you — actual science investment is done manually in Utopia.</p>
+        <h3 style={{ margin:"7px 0 6px", fontSize:18 }}>Create a Build with the New Form</h3>
+        <p style={muted}>
+          Build creation now uses a structured form. Enter each value directly into its own field—there are no text boxes to parse and no Parse buttons.
+          A saved build contains its race and personality, building percentages, optional military requirements, and science targets or priorities.
+        </p>
+
+        <h3 style={sectionTitle}>1 — BUILD DETAILS</h3>
+        <p style={muted}>
+          Enter a clear <b>Build name</b>. Add <b>Build by</b> if you want to record the author.
+          Choose the build's <b>Race</b> and <b>Personality</b> from the dropdown menus. Check these carefully because they identify which combination the plan is designed for.
+        </p>
+
+        <h3 style={sectionTitle}>2 — ENTER BUILDING PERCENTAGES</h3>
+        <p style={muted}>
+          Under <b>BUILDINGS</b>, enter one building name and its percentage per row. Use <b>+ Add building</b> for every additional building.
+          Use <b>Remove</b> to delete an unused or mistaken row. Enter the numeric percentage only in the Percent field; the form handles the percent sign for you.
+        </p>
+        <div style={{ ...card, marginTop:8, background:"rgba(255,255,255,.02)", fontFamily:"monospace", fontSize:10, color:"#b7c2cc", whiteSpace:"pre-wrap" }}>Building: Farms     Percent: 7
+Building: Guilds     Percent: 13
+Building: Towers     Percent: 10</div>
+        <p style={muted}>Enter the values from your intended build accurately. The form does not require a particular building list; add the rows that your build uses.</p>
+
+        <h3 style={sectionTitle}>3 — ENTER MILITARY REQUIREMENTS</h3>
+        <p style={muted}>
+          Fill in only the requirements the build uses: <b>PPA, TPA, WPA, DSPA, EPA / OSPA, EPA / DSPA, OSPA,</b> and/or <b>GCPA</b>.
+          Leave fields blank when the build has no requirement for them. Use <b>Military notes</b> for extra instructions or reminders, such as reserve requirements.
+          These are planning requirements only—saving a build does not train troops or change your province.
+        </p>
+
+        <h3 style={sectionTitle}>4 — ADD SCIENCE TARGETS &amp; WEIGHTS</h3>
+        <p style={muted}>
+          Add each science on its own row. Choose its category (<b>Economy, Military,</b> or <b>Arcane</b>), type the science name, then choose the value type.
+          Use <b>Priority weight (x)</b> when the build gives a relative priority, or <b>Target percent (%)</b> when it specifies a fixed percentage.
+          Enter the number in the value field without typing the x or % symbol.
+        </p>
+        <div style={{ ...card, marginTop:8, background:"rgba(255,255,255,.02)", fontFamily:"monospace", fontSize:10, color:"#b7c2cc", whiteSpace:"pre-wrap" }}>Category: Economy | Science: Alchemy | Type: Priority weight (x) | Value: 4
+Category: Economy | Science: Artisan | Type: Target percent (%) | Value: 4.2
+Category: Military | Science: Strategy | Type: Priority weight (x) | Value: 5</div>
+        <p style={muted}>
+          Use <b>+ Add science</b> to add rows and <b>Remove</b> to remove rows. Make sure each used row has both a science name and a value.
+          A weight is a priority, not a book count. A target percentage is a fixed percentage. Keep each science in the category that the build specifies.
+        </p>
+
+        <h3 style={sectionTitle}>5 — REVIEW AND SAVE</h3>
+        <p style={muted}>
+          Before saving, review every field directly in the form. Confirm the build name, race, personality, building percentages, military requirements and notes, and each science's category, name, value type, and value.
+          Correct mistakes before pressing <b>Save Build</b>. The form validates the entered values and reports an error if required information is missing or invalid.
+        </p>
+        <p style={muted}>
+          When saving finishes successfully, open the saved build from the Library and verify its <b>RACE &amp; PERSONALITY</b>, <b>BUILDINGS</b>,
+          <b> MILITARY REQUIREMENT</b>, and <b>SCIENCE PLAN</b> sections. If anything does not match the intended plan, edit or recreate the build with the corrected values.
+        </p>
+
+        <h3 style={sectionTitle}>6 — USE THE SCIENCE PLAN</h3>
+        <p style={muted}>
+          The saved science priorities and fixed-percentage targets feed the Science Plan. Compare <b>NOW</b> with <b>TARGET</b> and use <b>MOVE</b> as information for your next investments.
+          A positive number means you are below target; a negative number means the current investment is over target. Spartan does not move or invest books for you—you make actual science investments in Utopia.
+        </p>
+
         <h3 style={sectionTitle}>BEFORE YOU SAVE — CHECKLIST</h3>
         <div style={{ ...card, marginTop:8, background:"rgba(255,255,255,.02)" }}>
-          <p style={{ margin:"7px 0", fontSize:11, color:"#b7c2cc" }}>01 — Build has a clear name.</p>
-          <p style={{ margin:"7px 0", fontSize:11, color:"#b7c2cc" }}>02 — Race and personality are the intended combination.</p>
-          <p style={{ margin:"7px 0", fontSize:11, color:"#b7c2cc" }}>03 — Building percentages match the build you meant to enter.</p>
-          <p style={{ margin:"7px 0", fontSize:11, color:"#b7c2cc" }}>04 — Military requirements are correct: PPA / TPA / WPA / DSPA / OSPA / EPA-DSPA / GCPA where applicable.</p>
-          <p style={{ margin:"7px 0", fontSize:11, color:"#b7c2cc" }}>05 — Important military notes are present.</p>
-          <p style={{ margin:"7px 0", fontSize:11, color:"#b7c2cc" }}>06 — Science names and categories are correct.</p>
-          <p style={{ margin:"7px 0", fontSize:11, color:"#b7c2cc" }}>07 — Science weights are priorities, not book counts.</p>
-          <p style={{ margin:"7px 0", fontSize:11, color:"#b7c2cc" }}>08 — Any actual-percentage science entries are entered as percentages.</p>
-          <p style={{ margin:"7px 0", fontSize:11, color:"#b7c2cc" }}>09 — Every Parse preview matches what you intended.</p>
-          <p style={{ margin:"7px 0", fontSize:11, color:"#b7c2cc" }}>10 — You opened the saved build and checked it after saving.</p>
+          <p style={{ margin:"7px 0", fontSize:11, color:"#b7c2cc" }}>01 — Build name is clear and correct.</p>
+          <p style={{ margin:"7px 0", fontSize:11, color:"#b7c2cc" }}>02 — Race and personality match the intended build.</p>
+          <p style={{ margin:"7px 0", fontSize:11, color:"#b7c2cc" }}>03 — Every building name and percentage is correct.</p>
+          <p style={{ margin:"7px 0", fontSize:11, color:"#b7c2cc" }}>04 — Only applicable military requirements are filled in, with useful notes included.</p>
+          <p style={{ margin:"7px 0", fontSize:11, color:"#b7c2cc" }}>05 — Each science has the correct category and name.</p>
+          <p style={{ margin:"7px 0", fontSize:11, color:"#b7c2cc" }}>06 — Priority weight versus target percentage is selected correctly for every science.</p>
+          <p style={{ margin:"7px 0", fontSize:11, color:"#b7c2cc" }}>07 — Every science value is correct and non-negative.</p>
+          <p style={{ margin:"7px 0", fontSize:11, color:"#b7c2cc" }}>08 — The saved build opens and its sections match what you entered.</p>
+          <p style={{ margin:"7px 0", fontSize:11, color:"#b7c2cc" }}>09 — The Science Plan reflects the intended priorities and targets.</p>
         </div>
         <div style={{ marginTop:14, padding:12, borderRadius:8, border:"1px solid rgba(216,255,84,.16)", background:"rgba(216,255,84,.035)" }}>
           <div style={{ fontSize:10, color:"#d8ff54", letterSpacing:".08em", fontWeight:800 }}>THE SIMPLE VERSION</div>
-          <p style={{ ...muted, margin:"6px 0 0" }}><b>Choose → Enter → Parse → Check → Save → Verify → Plan.</b><br />Build the plan in plain text, let Spartan parse it, confirm Spartan understood it, then save it. The saved build becomes the reference for the Library and Science Plan.</p>
+          <p style={{ ...muted, margin:"6px 0 0" }}><b>Choose → Enter fields → Review → Save → Verify → Plan.</b><br />
+            No pasted build text and no parsing step are needed. Enter the structured values, save the build, then confirm it in the Library before relying on its Science Plan.</p>
         </div>
       </div>
     </div>
