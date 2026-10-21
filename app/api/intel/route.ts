@@ -213,6 +213,42 @@ export async function POST(request: Request) {
     })
     if (stewardError) throw new Error(stewardError.message)
 
+    // Accepted UtopiaIntel captures must be projected from the receipt vault into
+    // spartan_intel_records immediately; otherwise they can remain invisible to
+    // the site's page models until a separate storage cycle happens.
+    if (stewardship.decision === 'accept' && process.env.SPARTAN_STEWARD_KEY?.trim()) {
+      try {
+        const processUrl = new URL('/api/internal-storage/process', request.url)
+        const processed = await fetch(processUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-spartan-steward-key': process.env.SPARTAN_STEWARD_KEY.trim(),
+          },
+          body: JSON.stringify({ captureId: capture.captureId, limit: 1 }),
+          cache: 'no-store',
+        })
+        const result = await processed.json().catch(() => ({}))
+        if (!processed.ok || !result?.ok || Number(result?.processed ?? 0) !== 1) {
+          console.error('[UTOPIAINTEL] Accepted capture was saved, but site projection did not complete', {
+            captureId: capture.captureId,
+            status: processed.status,
+            result,
+          })
+        } else {
+          console.info('[UTOPIAINTEL] Accepted capture parsed and projected into site records', {
+            captureId: capture.captureId,
+            pageKind: result.results?.[0]?.pageKind ?? capture.pageKind,
+          })
+        }
+      } catch (processingError) {
+        console.error('[UTOPIAINTEL] Accepted capture remains in the vault; automatic projection failed', {
+          captureId: capture.captureId,
+          error: processingError instanceof Error ? processingError.message : String(processingError),
+        })
+      }
+    }
+
     return response({
       success: true,
       captured: true,
