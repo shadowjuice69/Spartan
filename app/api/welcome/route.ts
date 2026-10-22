@@ -57,7 +57,7 @@ function parseLive(raw: unknown, simple?: unknown) {
 }
 async function context() {
   const auth = await createClient(); const { data: { user } } = await auth.auth.getUser(); if (!user) throw new Error('Unauthorized')
-  const supabase = db(); const { data: account, error: ae } = await supabase.from('spartan_accounts').select('screen_name,province_name,province_location,discord_user_id,last_login_at,previous_login_at').eq('auth_user_id', user.id).maybeSingle(); if (ae) throw ae; if (!account) throw new Error('Spartan account identity not found.')
+  const supabase = db(); const { data: account, error: ae } = await supabase.from('spartan_accounts').select('id,screen_name,province_name,province_location,discord_user_id,last_login_at,previous_login_at').eq('auth_user_id', user.id).maybeSingle(); if (ae) throw ae; if (!account) throw new Error('Spartan account identity not found.')
   let { data: registry, error: re } = await supabase.from('spartan_province_registry').select('province_id,province_name,kingdom_code,user_id,updated_at').eq('province_name', account.province_name).eq('kingdom_code', account.province_location).order('updated_at', { ascending: false }).limit(1).maybeSingle(); if (re) throw re
   if (!registry?.province_id) { const r = await supabase.from('spartan_province_registry').select('province_id,province_name,kingdom_code,user_id,updated_at').ilike('province_name', account.province_name).eq('kingdom_code', account.province_location).order('updated_at', { ascending: false }).limit(1).maybeSingle(); if (r.error) throw r.error; registry = r.data }
   if (!registry?.province_id) throw new Error('Spartan province registry link is missing.')
@@ -86,9 +86,9 @@ export async function GET(request: Request) {
       const sinceMs = Math.min(Math.max(Number.isFinite(asked) ? asked : nowMs - 3_600_000, nowMs - 24 * 3_600_000), nowMs - 60_000)
       const { supabase, account, registry } = await context()
       const [{ data: history, error: he }, { data: intel, error: ie }, { data: events, error: ee }] = await Promise.all([
-        supabase.from('spartan_province_history').select('observed_at,acres,networth,population,soldiers,off_specs,def_specs,elites,thieves,wizards,offense,defense,mana,stealth').eq('province_id', registry.province_id).order('observed_at', { ascending: false }).limit(300),
-        supabase.from('spartan_intel_records').select('captured_at,raw_payload').eq('province_id', registry.province_id).eq('page_kind', 'throne').order('captured_at', { ascending: false }).limit(5),
-        supabase.from('spartan_event_history').select('occurred_at,troops_lost,thieves_lost,wizards_lost').eq('province_id', registry.province_id).gte('occurred_at', new Date(sinceMs).toISOString()).order('occurred_at', { ascending: false }).limit(200),
+        supabase.from('spartan_province_history').select('observed_at,acres,networth,population,soldiers,off_specs,def_specs,elites,thieves,wizards,offense,defense,mana,stealth').eq('province_id', account.id).order('observed_at', { ascending: false }).limit(300),
+        supabase.from('spartan_intel_records').select('captured_at,raw_payload').eq('province_id', account.id).eq('page_kind', 'throne').order('captured_at', { ascending: false }).limit(5),
+        supabase.from('spartan_event_history').select('occurred_at,troops_lost,thieves_lost,wizards_lost').eq('province_id', account.id).gte('occurred_at', new Date(sinceMs).toISOString()).order('occurred_at', { ascending: false }).limit(200),
       ])
       if (he) throw he
       if (ie) throw ie
