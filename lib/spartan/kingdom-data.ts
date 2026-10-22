@@ -104,12 +104,26 @@ function parseRowsFromTables(rawPayload: any) {
 function parseRowsFromText(text: string) {
   const rows: KingdomProvince[] = []
   const lines = text.split(/\r?\n/)
-  for (const line of lines) {
-    const trimmed = line.trim()
-    const m = trimmed.match(/^(\d{1,2})\s+.*?\b(Human|Undead|Elf|Orc|Halfling|Dwarf|Faery|Avian|Gnome|Dark Elf)\b.*$/i)
-    if (!m) continue
-    const slot = Number(m[1])
-    if (slot < 1 || slot > 25) continue
+  const headerIndexLine = lines.findIndex(line => /slot/i.test(line) && /province/i.test(line) && /race/i.test(line) && /land/i.test(line))
+  if (headerIndexLine < 0) return rows
+  const headers = lines[headerIndexLine].split(/\t+/).map(clean)
+  const indexes = {
+    slot: headerIndex(headers, ['slot', '#']),
+    name: headerIndex(headers, ['name', 'province name', 'province']),
+    race: headerIndex(headers, ['race']),
+    land: headerIndex(headers, ['land', 'acres']),
+    nw: headerIndex(headers, ['nw', 'net worth', 'networth']),
+    nwpa: headerIndex(headers, ['nwpa', 'nw/acre', 'net worth/acre', 'networth/acre']),
+    nobility: headerIndex(headers, ['nobility', 'honor']),
+    gains: headerIndex(headers, ['gains', 'gains/acres', 'gains acres']),
+  }
+  if (indexes.slot < 0 || indexes.name < 0 || indexes.race < 0 || indexes.land < 0 || indexes.nw < 0 || indexes.nwpa < 0) return rows
+  for (const line of lines.slice(headerIndexLine + 1)) {
+    if (/war doctrines/i.test(line)) break
+    if (!line.trim()) continue
+    const cells = line.split(/\t+/).map(clean)
+    if (cells.length <= Math.max(indexes.slot, indexes.name, indexes.race, indexes.land, indexes.nw, indexes.nwpa)) continue
+    addMappedRow(rows, cells, indexes)
   }
   return rows
 }
@@ -123,6 +137,7 @@ export function parseKingdomStructured(rawText: unknown, rawPayload: any, existi
   const text = String(rawText ?? '')
   const fields = existing && typeof existing === 'object' ? existing : {}
   const rows = parseRowsFromTables(rawPayload)
+  if (!rows.length) rows.push(...parseRowsFromText(text))
 
   const unique = new Map<number, KingdomProvince>()
   for (const row of rows) unique.set(row.slot, row)
