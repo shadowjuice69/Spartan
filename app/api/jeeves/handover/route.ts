@@ -58,20 +58,12 @@ export async function GET() {
       github<PullRequest[]>('pulls?state=open&per_page=100&sort=updated&direction=desc'),
     ])
     main = commit
-    proposals = pulls
-      .filter((pr) => {
-        const labels = (pr.labels || []).map((label) => String(label.name || '').toLowerCase())
-        return /^\[jeeves proposal\]/i.test(pr.title) || labels.includes('jeeves-proposal')
-      })
-      .map((pr) => ({
-        number: pr.number,
-        title: pr.title,
-        url: pr.html_url,
-        updatedAt: pr.updated_at,
-        headSha: pr.head?.sha || null,
-        draft: Boolean(pr.draft),
-        labels: (pr.labels || []).map((label) => String(label.name || '')),
-      }))
+    openPullRequests = pulls.map((pr) => {
+      const labels = (pr.labels || []).map((label) => String(label.name || ''))
+      const jeevesProposal = /^\\[jeeves proposal\\]/i.test(pr.title) || labels.some((label) => label.toLowerCase() === 'jeeves-proposal')
+      return { number: pr.number, title: pr.title, url: pr.html_url, updatedAt: pr.updated_at, headSha: pr.head?.sha || null, draft: Boolean(pr.draft), labels, jeevesProposal }
+    })
+    proposals = openPullRequests.filter((pr) => pr.jeevesProposal).map(({ jeevesProposal, ...pr }) => pr)
     proposalSearchComplete = true
     sourceStatus.github = 'ok'
   } catch (error) {
