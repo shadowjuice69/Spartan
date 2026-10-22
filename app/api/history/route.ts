@@ -44,10 +44,12 @@ function parseThroneDom(rawDom: unknown, province: any, observedAt: string, simp
   const [money, peasants, food, runes, networth, land] = cells.map(number)
   if (land == null && networth == null) return null
   const soldiers = cell(html, 'Soldiers')
-  const elites = cell(html, 'Strongarms')
-  const offSpecs = cell(html, 'Slingers')
-  const defSpecs = cell(html, 'Slingers')
-  const brutes = cell(html, 'Brutes')
+  // Race-specific unit labels are not universal; do not mislabel one race's
+  // elite/spec unit as another race's. The generic text parser handles named forces.
+  const elites = null
+  const offSpecs = null
+  const defSpecs = null
+  const brutes = null
   const thieves = cell(html, 'Thieves')
   const wizards = cell(html, 'Wizards')
   const warHorses = cell(html, 'War Horses')
@@ -82,7 +84,7 @@ export async function GET(request: Request) {
     const currentState = direct ? projectionData(direct) : kingdomProjection ? (projectionData(kingdomProjection).raw_kind === 'kingdom_details' ? kingdomProvince(kingdomProjection, province.province_name) : projectionData(kingdomProjection)) : {}
     const projected = snapshotFromState(province, currentState, direct?.updated_at || kingdomProjection?.updated_at || province.updated_at, 'spartan_state_projection')
     const live = (liveThroneResult.data || []).map((row: any) => parseThroneDom(row.raw_payload?.rawDom ?? row.raw_payload?.data_html, province, row.captured_at, row.raw_text || row.raw_payload?.data_simple)).find((row: any) => row && (row.acres != null || row.networth != null))
-    const current = live ? { ...projected, ...live, source: live.source } : projected
+    const current = live ? { ...projected, ...Object.fromEntries(Object.entries(live).filter(([key, value]) => value != null || key === 'source' || key === 'canonical')), source: live.source } : projected
     const rows = (historyResult.data || []).map((row: any) => ({ ...current, ...row, source: row.source || 'spartan_province_history', canonical: true }))
     const merged = new Map<string, Snapshot>(); for (const row of rows) merged.set(`${row.province_id}:${row.observed_at}`, row); merged.set(`${current.province_id}:${current.observed_at}`, current)
     const snapshots = [...merged.values()].sort((a, b) => Date.parse(a.observed_at) - Date.parse(b.observed_at)).slice(-limit)
