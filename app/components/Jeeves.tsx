@@ -38,6 +38,20 @@ type Briefing = {
   };
 };
 
+type Handover = {
+  ok: boolean;
+  checkedAt: string;
+  deployment: { service: string; deployedSha: string | null; mainSha: string | null; matchesMain: boolean };
+  proposals: { number: number; title: string; url: string; updatedAt: string; headSha: string | null; draft: boolean; labels: string[] }[];
+  proposalSearchComplete: boolean;
+  issues: { id: string; subsystem: string; endpoint: string; severity: string; message: string; lastDetectedAt: string | null; occurrences: number; commitSha: string | null }[];
+  issueSearchComplete: boolean;
+  sourceStatus: Record<string, string>;
+  warnings: string[];
+  summary: string;
+  approvalGate: { enforced: boolean; note: string };
+};
+
 const LOGIN_KEY = "spartan.jeeves.login.v3";
 
 function formatNumber(value: unknown): string {
@@ -57,6 +71,9 @@ export default function Jeeves() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [handover, setHandover] = useState<Handover | null>(null);
+  const [handoverError, setHandoverError] = useState("");
+  const [copyLabel, setCopyLabel] = useState("COPY SESSION HANDOVER FOR CHATGPT");
   const loaded = useRef<string | null>(null);
   const pathname = usePathname();
 
@@ -133,6 +150,7 @@ export default function Jeeves() {
 
         window.localStorage.setItem(LOGIN_KEY, greetedKey);
         setOpen(true);
+        void loadHandover();
       } catch (cause) {
         if (!cancelled) {
           setError(cause instanceof Error ? cause.message : "Jeeves could not load your briefing.");
@@ -144,6 +162,28 @@ export default function Jeeves() {
 
     void loadBriefing();
   }, [pathname]);
+
+  async function loadHandover() {
+    try {
+      const response = await fetch("/api/jeeves/handover", { cache: "no-store", headers: { accept: "application/json" } });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || result.ok !== true) throw new Error(result.error || "Session handover unavailable.");
+      setHandover(result as Handover);
+      setHandoverError("");
+    } catch (cause) {
+      setHandoverError(cause instanceof Error ? cause.message : "Session handover unavailable.");
+    }
+  }
+
+  async function copyHandover() {
+    if (!handover?.summary) return;
+    try {
+      await navigator.clipboard.writeText(handover.summary);
+      setCopyLabel("COPIED — PASTE INTO CHATGPT");
+    } catch {
+      setCopyLabel("COPY BLOCKED — OPEN HANDOVER API");
+    }
+  }
 
   async function introduce() {
     const preferredName = name.trim().replace(/\s+/g, " ");
@@ -247,6 +287,45 @@ export default function Jeeves() {
             <div className="jeeves-panel jeeves-summary">
               <div className="panel-title">JEEVES' SITUATION SUMMARY</div>
               <p>{briefing.summary}</p>
+            </div>
+
+            <div className="jeeves-panel" style={{ borderColor: "rgba(216,255,84,.25)" }}>
+              <div className="panel-title">SPARTAN SESSION HANDOVER</div>
+              <p>Production, pending Jeeves proposals, and open system issues — checked live when you sign in.</p>
+              {handoverError && <div className="jeeves-alert">Handover incomplete: {handoverError}. Do not assume the proposal queue is empty.</div>}
+              {!handover && !handoverError && <p>Checking GitHub proposals and Spartan diagnostics…</p>}
+              {handover && (
+                <>
+                  <div className="jeeves-grid">
+                    <div><small>GITHUB MAIN</small><b style={{ fontSize: 11 }}>{handover.deployment.mainSha ? handover.deployment.mainSha.slice(0, 7) : "UNKNOWN"}</b></div>
+                    <div><small>RENDER COMMIT</small><b style={{ fontSize: 11 }}>{handover.deployment.deployedSha ? handover.deployment.deployedSha.slice(0, 7) : "UNKNOWN"}</b></div>
+                    <div><small>OPEN PROPOSALS</small><b>{handover.proposalSearchComplete ? handover.proposals.length : "?"}</b></div>
+                  </div>
+                  <p style={{ fontSize: 11, color: handover.deployment.matchesMain ? "#67f0b0" : "#ffcc85" }}>
+                    {handover.deployment.matchesMain ? "Render commit matches GitHub main." : "Render/main commit match is not confirmed — review deployment state."}
+                  </p>
+                  {!handover.proposalSearchComplete && <div className="jeeves-alert">GitHub proposal check failed. Queue status is unknown.</div>}
+                  {handover.proposalSearchComplete && handover.proposals.length === 0 && <p>No open proposals matching the Jeeves proposal title/label convention were found.</p>}
+                  {handover.proposals.map((proposal) => (
+                    <div key={proposal.number} style={{ padding: "10px 0", borderTop: "1px solid rgba(255,255,255,.07)" }}>
+                      <a href={proposal.url} target="_blank" rel="noreferrer" style={{ color: "#d8ff54", fontSize: 12 }}>PR #{proposal.number}: {proposal.title}</a>
+                      <div style={{ color: "#ffcc85", fontSize: 9, letterSpacing: ".1em", marginTop: 5 }}>PENDING CHATGPT REVIEW · HEAD {proposal.headSha?.slice(0, 7) || "UNKNOWN"}</div>
+                    </div>
+                  ))}
+                  <div style={{ marginTop: 12, color: "#67f0b0", fontSize: 9, fontWeight: 900, letterSpacing: ".15em" }}>OPEN SYSTEM ISSUES ({handover.issueSearchComplete ? handover.issues.length : "UNKNOWN"})</div>
+                  {!handover.issueSearchComplete && <div className="jeeves-alert">Spartan diagnostics could not be checked.</div>}
+                  {handover.issueSearchComplete && handover.issues.length === 0 && <p>No open system issues were returned by diagnostics.</p>}
+                  {handover.issues.slice(0, 5).map((issue) => (
+                    <div key={issue.id} style={{ padding: "8px 0", borderTop: "1px solid rgba(255,255,255,.06)" }}>
+                      <div style={{ color: issue.severity === "critical" || issue.severity === "error" ? "#ff9696" : "#ffcc85", fontSize: 10, fontWeight: 800 }}>{issue.severity.toUpperCase()} · {issue.subsystem} {issue.endpoint}</div>
+                      <div style={{ color: "#aebcc8", fontSize: 11, marginTop: 4 }}>{issue.message}</div>
+                    </div>
+                  ))}
+                  <div className="jeeves-alert">APPROVAL GATE: NOT YET TECHNICALLY ENFORCED. This report does not block writes, merges, or deployments.</div>
+                  {handover.warnings.map((warning, index) => <p key={index} style={{ color: "#ffcc85", fontSize: 10 }}>Source warning: {warning}</p>)}
+                  <button className="jeeves-primary" type="button" onClick={() => void copyHandover()}>{copyLabel}</button>
+                </>
+              )}
             </div>
 
             <div className="jeeves-panel">
