@@ -94,7 +94,10 @@ export default function ScienceCalc() {
       .then((r) => (r.ok ? r.json() : null))
       .then((j) => {
         const cats: { name: string; totalBooks: number; booksAvailable: number }[] = j?.model?.current?.categories || []
-        if (!cats.length) { setBuildMsg("No live Science capture found. Sign in and open Council → Science with the scraper running."); return }
+        if (j?.scienceStatus?.hasCurrentAgeData === false || !cats.length) {
+          setBuildMsg("No current-age science data. Open Council → Science with the scraper running to capture this age; previous-age books are not used.")
+          return
+        }
         const next: Record<string, string> = { economy: "", military: "", arcane: "" }
         for (const key of Object.keys(LIVE_NAME)) {
           const c = cats.find((x) => x.name === LIVE_NAME[key])
