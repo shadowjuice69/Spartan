@@ -219,6 +219,7 @@ async function syncBotIntelRecord(sb, flow, capture, state) {
   const normalizeOperation = value => String(value || '')
     .toLowerCase()
     .replace(/&amp;/g, '&')
+    .replace(/\band\b/g, ' ')
     .replace(/[’']/g, '')
     .replace(/[^a-z0-9]+/g, ' ')
     .replace(/\b(the|an|a)\b/g, '')
