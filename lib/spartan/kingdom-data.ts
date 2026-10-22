@@ -129,7 +129,7 @@ function parseRowsFromText(text: string) {
 }
 
 function parseTotal(text: string, label: string) {
-  const m = text.match(new RegExp(label + '\s*[:=]?\s*([0-9.,]+\s*[KMB]?)', 'i'))
+  const m = text.match(new RegExp('(?:' + label + ')\\s*[:=]?\\s*([0-9.,]+\\s*[KMB]?)', 'i'))
   return m ? num(m[1]) : null
 }
 
