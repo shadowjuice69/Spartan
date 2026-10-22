@@ -313,7 +313,7 @@ async function syncBotIntelRecord(sb, flow, capture, state, options = {}) {
     }
   };
 
-  if (options.skipIfFreshKeyExists) {
+  if (options.skipIfFreshKeyExists && !options.preserveHistory) {
     let existingKeyQuery = sb.from('spartan_intel_records')
       .select('id,capture_id')
       .eq('page_kind', pageKind)
@@ -324,7 +324,7 @@ async function syncBotIntelRecord(sb, flow, capture, state, options = {}) {
     const { data: existingKeyRows, error: existingKeyError } = await existingKeyQuery;
     if (existingKeyError) throw new Error(`bot Intel backfill key check: ${existingKeyError.message}`);
     if (existingKeyRows?.length) return { pageKind, confidence, intelKey, skippedExisting: true };
-  } else {
+  } else if (!options.preserveHistory) {
     await removePreviousIntelProjection(sb, pageKind, flow.kingdom_id || null, intelKey, flow.capture_id);
   }
 
@@ -402,7 +402,7 @@ async function backfillMissingBotIntel(sb) {
     const flow = flowByCapture.get(capture.capture_id);
     if (!flow) { skipped++; continue; }
     const state = extractState(flow, capture);
-    const result = await syncBotIntelRecord(sb, flow, capture, state, { skipIfFreshKeyExists: true });
+    const result = await syncBotIntelRecord(sb, flow, capture, state, { preserveHistory: true });
     if (result?.skippedExisting) skipped++;
     else if (result) {
       recovered++;
