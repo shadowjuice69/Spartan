@@ -2,7 +2,9 @@ name: Spartan build verification
 
 on:
   push:
-    branches: [clean-auth-command-jeeves]
+    branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
