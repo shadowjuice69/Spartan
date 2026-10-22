@@ -274,13 +274,26 @@ function BuildDetail({ id, races, personalities, onBack, onDeleted }: { id: stri
 
   // Live books and effects from the player's captured Science council page (when signed in and captured).
   const [live, setLive] = useState<{ cats: LiveCategory[]; at: string | null } | null>(null)
+  const [liveScienceStatus, setLiveScienceStatus] = useState<string | null>(null)
   useEffect(() => {
     let cancelled = false
     fetch("/api/page-models?page=science", { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
       .then((j) => {
         const cats = j?.model?.current?.categories
-        if (!cancelled && Array.isArray(cats) && cats.length) setLive({ cats, at: j.model.capturedAt || null })
+        if (cancelled) return
+        if (j?.scienceStatus?.hasCurrentAgeData === false) {
+          setLive(null)
+          setLiveScienceStatus('No current-age science data. Capture the Science council page for this age; previous-age books are not used.')
+          return
+        }
+        if (Array.isArray(cats) && cats.length) {
+          setLive({ cats, at: j.model.capturedAt || null })
+          setLiveScienceStatus(null)
+        } else {
+          setLive(null)
+          setLiveScienceStatus('No current-age science data. Capture the Science council page for this age; previous-age books are not used.')
+        }
       })
       .catch(() => {})
     return () => { cancelled = true }
@@ -373,10 +386,10 @@ function BuildDetail({ id, races, personalities, onBack, onDeleted }: { id: stri
 
       <h3 style={{ fontSize:12, color:"#67f0b0", letterSpacing:".1em", marginTop:20 }}>SCIENCE PLAN</h3>
       {plan.every((p) => p.rows.length === 0) && <p style={{ fontSize:11, color:"#ffb35c" }}>This saved build has no readable science targets or weights. Spartan checked the structured science data and legacy science text. The saved build has not been changed; add science targets/weights to restore its Science Plan.</p>}
-      <p style={{ fontSize:10, color:"#687686", margin:"0 0 10px" }}>
+      <p style={{ fontSize:10, color: liveScienceStatus ? "#ffb35c" : "#687686", margin:"0 0 10px" }}>
         {live
-          ? `Using your live books from the Science council page${live.at ? ` (captured ${new Date(live.at).toLocaleString()})` : ""}. Type a number to plan for a different book count.`
-          : "No live Science capture found, so enter your books below. Open Council → Science with the scraper running to fill these in automatically."}
+          ? `Using current-age books from the Science council page${live.at ? ` (captured ${new Date(live.at).toLocaleString()})` : ""}. Type a number to plan for a different book count.`
+          : liveScienceStatus || "No current-age science data. Enter a book count manually or open Council → Science with the scraper running to capture this age's books."}
       </p>
       <div style={{ display:"flex", gap:14, marginBottom:14, flexWrap:"wrap", alignItems:"flex-end" }}>
         {(["economy","military","arcane"] as const).map((cat) => {
