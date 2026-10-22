@@ -34,7 +34,7 @@ function pick(source: AnyRecord, keys: string[]) {
   for (const key of keys) {
     let value = source[key]
     if (value === undefined || value === null) continue
-    if (key === 'data_simple') {
+    if (key === 'data_simple' || key === 'data_html') {
       value = parseRecord(value)
       if (typeof value === 'string') {
         const trimmed = value.trim()
@@ -80,6 +80,6 @@ export function runPageSteward(pageKind: string | null | undefined, parsedPayloa
   if (kind === 'exploration') return page(['exploration','explore','explorationCosts','exploration_costs','land','acres','freeLand','free_land','explorationQueue','exploration_queue','structured','grid','data_simple'])
   if (kind === 'kingdom') return page(['kingdom','kingdom_details','kingdom_code','kingdomCode','provinces','provinceList','province_list','kingdomStats','kingdom_stats','relations','relation','monarch','king','hostile','war','structured','grid','data_simple'])
   if (kind === 'intel' || kind === 'news' || kind === 'war' || kind === 'attack' || kind === 'ritual' || kind === 'aid' || kind === 'dragon' || kind === 'council_history' || kind === 'province_logs') return page(['intel','news','events','attacks','attack','ops','relations','war','hostile','history','army','offense','off','defense','def','name','race','personality','land','acres','mana','stealth','thieves','wizards','structured','grid','data_simple'])
-  if (kind === 'utopiaintel' || kind === 'generic') return page(['data_simple','fields','data','prov','url','kind','type','classification','acres','food','gold','networth','peons','runes','population','soldiers','thieves','wizards','mana','stealth','offense','defense','structured','grid','data_html','data_simple'])
+  if (kind === 'utopiaintel' || kind === 'generic') return page(['data_simple','fields','data','prov','url','kind','type','classification','acres','food','gold','networth','peons','runes','population','soldiers','thieves','wizards','mana','stealth','offense','defense','structured','grid','data_html'])
   return { pageKind: kind || 'unknown', handled: false, fields: [], payload: {} }
 }
