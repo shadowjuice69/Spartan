@@ -329,7 +329,7 @@ export async function GET(request: Request) {
       // Every Throne capture in scope: numbers from the payload, spells/armies/ritual/dragon from the page text.
       const NUMS = ['acres', 'networth', 'gold', 'food', 'runes', 'peons', 'soldiers', 'off_specs', 'def_specs', 'elites', 'thieves', 'wizards', 'war_horses', 'prisoners', 'offense', 'defense', 'off_available', 'tpa', 'wpa', 'build_efficiency'] as const
       const snaps = records
-        .filter(r => /\/throne/.test(String(r.url || '')) && r.parsed_payload && r.parsed_payload.acres != null)
+        .filter(r => /\/throne/.test(String(r.url || '')) && (r.parsed_payload?.acres != null || /(?:^|\s)Land\s+[\d,]+/.test(String(r.raw_text || ''))))
         .map(r => {
           const pp: any = r.parsed_payload
           const x = parseThroneText(r.raw_text)
