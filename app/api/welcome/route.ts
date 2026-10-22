@@ -47,7 +47,7 @@ function parseLive(raw: unknown, simple?: unknown) {
     return match ? Number(match[1].replace(/,/g, '')) : null
   }
   const fallbacks: Row = {
-    acres: read('Land'), networth: read('Networth'), gold: read('Money'), food: read('Food'), runes: read('Runes'),
+    acres: read('Land'), networth: read('Networth'), population: read('Peasants'), gold: read('Money'), food: read('Food'), runes: read('Runes'),
     soldiers: read('Soldiers'), thieves: read('Thieves'), wizards: read('Wizards'),
     war_horses: read('War Horses'), prisoners: read('Prisoners'),
     offense: read('Off. Points'), defense: read('Def. Points'),
