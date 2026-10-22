@@ -68,8 +68,7 @@ async function runKnowledge(sb){
   if(Object.values(candidateCounts).every(n=>n>0)){age=candidate;counts=candidateCounts;break}
  }
  if(!age)return result('knowledge','quarantine',100,'no age has populated race, personality and game rule tables',{source_key:source.source_key});
- const baseUrl=String(process.env.SPARTAN_DASHBOARD_URL||'https://sparta-west.onrender.com').replace(/\/$/,'');
- const sourceUrl=String(process.env.SPARTAN_WIKI_VERIFICATION_URL||`${baseUrl}/wiki?debug=1`);
+ const sourceUrl=String(process.env.SPARTAN_WIKI_VERIFICATION_URL||'https://sparta-west.onrender.com/wiki?debug=1');
  const sourceKey=`utopia_wiki_age_${age}`;
  const sourceName=`Spartan Utopia Wiki Age ${age}`;
  const metadata={...(source.metadata||{}),source:'render_public_wiki',source_key:sourceKey,path:'/wiki?debug=1',auto_aligned:true};
