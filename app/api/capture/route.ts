@@ -277,7 +277,7 @@ export async function POST(request: Request) {
       // request to this Render service can fail even while the app is healthy.
       if (captureSteward.decision === 'accept' && typeof capture.captureId === 'string' && capture.captureId.trim()) {
         try {
-          const processing = await processStorageQueue(supabase, 25)
+          const processing = await processStorageQueue(supabase, 25, capture.captureId)
           if (processing.failed) {
             console.error('[SPARTAN CAPTURE] Automatic storage processing completed with failures', {
               captureId: capture.captureId,
