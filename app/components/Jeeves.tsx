@@ -40,6 +40,7 @@ type Briefing = {
 
 type Handover = {
   ok: boolean;
+  visible: boolean;
   checkedAt: string;
   deployment: { service: string; deployedSha: string | null; mainSha: string | null; matchesMain: boolean };
   proposals: { number: number; title: string; url: string; updatedAt: string; headSha: string | null; draft: boolean; labels: string[] }[];
@@ -290,6 +291,7 @@ export default function Jeeves() {
               <p>{briefing.summary}</p>
             </div>
 
+            {handover?.visible !== false && (
             <div className="jeeves-panel" style={{ borderColor: "rgba(216,255,84,.25)" }}>
               <div className="panel-title">SPARTAN SESSION HANDOVER</div>
               <p>Production, pending Jeeves proposals, and open system issues — checked live when you sign in.</p>
@@ -328,6 +330,8 @@ export default function Jeeves() {
                 </>
               )}
             </div>
+
+            )}
 
             <div className="jeeves-panel">
               <div className="panel-title">CURRENT PROVINCE STATE · VERIFIED</div>
