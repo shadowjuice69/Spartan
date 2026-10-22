@@ -63,7 +63,8 @@ export async function GET(req:NextRequest){
       for(const row of scienceResult.data||[]){
         const at=String(row.captured_at||row.created_at||"")
         const age=Number(row.age)
-        const current=Number.isFinite(age)&&row.age!=null?age===currentAge:(Number.isFinite(Date.parse(at))&&Date.parse(at)>=ageStartMs)
+        const capturedMs=Date.parse(at)
+        const current=Number.isFinite(capturedMs)&&capturedMs>=ageStartMs&&(row.age==null||age===currentAge)
         if(!current)continue
         const parsed=parseScience(String(row.raw_text||""))
         const books:Record<string,number>={}
