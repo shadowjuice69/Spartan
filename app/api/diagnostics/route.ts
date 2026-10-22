@@ -32,11 +32,14 @@ export async function GET() {
     timed('supabase_accounts', async () => { const {error}=await db.from('spartan_accounts').select('id').eq('auth_user_id',user.id).limit(1); if(error) throw error; return 'query ok' }),
     timed('province_registry', async () => { const {error}=await db.from('spartan_province_registry').select('province_id').eq('user_id',user.id).limit(1); if(error) throw error; return 'query ok' }),
     timed('clock_data', async () => {
-      const {data:account,error:a}=await db.from('spartan_accounts').select('province_name,province_location').eq('auth_user_id',user.id).maybeSingle(); if(a) throw a; if(!account) throw new Error('account missing')
-      const {data:registry,error:r}=await db.from('spartan_province_registry').select('province_id').eq('user_id',user.id).limit(1).maybeSingle(); if(r) throw r; if(!registry?.province_id) throw new Error('province registry link missing')
-      const {data:capture,error:c}=await db.from('spartan_capture_vault').select('id,raw_text,parsed_payload').eq('province_id',registry.province_id).eq('page_kind','throne').order('captured_at',{ascending:false}).limit(20); if(c) throw c
-      const found=(capture||[]).some((row:any)=>/\b(?:January|February|March|April|May|June|July)\s+\d{1,2}(?:st|nd|rd|th)?[,]?\s*(?:of\s+)?YR\s*\d+/i.test(String(row.raw_text||'')) || JSON.stringify(row.parsed_payload||{}).match(/\b(?:January|February|March|April|May|June|July)\s+\d{1,2}(?:st|nd|rd|th)?[,]?\s*(?:of\s+)?YR\s*\d+/i))
-      if(!found) throw new Error('no authoritative throne date capture')
+      const {data:account,error:a}=await db.from('spartan_accounts').select('id,province_name,province_location').eq('auth_user_id',user.id).maybeSingle(); if(a) throw a; if(!account) throw new Error('account missing')
+      const {data:registry,error:r}=await db.from('spartan_province_registry').select('province_id').eq('user_id',user.id).order('updated_at',{ascending:false}).limit(1).maybeSingle(); if(r) throw r; if(!registry?.province_id) throw new Error('province registry link missing')
+      // The authoritative clock reader uses spartan_intel_records. The capture vault is an ingestion/history store and may not contain normalized Throne rows.
+      const provinceIds=[...new Set([String(account.id),String(registry.province_id)].filter(Boolean))]
+      const {data:capture,error:c}=await db.from('spartan_intel_records').select('id,raw_text,parsed_payload').in('province_id',provinceIds).eq('page_kind','throne').order('captured_at',{ascending:false}).limit(100); if(c) throw c
+      const datePattern=/\b(?:January|February|March|April|May|June|July)\s+\d{1,2}(?:st|nd|rd|th)?[,]?\s*(?:of\s+)?YR\s*\d+/i
+      const found=(capture||[]).some((row:any)=>datePattern.test(String(row.raw_text||'')) || datePattern.test(JSON.stringify(row.parsed_payload||{})))
+      if(!found) throw new Error('no authoritative throne date capture in spartan_intel_records for the linked province')
       return 'clock source ready'
     }),
     timed('jeeves_data', async () => {
@@ -59,8 +62,17 @@ export async function POST(request: Request) {
   try {
     const body=await request.json(); const allowedSeverity=new Set(['info','warning','error','critical']); const severity=allowedSeverity.has(body?.severity)?body.severity:'error'
     const subsystem=typeof body?.subsystem==='string'?body.subsystem.slice(0,80):'client'; const endpoint=typeof body?.endpoint==='string'?body.endpoint.slice(0,200):'client'; const message=typeof body?.message==='string'?body.message.slice(0,1000):'Client diagnostic failure'
-    const db=adminClient(); const checkedAt=new Date().toISOString(); const {error}=await db.from('spartan_system_issues').insert({subsystem,endpoint,severity,status:'open',error_message:message,first_detected_at:checkedAt,last_detected_at:checkedAt,occurrence_count:1,commit_sha:process.env.RENDER_GIT_COMMIT || process.env.RENDER_GIT_COMMIT_SHA || null,metadata:{userId:user.id,source:'client',context:body?.context && typeof body.context==='object'?body.context:{}}})
-    if(error) throw error
+    const db=adminClient(); const checkedAt=new Date().toISOString()
+    // Collapse repeated browser reports into the latest open issue instead of creating thousands of duplicate rows.
+    const {data:existing,error:lookupError}=await db.from('spartan_system_issues').select('issue_id,occurrence_count').eq('subsystem',subsystem).eq('endpoint',endpoint).eq('error_message',message).eq('status','open').order('last_detected_at',{ascending:false}).limit(1).maybeSingle()
+    if(lookupError) throw lookupError
+    if(existing) {
+      const {error}=await db.from('spartan_system_issues').update({severity,error_message:message,last_detected_at:checkedAt,occurrence_count:Number(existing.occurrence_count||0)+1,metadata:{userId:user.id,source:'client',context:body?.context && typeof body.context==='object'?body.context:{}}}).eq('issue_id',existing.issue_id)
+      if(error) throw error
+    } else {
+      const {error}=await db.from('spartan_system_issues').insert({subsystem,endpoint,severity,status:'open',error_message:message,first_detected_at:checkedAt,last_detected_at:checkedAt,occurrence_count:1,commit_sha:process.env.RENDER_GIT_COMMIT || process.env.RENDER_GIT_COMMIT_SHA || null,metadata:{userId:user.id,source:'client',context:body?.context && typeof body.context==='object'?body.context:{}}})
+      if(error) throw error
+    }
     return NextResponse.json({ok:true})
   } catch(error) { return NextResponse.json({ok:false,error:error instanceof Error?error.message:'Diagnostic write failed'},{status:400}) }
 }
