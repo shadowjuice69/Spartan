@@ -309,7 +309,7 @@ async function syncBotIntelRecord(sb, flow, capture, state, options = {}) {
       source: 'channel+content',
       reason,
       intel_key: intelKey,
-      freshness_policy: 'replace_previous_same_target_and_type'
+      freshness_policy: 'preserve_each_capture_history'
     }
   };
 
@@ -324,10 +324,10 @@ async function syncBotIntelRecord(sb, flow, capture, state, options = {}) {
     const { data: existingKeyRows, error: existingKeyError } = await existingKeyQuery;
     if (existingKeyError) throw new Error(`bot Intel backfill key check: ${existingKeyError.message}`);
     if (existingKeyRows?.length) return { pageKind, confidence, intelKey, skippedExisting: true };
-  } else if (!options.preserveHistory) {
-    await removePreviousIntelProjection(sb, pageKind, flow.kingdom_id || null, intelKey, flow.capture_id);
   }
 
+  // Keep each source capture as historical evidence. Do not delete older
+  // projections merely because a later operation has the same identity.
   const { error } = await sb.from('spartan_intel_records').upsert({
     capture_id: flow.capture_id,
     source_vault_id: capture.id,
