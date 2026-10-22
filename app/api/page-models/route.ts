@@ -397,11 +397,24 @@ export async function GET(request: Request) {
       if (gridResult.error) fail(gridResult.error)
       const gridRecs = gridResult.data || []
       const roster = new Map<string, any>()
+      const missing = (value: any) => value == null || value === '' || (Array.isArray(value) && value.length === 0) || (typeof value === 'number' && !Number.isFinite(value))
       for (const g of gridRecs as any[]) {
         const rows = parseGridRows(g.grid)
         for (const row of rows) {
-          const key = `${row.location}|${row.name}`
-          if (!roster.has(key)) roster.set(key, { ...row, seenAt: g.created_at, seenOn: pathOf(g.url) })
+          const key = String(row.location) + '|' + String(row.name)
+          const current = roster.get(key)
+          if (!current) {
+            roster.set(key, { ...row, seenAt: g.created_at, seenOn: pathOf(g.url) })
+            continue
+          }
+          // Captures are often partial: the newest UtopiaIntel roster may have
+          // names/races only, while an Intel-site grid has combat/personality
+          // columns. Merge newest-first, filling only fields it did not provide.
+          const merged = { ...current }
+          for (const [field, value] of Object.entries(row)) {
+            if (missing(merged[field]) && !missing(value)) merged[field] = value
+          }
+          roster.set(key, merged)
         }
       }
       const codes = new Set<string>([...byCode.keys(), ...[...roster.values()].map(r => r.location).filter(Boolean)])
