@@ -27,12 +27,66 @@ function inferPageKind(url: string) {
   if (value.includes('science')) return 'science'
   if (value.includes('magic')) return 'magic'
   if (value.includes('thievery')) return 'thievery'
+  if (value.includes('kingdom_intel')) return 'intel'
+  if (value.includes('/stats')) return 'intel'
   if (value.includes('news')) return 'news'
   return 'utopiaintel'
 }
 
 function normalizeName(value: unknown) {
   return typeof value === 'string' ? value.trim().toLocaleLowerCase('en-US') : ''
+}
+
+function decodeHtml(value: unknown) {
+  return String(value ?? '')
+    .replace(/<br\s*\/?>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)))
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function parseKingdomIntelGrid(html: string, url: string, dataSimple: string) {
+  const kdMatch = url.match(/\/kingdom_intel\/(\d+)\/(\d+)(?:\/|$|[?#])/i)
+  const kingdomCode = kdMatch ? kdMatch[1] + ':' + kdMatch[2] : ''
+  const rows: Array<{ id: string; cells: Record<string, any> }> = []
+  const table = html.match(/<table\b[^>]*class=["'][^"']*tablesorter[^"']*["'][^>]*>([\s\S]*?)<\/table>/i)?.[1] || html
+  for (const rowMatch of table.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/gi)) {
+    const cells = [...rowMatch[1].matchAll(/<t[dh]\b[^>]*>([\s\S]*?)<\/t[dh]>/gi)].map(match => decodeHtml(match[1]))
+    const slot = Number(cells[0])
+    if (!Number.isInteger(slot) || slot < 1 || slot > 25 || !cells[1]) continue
+    const identity = cells[1].match(/^(.*?)\s+\(([^()]+)\)$/)
+    const name = (identity?.[1] || cells[1]).trim()
+    const race = (identity?.[2] || '').trim()
+    const spells = (cells[2] || '').trim()
+    rows.push({
+      id: String(slot),
+      cells: {
+        id: String(slot), slot: String(slot), name, race, location: kingdomCode,
+        goodSpells: { text: spells, labels: spells ? [spells] : [] },
+      },
+    })
+  }
+
+  // Some capture clients omit HTML. The text table still carries the roster names and races.
+  if (!rows.length && dataSimple) {
+    const lines = dataSimple.split(/\r?\n/)
+    const header = lines.findIndex(line => /Slot\s+Province/i.test(line))
+    for (const line of lines.slice(header + 1)) {
+      const parts = line.split(/\t+/).map(value => value.trim())
+      const slot = Number(parts[0])
+      if (!Number.isInteger(slot) || slot < 1 || slot > 25 || !parts[1]) continue
+      const identity = parts[1].match(/^(.*?)\s+\(([^()]+)\)$/)
+      rows.push({ id: String(slot), cells: { id: String(slot), slot: String(slot), name: (identity?.[1] || parts[1]).trim(), race: (identity?.[2] || '').trim(), location: kingdomCode } })
+    }
+  }
+  return { kingdomCode, grid: rows.length ? { rows } : null }
 }
 
 export async function OPTIONS() {
