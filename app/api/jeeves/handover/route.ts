@@ -60,7 +60,7 @@ export async function GET() {
     main = commit
     openPullRequests = pulls.map((pr) => {
       const labels = (pr.labels || []).map((label) => String(label.name || ''))
-      const jeevesProposal = /^\\[jeeves proposal\\]/i.test(pr.title) || labels.some((label) => label.toLowerCase() === 'jeeves-proposal')
+      const jeevesProposal = /^\[jeeves proposal\]/i.test(pr.title) || labels.some((label) => label.toLowerCase() === 'jeeves-proposal')
       return { number: pr.number, title: pr.title, url: pr.html_url, updatedAt: pr.updated_at, headSha: pr.head?.sha || null, draft: Boolean(pr.draft), labels, jeevesProposal }
     })
     proposals = openPullRequests.filter((pr) => pr.jeevesProposal).map(({ jeevesProposal, ...pr }) => pr)
