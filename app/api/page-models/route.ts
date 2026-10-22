@@ -242,8 +242,8 @@ export async function GET(request: Request) {
     if (page === 'science') {
       const startMs = ageStartedAt ? Date.parse(ageStartedAt) : NaN
       records = currentAge === null ? [] : records.filter((r) => {
-        if (r.age != null && Number.isFinite(Number(r.age))) return Number(r.age) === currentAge
         const capturedMs = Date.parse(when(r))
+        if (r.age != null && Number.isFinite(Number(r.age))) return Number(r.age) === currentAge && Number.isFinite(startMs) && Number.isFinite(capturedMs) && capturedMs >= startMs
         return Number.isFinite(startMs) && Number.isFinite(capturedMs) && capturedMs >= startMs
       })
     }
