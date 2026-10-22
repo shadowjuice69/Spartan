@@ -64,7 +64,7 @@ export async function POST(request: Request) {
     const subsystem=typeof body?.subsystem==='string'?body.subsystem.slice(0,80):'client'; const endpoint=typeof body?.endpoint==='string'?body.endpoint.slice(0,200):'client'; const message=typeof body?.message==='string'?body.message.slice(0,1000):'Client diagnostic failure'
     const db=adminClient(); const checkedAt=new Date().toISOString()
     // Collapse repeated browser reports into the latest open issue instead of creating thousands of duplicate rows.
-    const {data:existing,error:lookupError}=await db.from('spartan_system_issues').select('issue_id,occurrence_count').eq('subsystem',subsystem).eq('endpoint',endpoint).eq('status','open').order('last_detected_at',{ascending:false}).limit(1).maybeSingle()
+    const {data:existing,error:lookupError}=await db.from('spartan_system_issues').select('issue_id,occurrence_count').eq('subsystem',subsystem).eq('endpoint',endpoint).eq('error_message',message).eq('status','open').order('last_detected_at',{ascending:false}).limit(1).maybeSingle()
     if(lookupError) throw lookupError
     if(existing) {
       const {error}=await db.from('spartan_system_issues').update({severity,error_message:message,last_detected_at:checkedAt,occurrence_count:Number(existing.occurrence_count||0)+1,metadata:{userId:user.id,source:'client',context:body?.context && typeof body.context==='object'?body.context:{}}}).eq('issue_id',existing.issue_id)
