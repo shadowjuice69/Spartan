@@ -4,6 +4,7 @@ import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { runCaptureStewards, runSnapshotSteward } from '@/lib/spartan/stewards'
 import { resolveWikiKnowledge } from '@/lib/spartan/wiki-knowledge'
 import { enrichKingdomPayload } from '@/lib/spartan/kingdom-data'
+import { processStorageQueue } from '@/lib/spartan/internal-storage'
 import type { ProvinceSnapshot, SpartanEvent } from '@/lib/spartan/history'
 
 export const dynamic = 'force-dynamic'
@@ -272,40 +273,23 @@ export async function POST(request: Request) {
       })
       if (stewardError) return NextResponse.json({ error: stewardError.message }, { status: 500 })
 
-      // Accepted captures must be routed into the durable Intel feed immediately.
-      // The capture vault is the safety copy; without this handoff, pages only see
-      // the vault receipt and never see the new intel record.
+      // Route accepted captures through the shared worker directly. A self-HTTP
+      // request to this Render service can fail even while the app is healthy.
       if (captureSteward.decision === 'accept' && typeof capture.captureId === 'string' && capture.captureId.trim()) {
-        const stewardKey = process.env.SPARTAN_STEWARD_KEY?.trim()
-        if (stewardKey) {
-          try {
-            const processResponse = await fetch(new URL('/api/internal-storage/process', request.url), {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'x-spartan-steward-key': stewardKey,
-              },
-              // Drain the accepted-capture queue so this run also catches up any
-              // earlier captures that were saved but never routed into Intel records.
-              body: JSON.stringify({ limit: 25 }),
-              cache: 'no-store',
-            })
-            if (!processResponse.ok) {
-              console.error('[SPARTAN CAPTURE] Automatic storage processing failed', {
-                captureId: capture.captureId,
-                status: processResponse.status,
-                detail: (await processResponse.text()).slice(0, 500),
-              })
-            }
-          } catch (processingError) {
-            console.error('[SPARTAN CAPTURE] Automatic storage processing request failed', {
+        try {
+          const processing = await processStorageQueue(supabase, 25)
+          if (processing.failed) {
+            console.error('[SPARTAN CAPTURE] Automatic storage processing completed with failures', {
               captureId: capture.captureId,
-              error: processingError instanceof Error ? processingError.message : String(processingError),
+              processed: processing.processed,
+              failed: processing.failed,
+              failures: processing.failures.slice(0, 5),
             })
           }
-        } else {
-          console.error('[SPARTAN CAPTURE] Automatic storage processing skipped: SPARTAN_STEWARD_KEY is missing', {
+        } catch (processingError) {
+          console.error('[SPARTAN CAPTURE] Automatic storage processing failed', {
             captureId: capture.captureId,
+            error: processingError instanceof Error ? processingError.message : String(processingError),
           })
         }
       }
