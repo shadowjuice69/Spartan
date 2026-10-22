@@ -1,6 +1,7 @@
 "use strict"
 
 import { NextRequest, NextResponse } from "next/server"
+import { parseScience } from "@/lib/spartan/page-models"
 import { createClient } from "@supabase/supabase-js"
 
 export const runtime = "nodejs"
@@ -31,9 +32,68 @@ export async function GET(req:NextRequest){
 
   const p=pv.data[0]
   const metadata=(p.metadata&&typeof p.metadata==="object")?p.metadata as Record<string,any>:{}
-  const capturedScience=(metadata.science&&typeof metadata.science==="object")?metadata.science as Record<string,any>:{}
-  const capturedEffects=(metadata.science_effects&&typeof metadata.science_effects==="object")?metadata.science_effects as Record<string,any>:{}
+  let capturedScience:Record<string,any>={}
+  let capturedEffects:Record<string,any>={}
+  let capturedAt:string|null=null
+  let source="No current-age science capture"
 
+  // The current_age setting may be absent after an age reset. The append-only
+  // age log is the authoritative fallback, and untagged science is accepted
+  // only when its capture timestamp is on/after that age's start.
+  const ageResult=await sb.from("spartan_age_log").select("new_age,created_at").order("created_at",{ascending:false}).limit(1).maybeSingle()
+  if(ageResult.error)throw ageResult.error
+  const currentAge=Number(ageResult.data?.new_age)
+  const ageStartedAt=ageResult.data?.created_at||null
+  const ageStartMs=ageStartedAt?Date.parse(ageStartedAt):NaN
+
+  if(Number.isInteger(currentAge)&&currentAge>0&&Number.isFinite(ageStartMs)){
+    const accountResult=await sb.from("spartan_accounts").select("id").ilike("province_name",p.province_name).eq("province_location",p.kingdom_code).limit(1)
+    if(accountResult.error)throw accountResult.error
+    const account=accountResult.data?.[0]
+    if(account?.id){
+      const scienceResult=await sb.from("spartan_intel_records")
+        .select("captured_at,created_at,age,raw_text,parsed_payload")
+        .eq("province_id",String(account.id))
+        .eq("page_kind","science")
+        .order("captured_at",{ascending:false})
+        .limit(30)
+      if(scienceResult.error)throw scienceResult.error
+      for(const row of scienceResult.data||[]){
+        const at=String(row.captured_at||row.created_at||"")
+        const age=Number(row.age)
+        const current=Number.isFinite(age)&&row.age!=null?age===currentAge:(Number.isFinite(Date.parse(at))&&Date.parse(at)>=ageStartMs)
+        if(!current)continue
+        const parsed=parseScience(String(row.raw_text||""))
+        const books:Record<string,number>={}
+        const effects:Record<string,string>={}
+        for(const category of parsed.categories||[]){
+          for(const item of category.items||[]){
+            const key=String(item.name||"").toLowerCase().replace(/[^a-z0-9]+/g,"_").replace(/^_+|_+$/g,"")
+            if(!key)continue
+            books[key]=Number(item.books)||0
+            effects[key]=String(Number(item.effect)||0)+"%"
+          }
+        }
+        if(Object.keys(books).length){
+          capturedScience=books
+          capturedEffects=effects
+          capturedAt=at||null
+          source="Current-age Spartan Science capture"
+          break
+        }
+      }
+    }
+  }
+
+  // Registry metadata remains a compatibility fallback only when its own
+  // capture timestamp proves it belongs to the current age.
+  const metadataAt=String(metadata.science_captured_at||"")
+  if(!Object.keys(capturedScience).length&&Number.isFinite(ageStartMs)&&Date.parse(metadataAt)>=ageStartMs){
+    capturedScience=(metadata.science&&typeof metadata.science==="object")?metadata.science as Record<string,any>:{}
+    capturedEffects=(metadata.science_effects&&typeof metadata.science_effects==="object")?metadata.science_effects as Record<string,any>:{}
+    capturedAt=metadataAt||null
+    source="Current-age province registry science snapshot"
+  }
   const summary:any={}
   for(const k of keys){
     const currentBooks=Number(capturedScience[k]||0)
@@ -59,8 +119,10 @@ export async function GET(req:NextRequest){
     province:p.province_name,
     kingdom:p.kingdom_code,
     summary,
-    source:"Spartan province registry / latest captured Science page",
-    capturedAt:metadata.science_captured_at||null
+    source,
+    age:Number.isInteger(currentAge)&&currentAge>0?currentAge:null,
+    ageStartedAt,
+    capturedAt
   })
  }catch(e:any){
   return NextResponse.json({error:e?.message||"Science summary failed"},{status:500})
