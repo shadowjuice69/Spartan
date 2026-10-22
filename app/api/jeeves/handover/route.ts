@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient as createAdmin } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/server'
+import { canAccessOwnerConsole, extractDiscordId } from '@/lib/spartan/security'
 
 export const dynamic = 'force-dynamic'
 
@@ -42,6 +43,12 @@ export async function GET() {
   const { data: { user } } = await auth.auth.getUser()
   if (!user) return NextResponse.json({ ok: false, error: 'Authentication required.' }, { status: 401 })
 
+  const db = adminClient()
+  const { data: account, error: accountError } = await db.from('spartan_accounts').select('discord_user_id').eq('auth_user_id', user.id).maybeSingle()
+  if (accountError) return NextResponse.json({ ok: false, error: 'Could not verify Spartan owner access.' }, { status: 503 })
+  const discordId = account?.discord_user_id || extractDiscordId(user)
+  if (!canAccessOwnerConsole(discordId)) return NextResponse.json({ ok: true, visible: false })
+
   const checkedAt = new Date().toISOString()
   const sourceStatus = { github: 'pending', supabase: 'pending' } as Record<string, string>
   let main: { sha?: string; commit?: { message?: string; committer?: { date?: string } }; html_url?: string } | null = null
@@ -72,7 +79,6 @@ export async function GET() {
   }
 
   try {
-    const db = adminClient()
     const { data, error } = await db
       .from('spartan_system_issues')
       .select('issue_id,subsystem,endpoint,severity,error_message,last_detected_at,occurrence_count,commit_sha')
@@ -131,6 +137,7 @@ export async function GET() {
 
   return NextResponse.json({
     ok: true,
+    visible: true,
     checkedAt,
     deployment,
     proposals,
