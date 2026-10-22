@@ -22,6 +22,9 @@ function runSchema(flow,capture){const rawFields=fieldPaths(capture?.raw_payload
 
 async function runIntegrity(sb,flow,queueId,projectionKey){
  if(!flow?.flow_id)return result('integrity','fail',100,'flow_id missing');
+ // Global and kingdom-only captures are valid without a province state projection.
+ // Looking them up by flow_id creates false historical integrity errors.
+ if(!flow.province_id)return result('integrity','pass',100,'global or kingdom-only flow has no province projection requirement',{queue_id:queueId,kingdom_id:flow.kingdom_id||null,scope:'non-province'});
  const{data:projection,error}=await sb.from('spartan_state_projection').select('province_id,version,source_flow_id,updated_at').eq('province_id',projectionKey).maybeSingle();
  if(error)return result('integrity','fail',100,`projection lookup failed: ${error.message}`);
  if(!projection)return result('integrity','fail',100,'projection missing after processing');
@@ -69,7 +72,7 @@ async function runKnowledge(sb){
  const sourceUrl=String(process.env.SPARTAN_WIKI_VERIFICATION_URL||`${baseUrl}/wiki?debug=1`);
  const sourceKey=`utopia_wiki_age_${age}`;
  const sourceName=`Spartan Utopia Wiki Age ${age}`;
- const metadata={...(source.metadata||{}),source:'render_public_wiki',path:'/wiki?debug=1',auto_aligned:true};
+ const metadata={...(source.metadata||{}),source:'render_public_wiki',source_key:sourceKey,path:'/wiki?debug=1',auto_aligned:true};
  if(source.source_key!==sourceKey||source.source_name!==sourceName||source.source_url!==sourceUrl||Number(source.age_number)!==age){
   const{error:updateError}=await sb.from('spartan_wiki_knowledge_registry').update({source_key:sourceKey,source_name:sourceName,source_url:sourceUrl,age_number:age,metadata,updated_at:new Date().toISOString()}).eq('source_key',source.source_key);
   if(updateError)return result('knowledge','fail',100,`knowledge registry auto-alignment failed: ${updateError.message}`,{source_key:source.source_key,age,counts});
