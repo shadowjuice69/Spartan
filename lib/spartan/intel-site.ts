@@ -38,6 +38,34 @@ export type Prov = {
 }
 
 const text = (v: unknown) => String(v ?? '').trim()
+
+// intel.utopia.site's kingdom grid stores race/personality together in combo
+// (for example "Av/Cl") rather than as separate cell fields. Decode it once
+// for every page model that consumes this grid.
+const RACE_CODES: Record<string, string> = {
+  av: 'Avian', de: 'Dark Elf', da: 'Dark Elf', dr: 'Dryad', dw: 'Dwarf',
+  el: 'Elf', fa: 'Faery', gn: 'Gnome', ha: 'Halfling', hu: 'Human',
+  or: 'Orc', un: 'Undead',
+}
+const PERSONALITY_CODES: Record<string, string> = {
+  ar: 'Artisan', cl: 'Cleric', ge: 'General', he: 'Heretic', my: 'Mystic',
+  ne: 'Necromancer', ro: 'Rogue', sa: 'Sage', ta: 'Tactician',
+  wh: 'War Hero', wa: 'Warrior',
+}
+function decodeName(value: unknown, codes: Record<string, string>): string {
+  const raw = text(value)
+  if (!raw) return ''
+  const decoded = codes[raw.toLowerCase()]
+  return decoded || raw
+}
+export function racePersonalityFromCells(cells: Cells): { race: string; personality: string } {
+  const [raceCode = '', personalityCode = ''] = text(cells.combo).split('/').map(part => part.trim())
+  return {
+    race: decodeName(cells.race, RACE_CODES) || decodeName(raceCode, RACE_CODES),
+    personality: decodeName(cells.personality, PERSONALITY_CODES) || decodeName(personalityCode, PERSONALITY_CODES),
+  }
+}
+
 export const isArmyRow = (r: GridRow) => /_/.test(String(r.id ?? r.cells?.id ?? ''))
 
 export function mergeGrids(captures: GridCapture[]): Record<string, Prov[]> {
@@ -50,7 +78,10 @@ export function mergeGrids(captures: GridCapture[]): Record<string, Prov[]> {
       const slot = text(c.slot || row.id)
       if (!slot) continue
       const cur = map.get(slot) || { cells: {}, at: cap.at }
-      for (const [k, v] of Object.entries(c)) {
+      // Fill decoded race/personality only when an explicit value was not captured.
+      const decoded = racePersonalityFromCells(c)
+      const cells = { ...c, race: text(c.race) || decoded.race, personality: text(c.personality) || decoded.personality }
+      for (const [k, v] of Object.entries(cells)) {
         const empty = v === '' || v === null || v === undefined || (typeof v === 'object' && !text((v as any).text))
         if (!empty && !(k in cur.cells)) cur.cells[k] = v
       }

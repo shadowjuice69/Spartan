@@ -3,6 +3,8 @@
 
 export type AnyRec = Record<string, any>
 
+import { racePersonalityFromCells } from './intel-site'
+
 export const clean = (value: unknown) => String(value ?? '').replace(/\s+/g, ' ').trim()
 
 export function toNum(value: unknown): number | null {
@@ -326,13 +328,14 @@ export function parseGridRows(grid: AnyRec | null | undefined) {
   return rows
     .map((row: AnyRec) => {
       const c: AnyRec = row?.cells || row || {}
+      const identity = racePersonalityFromCells(c)
       return {
         slot: toNum(c.slot),
         name: clean(c.name),
         location: clean(c.location),
         ruler: clean(c.ruler),
-        race: clean(c.race),
-        personality: clean(c.personality),
+        race: identity.race,
+        personality: identity.personality,
         combo: clean(c.combo),
         honor: clean(c.honor),
         group: clean(c.group),
