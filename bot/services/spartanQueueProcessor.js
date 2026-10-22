@@ -5,8 +5,10 @@ const stewardSystem = require('./spartanStewardSystem');
 
 const INTERVAL_MS = Math.max(500, Number(process.env.SPARTAN_PROCESSOR_INTERVAL_MS || 2000));
 const BATCH_SIZE = Math.max(1, Math.min(50, Number(process.env.SPARTAN_PROCESSOR_BATCH_SIZE || 10)));
+const BACKLOG_STEWARD_INTERVAL_MS = Math.max(60000, Number(process.env.SPARTAN_BACKLOG_STEWARD_INTERVAL_MS || 300000));
 const WORKER_ID = process.env.RENDER_INSTANCE_ID || `spartan-${process.pid}-${crypto.randomBytes(3).toString('hex')}`;
 let timer = null;
+let backlogStewardTimer = null;
 let running = false;
 let startupBackfillRunning = false;
 function compact(value) { return Object.fromEntries(Object.entries(value || {}).filter(([, v]) => v !== undefined && v !== null)); }
@@ -473,6 +475,21 @@ async function processBatch() {
     for (const job of jobs) { try { const result = await processOne(sb, job); if (!result.quarantined) logger.info(`[SPARTAN PROCESSOR] completed queue=${result.queueId} flow=${result.flowId} page=${result.pageKind || ''} version=${result.version}`); } catch (error) { logger.error(`[SPARTAN PROCESSOR] queue=${job.id} flow=${job.flow_id} failed: ${error.stack || error.message}`); try { await failOne(sb, job, error); } catch (failError) { logger.error(`[SPARTAN PROCESSOR] failure bookkeeping failed: ${failError.message}`); } } }
   } catch (error) { logger.error(`[SPARTAN PROCESSOR LOOP] ${error.stack || error.message}`); } finally { running = false; }
 }
-function start() { if (timer || startupBackfillRunning) return; if (process.env.SPARTAN_PROCESSOR_ENABLED === 'false') { logger.info('[SPARTAN PROCESSOR] disabled by SPARTAN_PROCESSOR_ENABLED=false'); return; } stewardSystem.start(); logger.info(`[SPARTAN PROCESSOR] starting worker=${WORKER_ID} interval=${INTERVAL_MS}ms batch=${BATCH_SIZE}`); const sb = supabaseService.getClient(); startupBackfillRunning = true; backfillMissingBotIntel(sb).catch(error => logger.error(`[SPARTAN INTEL BACKFILL] failed: ${error.stack || error.message}`)).finally(() => { startupBackfillRunning = false; processBatch(); timer = setInterval(processBatch, INTERVAL_MS); }); }
-function stop() { if (timer) clearInterval(timer); timer = null; }
-module.exports = { start, stop, processBatch, processOne };
+async function runBacklogSteward() {
+  if (running || startupBackfillRunning) return;
+  const sb = supabaseService.getClient();
+  if (!sb) return;
+  startupBackfillRunning = true;
+  try {
+    const result = await backfillMissingBotIntel(sb);
+    logger.info(`[SPARTAN BACKLOG STEWARD] checked=${result.checked} recovered=${result.recovered} skipped=${result.skipped}`);
+  } catch (error) {
+    logger.error(`[SPARTAN BACKLOG STEWARD] failed: ${error.stack || error.message}`);
+  } finally {
+    startupBackfillRunning = false;
+    processBatch();
+  }
+}
+function start() { if (timer || startupBackfillRunning) return; if (process.env.SPARTAN_PROCESSOR_ENABLED === 'false') { logger.info('[SPARTAN PROCESSOR] disabled by SPARTAN_PROCESSOR_ENABLED=false'); return; } stewardSystem.start(); logger.info(`[SPARTAN PROCESSOR] starting worker=${WORKER_ID} interval=${INTERVAL_MS}ms batch=${BATCH_SIZE}`); const sb = supabaseService.getClient(); startupBackfillRunning = true; backfillMissingBotIntel(sb).catch(error => logger.error(`[SPARTAN INTEL BACKFILL] failed: ${error.stack || error.message}`)).finally(() => { startupBackfillRunning = false; processBatch(); timer = setInterval(processBatch, INTERVAL_MS); backlogStewardTimer = setInterval(runBacklogSteward, BACKLOG_STEWARD_INTERVAL_MS); logger.info(`[SPARTAN BACKLOG STEWARD] scheduled interval=${BACKLOG_STEWARD_INTERVAL_MS}ms`); }); }
+function stop() { if (timer) clearInterval(timer); if (backlogStewardTimer) clearInterval(backlogStewardTimer); timer = null; backlogStewardTimer = null; }
+module.exports = { start, stop, processBatch, processOne, runBacklogSteward };
