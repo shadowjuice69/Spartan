@@ -1,4 +1,5 @@
 import type { ScienceCategory } from './build-parser'
+import { parseScienceText } from './build-parser'
 import { calculateCategoryAllocation } from './science-calculator'
 
 // The science page names the third category "Arcane Arts"; builds call it "arcane".
@@ -26,6 +27,67 @@ export interface CategoryPlan {
   available: number
   rows: PlanRow[]
   extras: { name: string; books: number }[]
+}
+
+
+// Older stored builds may contain numeric weights or legacy raw science text.
+// Normalize those formats at read time; never write back or mutate the saved build.
+const emptyScience = (): Record<CategoryKey, ScienceCategory> => ({ economy: {}, military: {}, arcane: {} })
+const hasEntries = (value: Record<CategoryKey, ScienceCategory>) =>
+  CATEGORY_KEYS.some((key) => Object.keys(value[key]).length > 0)
+
+export function normalizeScience(value: unknown, rawText?: unknown): Record<CategoryKey, ScienceCategory> {
+  const result = emptyScience()
+  const source = value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {}
+  const aliases: Record<CategoryKey, string[]> = {
+    economy: ['economy', 'economy science', 'economy_science'],
+    military: ['military', 'military science', 'military_science'],
+    arcane: ['arcane', 'arcane arts', 'arcane_science', 'arcane arts science'],
+  }
+
+  const parseEntry = (raw: unknown): { type: 'weight' | 'actual_pct'; value: number } | null => {
+    if (typeof raw === 'number' && Number.isFinite(raw) && raw >= 0) return { type: 'weight', value: raw }
+    if (typeof raw === 'string') {
+      const text = raw.trim()
+      const m = text.match(/^(\\d+(?:\\.\\d+)?)\\s*(%|x)?$/i)
+      if (!m) return null
+      const n = Number(m[1])
+      return Number.isFinite(n) && n >= 0
+        ? { type: m[2] === '%' ? 'actual_pct' : 'weight', value: n }
+        : null
+    }
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
+    const item = raw as Record<string, unknown>
+    const rawValue = item.value ?? item.weight ?? item.actual_pct ?? item.percent ?? item.target_pct
+    const n = typeof rawValue === 'number' ? rawValue : Number(rawValue)
+    if (!Number.isFinite(n) || n < 0 || rawValue == null || rawValue === '') return null
+    const kind = String(item.type ?? item.kind ?? '').toLowerCase()
+    const isPct = kind === 'actual_pct' || kind.includes('percent') || kind === 'fixed'
+      || item.actual_pct != null || item.percent != null || item.target_pct != null
+    if (kind && kind !== 'weight' && kind !== 'actual_pct' && !kind.includes('percent') && kind !== 'fixed') return null
+    return { type: isPct ? 'actual_pct' : 'weight', value: n }
+  }
+
+  for (const key of CATEGORY_KEYS) {
+    const foundKey = Object.keys(source).find((candidate) => aliases[key].includes(candidate.trim().toLowerCase()))
+    const entries = foundKey ? source[foundKey] : null
+    if (!entries || typeof entries !== 'object' || Array.isArray(entries)) continue
+    for (const [name, raw] of Object.entries(entries as Record<string, unknown>)) {
+      const cleanName = name.trim()
+      const entry = parseEntry(raw)
+      if (cleanName && entry) result[key][cleanName] = entry
+    }
+  }
+
+  if (typeof rawText === 'string' && rawText.trim()) {
+    const legacy = parseScienceText(rawText)
+    for (const key of CATEGORY_KEYS) {
+      if (Object.keys(result[key]).length === 0) result[key] = legacy[key]
+    }
+  }
+  return result
 }
 
 const liveName = (key: CategoryKey) => (key === 'arcane' ? 'arcane arts' : key)
