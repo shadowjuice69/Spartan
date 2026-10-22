@@ -11,7 +11,7 @@ type Extras = {
   gameDate: string | null; nextTickMinutes: number | null; race: string | null; ruler: string | null
   tradeBalance: number | null; offPoints: number | null; offAvailable: number | null; defPoints: number | null; defHome: number | null
   thievesReadyPct: number | null; wizardsReadyPct: number | null
-  spells: Spell[]; armies: { daysLeft: number; acres: number }[]
+  spells: Spell[]; armies: { daysLeft: number; acres: number }[]; unitCounts?: Record<string, number>
   ritual: { name: string; effectiveness: number; daysLeft: number } | null
   dragon: string | null; notices: string | null; news: string | null
 }
@@ -34,10 +34,17 @@ export default function ThronePage() {
   const x = s?.extras
   const acres = n(nums.acres)
 
-  const units = [
-    ['Soldiers', nums.soldiers, C.mute], ['Offensive specialists', nums.off_specs, C.red], ['Defensive specialists', nums.def_specs, C.cyan],
-    ['Elites', nums.elites, C.violet], ['Thieves', nums.thieves, C.amber], ['Wizards', nums.wizards, C.lime], ['War horses', nums.war_horses, C.green],
-  ].filter(([, v]) => v).map(([label, value, color]) => ({ label: String(label), value: Number(value), color: color as string, text: `${fmt(Number(value))} · ${per(Number(value), acres)}/acre` }))
+  const capturedUnits = Object.entries(x?.unitCounts || {})
+  const unitRows = capturedUnits.length
+    ? capturedUnits.map(([label, value], index) => [label, value, [C.red, C.cyan, C.violet, C.amber, C.lime, C.green, C.pink, C.blue][index % 8]] as [string, number, string])
+    : [
+        ['Soldiers', nums.soldiers, C.mute], ['Offensive specialists', nums.off_specs, C.red], ['Defensive specialists', nums.def_specs, C.cyan],
+        ['Elites', nums.elites, C.violet], ['Thieves', nums.thieves, C.amber], ['Wizards', nums.wizards, C.lime], ['War horses', nums.war_horses, C.green],
+      ] as Array<[string, number | null, string]>
+  const units = unitRows.filter(([, value]) => value).map(([label, value, color]) => ({
+    label: String(label), value: Number(value), color: color as string,
+    text: fmt(Number(value)) + ' · ' + per(Number(value), acres) + '/acre',
+  }))
 
   const series = cur?.series || []
   const land = [

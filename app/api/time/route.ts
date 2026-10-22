@@ -67,7 +67,7 @@ async function resolveAnchor(): Promise<Anchor> {
   const auth = await createClient(); const { data: { user } } = await auth.auth.getUser()
   if (!user) throw new Error('Unauthorized')
   const db = adminClient()
-  const { data: account, error: accountError } = await db.from('spartan_accounts').select('province_name,province_location,discord_user_id').eq('auth_user_id', user.id).maybeSingle()
+  const { data: account, error: accountError } = await db.from('spartan_accounts').select('id,province_name,province_location,discord_user_id').eq('auth_user_id', user.id).maybeSingle()
   if (accountError) throw accountError
   if (!account) throw new Error('Spartan account identity not found.')
 
@@ -82,7 +82,7 @@ async function resolveAnchor(): Promise<Anchor> {
   }
   if (!registry?.province_id) throw new Error('Your Spartan province is not linked to the Utopia clock.')
 
-  const { data: captures, error: captureError } = await db.from('spartan_intel_records').select('captured_at,raw_text,parsed_payload,page_kind').eq('province_id', registry.province_id).eq('page_kind', 'throne').order('captured_at', { ascending: false }).limit(100)
+  const { data: captures, error: captureError } = await db.from('spartan_intel_records').select('captured_at,raw_text,parsed_payload,page_kind').eq('province_id', String(account.id)).eq('page_kind', 'throne').order('captured_at', { ascending: false }).limit(100)
   if (captureError) throw captureError
   for (const capture of captures ?? []) {
     const gameDate = findGameDate(capture.raw_text) ?? findGameDate(capture.parsed_payload)

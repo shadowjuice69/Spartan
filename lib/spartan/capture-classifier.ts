@@ -29,6 +29,7 @@ export function classifyCapture(urlValue: unknown, rawTextValue: unknown, scrape
     [/\/magic(?:$|[?#/])/, 'magic', 1, 'Utopia magic URL'],
     [/\/thie(?:very|ves?)(?:$|[?#/])/, 'thievery', 0.98, 'Utopia thievery URL'],
     [/\/explor(?:e|ation)(?:$|[?#/])/, 'exploration', 1, 'Utopia exploration URL'],
+    [/\/kingdom_intel(?:$|[?#/])/, 'intel', 0.98, 'Utopia kingdom intel URL'],
     [/\/kingdom(?:$|[?#/])/, 'kingdom', 1, 'Utopia kingdom URL'],
     [/\/kingdom_details(?:$|[?#/])/, 'kingdom', 0.95, 'Utopia kingdom details URL'],
     [/\/info_dragon(?:$|[?#/])/, 'kingdom', 0.9, 'Utopia dragon/ritual info URL'],

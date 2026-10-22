@@ -215,12 +215,24 @@ export async function GET(request: Request) {
     let currentAge: number | null = null
     let ageStartedAt: string | null = null
     if (page === 'science') {
-      const ageSetting = await db.from('bot_settings').select('value').eq('key', 'current_age').maybeSingle()
-      const parsedAge = Number(ageSetting.data?.value)
-      currentAge = Number.isInteger(parsedAge) && parsedAge > 0 ? parsedAge : null
+      const [ageSetting, latestAgeLog] = await Promise.all([
+        db.from('bot_settings').select('value').eq('key', 'current_age').maybeSingle(),
+        db.from('spartan_age_log').select('new_age,created_at').order('created_at', { ascending: false }).limit(1).maybeSingle(),
+      ])
+      if (ageSetting.error) fail(ageSetting.error)
+      if (latestAgeLog.error) fail(latestAgeLog.error)
+      const configuredAge = Number(ageSetting.data?.value)
+      const loggedAge = Number(latestAgeLog.data?.new_age)
+      currentAge = Number.isInteger(configuredAge) && configuredAge > 0
+        ? configuredAge
+        : Number.isInteger(loggedAge) && loggedAge > 0 ? loggedAge : null
+
       if (currentAge !== null) {
         const ageLog = await db.from('spartan_age_log').select('created_at').eq('new_age', currentAge).order('created_at', { ascending: false }).limit(1).maybeSingle()
-        ageStartedAt = ageLog.data?.created_at || null
+        if (ageLog.error) fail(ageLog.error)
+        ageStartedAt = ageLog.data?.created_at
+          || (loggedAge === currentAge ? latestAgeLog.data?.created_at : null)
+          || null
       }
     }
 
@@ -230,8 +242,8 @@ export async function GET(request: Request) {
     if (page === 'science') {
       const startMs = ageStartedAt ? Date.parse(ageStartedAt) : NaN
       records = currentAge === null ? [] : records.filter((r) => {
-        if (r.age != null && Number.isFinite(Number(r.age))) return Number(r.age) === currentAge
         const capturedMs = Date.parse(when(r))
+        if (r.age != null && Number.isFinite(Number(r.age))) return Number(r.age) === currentAge && Number.isFinite(startMs) && Number.isFinite(capturedMs) && capturedMs >= startMs
         return Number.isFinite(startMs) && Number.isFinite(capturedMs) && capturedMs >= startMs
       })
     }
@@ -306,7 +318,8 @@ export async function GET(request: Request) {
       const g = await db.from('spartan_intel_records')
         .select('id,url,created_at,captured_at,parsed_payload,raw_text,grid:raw_payload->grid')
         .eq('page_kind', 'intel').or(scope).order('created_at', { ascending: false }).limit(60)
-      const rows: any[] = g.error ? [] : g.data || []
+      if (g.error) fail(g.error)
+      const rows: any[] = g.data || []
       const captures: GridCapture[] = rows
         .filter(r => Array.isArray(r.grid?.rows) && r.parsed_payload?.kingdom_code)
         .map(r => ({ kd: String(r.parsed_payload.kingdom_code), at: r.captured_at || r.created_at, url: String(r.url || '').replace(/^https?:\/\/[^/]+/, '').replace(/[?#].*$/, '') || '/', rows: r.grid.rows }))
@@ -318,7 +331,7 @@ export async function GET(request: Request) {
         const provinces = mergeGrids(recent)[kd] || []
         return { kd, own: kd === ownKd, source: recent[0].url, capturedAt: recent[0].at, captures: recent.length, provinces }
       }).sort((a, b) => Number(b.own) - Number(a.own) || Date.parse(b.capturedAt) - Date.parse(a.capturedAt))
-      const statsRow = rows.find(r => /\/stats$/.test(String(r.url || '').split('?')[0]))
+      const statsRow = rows.find(r => /Our KD\s*-|Enemy KD\s*-/.test(String(r.raw_text || '')))
       const armies = armiesFrom(byKd[ownKd] || []).filter(a => (a.secondsRemaining ?? 0) > 0)
       body.model = { kingdoms, stats: parseStats(statsRow?.raw_text), statsAt: statsRow ? statsRow.captured_at || statsRow.created_at : null, armies, ownKd, ownName: account.province_name }
       body.fields = []
@@ -328,15 +341,16 @@ export async function GET(request: Request) {
       // Every Throne capture in scope: numbers from the payload, spells/armies/ritual/dragon from the page text.
       const NUMS = ['acres', 'networth', 'gold', 'food', 'runes', 'peons', 'soldiers', 'off_specs', 'def_specs', 'elites', 'thieves', 'wizards', 'war_horses', 'prisoners', 'offense', 'defense', 'off_available', 'tpa', 'wpa', 'build_efficiency'] as const
       const snaps = records
-        .filter(r => /\/throne/.test(String(r.url || '')) && r.parsed_payload && r.parsed_payload.acres != null)
+        .filter(r => /\/throne/.test(String(r.url || '')) && (r.parsed_payload?.acres != null || /(?:^|\s)Land\s+[\d,]+/.test(String(r.raw_text || ''))))
         .map(r => {
           const pp: any = r.parsed_payload
           const x = parseThroneText(r.raw_text)
           const nums: Record<string, number | null> = {}
-          for (const k of NUMS) nums[k] = toNum(pp[k])
+          const parsedThrone = parseThrone(r.raw_text || '')
+          for (const k of NUMS) nums[k] = toNum(pp[k]) ?? toNum((parsedThrone as any)[k])
           return {
             id: r.id, at: when(r), province: String(pp.province_name || x.province || ''), kd: String(pp.kingdom_code || x.kd || ''),
-            nums, armiesDaysLeft: toNum(pp.armies_days_left), armiesLastAcres: toNum(pp.armies_last_acres), extras: x,
+            nums, armiesDaysLeft: toNum(pp.armies_days_left), armiesLastAcres: toNum(pp.armies_last_acres), extras: { ...x, unitCounts: parsedThrone.unitCounts },
           }
         })
         .filter(sn => sn.province)
@@ -380,13 +394,27 @@ export async function GET(request: Request) {
         if (d.code && !byCode.has(d.code)) byCode.set(d.code, { ...d, capturedAt: when(r) })
       }
       const gridResult = await db.from('spartan_intel_records').select('id,created_at,url,grid:raw_payload->grid').eq('page_kind', 'intel').or(scope).order('created_at', { ascending: false }).limit(40)
-      const gridRecs = gridResult.error ? [] : gridResult.data || []
+      if (gridResult.error) fail(gridResult.error)
+      const gridRecs = gridResult.data || []
       const roster = new Map<string, any>()
+      const missing = (value: any) => value == null || value === '' || (Array.isArray(value) && value.length === 0) || (typeof value === 'number' && !Number.isFinite(value))
       for (const g of gridRecs as any[]) {
         const rows = parseGridRows(g.grid)
         for (const row of rows) {
-          const key = `${row.location}|${row.name}`
-          if (!roster.has(key)) roster.set(key, { ...row, seenAt: g.created_at, seenOn: pathOf(g.url) })
+          const key = String(row.location) + '|' + String(row.name)
+          const current = roster.get(key)
+          if (!current) {
+            roster.set(key, { ...row, seenAt: g.created_at, seenOn: pathOf(g.url) })
+            continue
+          }
+          // Captures are often partial: the newest UtopiaIntel roster may have
+          // names/races only, while an Intel-site grid has combat/personality
+          // columns. Merge newest-first, filling only fields it did not provide.
+          const merged = { ...current }
+          for (const [field, value] of Object.entries(row)) {
+            if (missing(merged[field]) && !missing(value)) merged[field] = value
+          }
+          roster.set(key, merged)
         }
       }
       const codes = new Set<string>([...byCode.keys(), ...[...roster.values()].map(r => r.location).filter(Boolean)])

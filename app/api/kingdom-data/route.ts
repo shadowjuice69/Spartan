@@ -16,12 +16,14 @@ type CaptureRow = {
   captured_at: string
   kingdom_id: string | null
   parsed_payload: any
+  raw_text?: string | null
+  raw_payload?: any
 }
 
 function details(row: CaptureRow) {
   const existing = row.parsed_payload?.kingdom_details
-  if (existing && Array.isArray(existing.provinces)) return existing
-  return parseKingdomStructured('', {}, row.parsed_payload || {})
+  if (existing && Array.isArray(existing.provinces) && existing.provinces.length) return existing
+  return parseKingdomStructured(row.raw_text || '', row.raw_payload || {}, row.parsed_payload || {})
 }
 
 function delta(current: number | null, previous: number | null) {
@@ -52,7 +54,7 @@ export async function GET() {
     // the page must remain populated after vault cleanup.
     const { data: captures, error: captureError } = await db
       .from('spartan_capture_vault')
-      .select('capture_id,captured_at,kingdom_id,parsed_payload')
+      .select('capture_id,captured_at,kingdom_id,parsed_payload,raw_text,raw_payload')
       .eq('kingdom_id', account.province_location)
       .eq('page_kind', 'kingdom')
       .order('captured_at', { ascending: false })
@@ -65,7 +67,7 @@ export async function GET() {
     if (!sourceRows.length) {
       const { data: intelRows, error: intelError } = await db
         .from('spartan_intel_records')
-        .select('id,captured_at,kingdom_id,parsed_payload')
+        .select('id,captured_at,kingdom_id,parsed_payload,raw_text,raw_payload')
         .eq('kingdom_id', account.province_location)
         .eq('page_kind', 'kingdom')
         .order('captured_at', { ascending: false })
@@ -78,6 +80,8 @@ export async function GET() {
         captured_at: row.captured_at,
         kingdom_id: row.kingdom_id,
         parsed_payload: row.parsed_payload,
+        raw_text: row.raw_text,
+        raw_payload: row.raw_payload,
       }))
     }
 

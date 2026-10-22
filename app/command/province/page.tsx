@@ -15,10 +15,10 @@ export default function ProvincePage() {
   const f = m?.throneFields || {}
   const s = m?.state
   const history: any[] = data?.history || []
-  const acres = f.acres ?? s?.land
-  const nw = f.networth ?? s?.networth
-  const off = f.offense
-  const def = f.defense
+  const acres = f.acres ?? s?.land ?? t?.acres
+  const nw = f.networth ?? s?.networth ?? t?.networth
+  const off = f.offense ?? t?.offense
+  const def = f.defense ?? t?.defense
   const pop = s?.population
   const popSlices = pop ? [
     { label: 'Peasants', value: pop.peasants || 0, color: C.cyan },
@@ -26,11 +26,15 @@ export default function ProvincePage() {
     { label: 'Thieves', value: pop.thieves || 0, color: C.amber },
     { label: 'Wizards', value: pop.wizards || 0, color: C.violet },
   ] : []
-  const army = [
-    ['Strongarms (offense)', f.off_specs, C.red], ['Slingers (defense)', f.def_specs, C.cyan], ['Elites', f.elites, C.violet],
-    ['Soldiers', f.soldiers, C.amber], ['War horses', f.war_horses, C.lime], ['Thieves', f.thieves, C.pink], ['Wizards', f.wizards, C.blue],
-  ].filter(r => r[1] != null) as Array<[string, number, string]>
-  const resources = [['Gold', f.gold, C.amber], ['Food', f.food, C.green], ['Runes', f.runes, C.violet], ['Peasants', f.peons, C.cyan]].filter(r => r[1] != null) as Array<[string, number, string]>
+  const capturedUnits = t?.unitCounts && typeof t.unitCounts === 'object' ? Object.entries(t.unitCounts as Record<string, number>) : []
+  const army = (capturedUnits.length
+    ? capturedUnits.map(([name, value], index) => [name, value, [C.red, C.cyan, C.violet, C.amber, C.lime, C.pink, C.blue][index % 7]] as [string, number, string])
+    : [
+        ['Offensive specialists', f.off_specs, C.red], ['Defensive specialists', f.def_specs, C.cyan], ['Elites', f.elites, C.violet],
+        ['Soldiers', f.soldiers ?? t?.soldiers, C.amber], ['War horses', f.war_horses ?? t?.war_horses, C.lime],
+        ['Thieves', f.thieves ?? t?.thieves, C.pink], ['Wizards', f.wizards ?? t?.wizards, C.blue],
+      ] as Array<[string, number | null | undefined, string]>).filter(r => r[1] != null && Number.isFinite(Number(r[1]))) as Array<[string, number, string]>
+  const resources = [['Gold', f.gold ?? t?.gold, C.amber], ['Food', f.food ?? t?.food, C.green], ['Runes', f.runes ?? t?.runes, C.violet], ['Peasants', f.peons ?? t?.peons, C.cyan]].filter(r => r[1] != null) as Array<[string, number, string]>
   const trends: any[] = s?.trends || []
   const net = (name: string) => trends.find(x => x.label === name)
 

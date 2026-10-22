@@ -102,6 +102,18 @@ export function mergeGrids(captures: GridCapture[]): Record<string, Prov[]> {
 }
 
 export type Army = { id: string; name: string; acres: number | null; gens: number | null; off: number | null; secondsRemaining: number | null; capturedAt: string }
+
+// Intel-site army timers are strings such as "2h 16m"; numeric val() intentionally
+// rejects those strings, which previously caused every army to be filtered out.
+export function remainingSeconds(value: unknown): number | null {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null
+  const raw = text(value).toLowerCase()
+  if (!raw) return null
+  const matches = [...raw.matchAll(/(\d+(?:\.\d+)?)\s*([dhms])\b/g)]
+  if (!matches.length) return val(raw)
+  return matches.reduce((total, match) => total + Number(match[1]) * ({ d: 86400, h: 3600, m: 60, s: 1 }[match[2] as 'd' | 'h' | 'm' | 's']), 0)
+}
+
 export function armiesFrom(captures: GridCapture[]): Army[] {
   const seen = new Map<string, Army>()
   for (const cap of [...captures].sort((a, b) => Date.parse(b.at) - Date.parse(a.at))) {
@@ -110,7 +122,7 @@ export function armiesFrom(captures: GridCapture[]): Army[] {
       const c = row.cells || {}
       const id = String(row.id ?? c.id)
       if (seen.has(id)) continue
-      seen.set(id, { id, name: text(c.name), acres: val(c.acres), gens: val(c.generals ?? c.gen), off: val(c.modOff ?? c.rawOff), secondsRemaining: val(c.secondsRemaining), capturedAt: cap.at })
+      seen.set(id, { id, name: text(c.name), acres: val(c.acres), gens: val(c.generals ?? c.gen), off: val(c.modOff ?? c.rawOff), secondsRemaining: remainingSeconds(c.secondsRemaining ?? c.timeRemaining ?? c.TimeRemaining), capturedAt: cap.at })
     }
   }
   return [...seen.values()]

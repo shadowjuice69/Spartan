@@ -2,6 +2,8 @@ import crypto from 'crypto'
 import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { runCaptureStewards } from '@/lib/spartan/stewards'
+import { classifyCapture } from '@/lib/spartan/capture-classifier'
+import { runPageSteward } from '@/lib/spartan/page-stewards'
 import { resolveWikiKnowledge } from '@/lib/spartan/wiki-knowledge'
 
 export const dynamic = 'force-dynamic'
@@ -27,12 +29,66 @@ function inferPageKind(url: string) {
   if (value.includes('science')) return 'science'
   if (value.includes('magic')) return 'magic'
   if (value.includes('thievery')) return 'thievery'
+  if (value.includes('kingdom_intel')) return 'intel'
+  if (value.includes('/stats')) return 'intel'
   if (value.includes('news')) return 'news'
   return 'utopiaintel'
 }
 
 function normalizeName(value: unknown) {
   return typeof value === 'string' ? value.trim().toLocaleLowerCase('en-US') : ''
+}
+
+function decodeHtml(value: unknown) {
+  return String(value ?? '')
+    .replace(/<br\s*\/?>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)))
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function parseKingdomIntelGrid(html: string, url: string, dataSimple: string) {
+  const kdMatch = url.match(/\/kingdom_intel\/(\d+)\/(\d+)(?:\/|$|[?#])/i)
+  const kingdomCode = kdMatch ? kdMatch[1] + ':' + kdMatch[2] : ''
+  const rows: Array<{ id: string; cells: Record<string, any> }> = []
+  const table = html.match(/<table\b[^>]*class=["'][^"']*tablesorter[^"']*["'][^>]*>([\s\S]*?)<\/table>/i)?.[1] || html
+  for (const rowMatch of table.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/gi)) {
+    const cells = [...rowMatch[1].matchAll(/<t[dh]\b[^>]*>([\s\S]*?)<\/t[dh]>/gi)].map(match => decodeHtml(match[1]))
+    const slot = Number(cells[0])
+    if (!Number.isInteger(slot) || slot < 1 || slot > 25 || !cells[1]) continue
+    const identity = cells[1].match(/^(.*?)\s+\(([^()]+)\)$/)
+    const name = (identity?.[1] || cells[1]).trim()
+    const race = (identity?.[2] || '').trim()
+    const spells = (cells[2] || '').trim()
+    rows.push({
+      id: String(slot),
+      cells: {
+        id: String(slot), slot: String(slot), name, race, location: kingdomCode,
+        goodSpells: { text: spells, labels: spells ? [spells] : [] },
+      },
+    })
+  }
+
+  // Some capture clients omit HTML. The text table still carries the roster names and races.
+  if (!rows.length && dataSimple) {
+    const lines = dataSimple.split(/\r?\n/)
+    const header = lines.findIndex(line => /Slot\s+Province/i.test(line))
+    for (const line of lines.slice(header + 1)) {
+      const parts = line.split(/\t+/).map(value => value.trim())
+      const slot = Number(parts[0])
+      if (!Number.isInteger(slot) || slot < 1 || slot > 25 || !parts[1]) continue
+      const identity = parts[1].match(/^(.*?)\s+\(([^()]+)\)$/)
+      rows.push({ id: String(slot), cells: { id: String(slot), slot: String(slot), name: (identity?.[1] || parts[1]).trim(), race: (identity?.[2] || '').trim(), location: kingdomCode } })
+    }
+  }
+  return { kingdomCode, grid: rows.length ? { rows } : null }
 }
 
 export async function OPTIONS() {
@@ -102,12 +158,16 @@ export async function POST(request: Request) {
       .update(JSON.stringify([sourceUrl, province, dataHtml, dataSimple]))
       .digest('hex')
 
+    const pageKind = inferPageKind(sourceUrl)
+    const intelGrid = pageKind === 'intel' ? parseKingdomIntelGrid(dataHtml, sourceUrl, dataSimple) : null
+    const urlKd = sourceUrl.match(/\/(?:kingdom_intel|kingdom_details)\/(\d+)\/(\d+)(?:\/|$|[?#])/i)
+    const kingdomCode = intelGrid?.kingdomCode || (urlKd ? urlKd[1] + ':' + urlKd[2] : null)
     const capture = {
-      captureId: `utopiaintel-${fingerprint}`,
+      captureId: 'utopiaintel-' + fingerprint,
       capturedAt: receivedAt,
       source: 'utopiaintel',
       sourceId: fingerprint,
-      pageKind: inferPageKind(sourceUrl),
+      pageKind,
       url: sourceUrl || undefined,
       provinceName: account.province_name,
       province: account.province_name,
@@ -123,11 +183,13 @@ export async function POST(request: Request) {
         data_simple: dataSimple,
         url: sourceUrl,
         prov: province,
+        ...(intelGrid?.grid ? { grid: intelGrid.grid } : {}),
       },
       parsedPayload: {
         url: sourceUrl,
         prov: province,
         data_simple: dataSimple,
+        ...(kingdomCode ? { kingdom_code: kingdomCode } : {}),
       },
     }
 
@@ -147,7 +209,7 @@ export async function POST(request: Request) {
       parsedPayload,
     ])).digest('hex')
 
-    const { error: vaultError } = await supabase.from('spartan_capture_vault').upsert({
+    const { data: vaultReceipt, error: vaultError } = await supabase.from('spartan_capture_vault').upsert({
       user_id: account.id,
       province_id: account.id,
       kingdom_id: account.province_location,
@@ -161,9 +223,10 @@ export async function POST(request: Request) {
       raw_payload: rawPayload,
       parsed_payload: parsedPayload,
       content_hash: contentHash,
-    }, { onConflict: 'content_hash' })
+    }, { onConflict: 'content_hash' }).select('id').single()
 
     if (vaultError) throw new Error(vaultError.message)
+    if (!vaultReceipt?.id) throw new Error('UtopiaIntel receipt was not returned after saving.')
 
     console.info('[UTOPIAINTEL] Receipt stored in spartan_capture_vault', {
       captureId: capture.captureId,
@@ -213,40 +276,71 @@ export async function POST(request: Request) {
     })
     if (stewardError) throw new Error(stewardError.message)
 
-    // Accepted UtopiaIntel captures must be projected from the receipt vault into
-    // spartan_intel_records immediately; otherwise they can remain invisible to
-    // the site's page models until a separate storage cycle happens.
-    if (stewardship.decision === 'accept' && process.env.SPARTAN_STEWARD_KEY?.trim()) {
-      try {
-        const processUrl = new URL('/api/internal-storage/process', request.url)
-        const processed = await fetch(processUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-spartan-steward-key': process.env.SPARTAN_STEWARD_KEY.trim(),
-          },
-          body: JSON.stringify({ captureId: capture.captureId, limit: 1 }),
-          cache: 'no-store',
-        })
-        const result = await processed.json().catch(() => ({}))
-        if (!processed.ok || !result?.ok || Number(result?.processed ?? 0) !== 1) {
-          console.error('[UTOPIAINTEL] Accepted capture was saved, but site projection did not complete', {
-            captureId: capture.captureId,
-            status: processed.status,
-            result,
-          })
-        } else {
-          console.info('[UTOPIAINTEL] Accepted capture parsed and projected into site records', {
-            captureId: capture.captureId,
-            pageKind: result.results?.[0]?.pageKind ?? capture.pageKind,
-          })
-        }
-      } catch (processingError) {
-        console.error('[UTOPIAINTEL] Accepted capture remains in the vault; automatic projection failed', {
-          captureId: capture.captureId,
-          error: processingError instanceof Error ? processingError.message : String(processingError),
-        })
+    // Project accepted receipts directly in-process. Calling this same Render service
+    // over its public hostname can fail DNS/connection setup on the service itself.
+    // The vault receipt remains durable, and the normal Storage Steward can still
+    // verify/clean it up later without duplicating the canonical record.
+    if (stewardship.decision === 'accept') {
+      const classification = classifyCapture(capture.url, rawText, capture.pageKind)
+      const pageSteward = runPageSteward(classification.pageKind, parsedPayload, rawPayload)
+      const existing = await supabase.from('spartan_intel_records').select('id').eq('capture_id', capture.captureId).maybeSingle()
+      if (existing.error) throw new Error(existing.error.message)
+      const capturedMs = Date.parse(receivedAt)
+      const expiresAt = classification.retentionClass === 'intel_48h'
+        ? new Date(capturedMs + 48 * 60 * 60 * 1000).toISOString()
+        : null
+      const structuredPayload = {
+        ...parsedPayload,
+        pageSteward: { handled: pageSteward.handled, fields: pageSteward.fields, payload: pageSteward.payload },
       }
+      const recordFields = {
+        source_vault_id: vaultReceipt.id,
+        user_id: account.id,
+        province_id: account.id,
+        kingdom_id: account.province_location,
+        target_kingdom_id: kingdomCode && kingdomCode !== account.province_location ? kingdomCode : null,
+        target_province_id: null,
+        visibility: kingdomCode && kingdomCode !== account.province_location ? 'enemy' : 'own',
+        captured_at: receivedAt,
+        source: 'utopiaintel',
+        source_id: fingerprint,
+        url: capture.url,
+        page_kind: classification.pageKind,
+        classification_source: classification.source,
+        classification_confidence: classification.confidence,
+        classification_reason: classification.reason,
+        age: null,
+        game_year: null,
+        game_tick: null,
+        retention_class: classification.retentionClass,
+        expires_at: expiresAt,
+        raw_text: rawText || null,
+        raw_payload: rawPayload,
+        parsed_payload: structuredPayload,
+        content_hash: contentHash,
+      }
+      if (!existing.data) {
+        const { error: projectionError } = await supabase.from('spartan_intel_records').insert({
+          capture_id: capture.captureId,
+          ...recordFields,
+        })
+        if (projectionError && projectionError.code !== '23505') throw new Error(projectionError.message)
+      } else {
+        // Refresh a matching fingerprint too: older versions may have stored the
+        // same receipt before the kingdom grid parser/classifier existed.
+        const { error: refreshError } = await supabase.from('spartan_intel_records').update(recordFields).eq('capture_id', capture.captureId)
+        if (refreshError) throw new Error(refreshError.message)
+      }
+      const { error: eventError } = await supabase.from('spartan_steward_events').insert({
+        steward_key: 'storage',
+        capture_id: capture.captureId,
+        decision: 'pass',
+        confidence: classification.confidence,
+        reason: 'Accepted UtopiaIntel receipt projected directly; receipt retained for Storage Steward verification.',
+        details: { sourceVaultId: vaultReceipt.id, destination: 'spartan_intel_records', verifiedPageKind: classification.pageKind, classificationSource: classification.source, sourceUrl: capture.url, pageStewardHandled: pageSteward.handled, pageStewardFields: pageSteward.fields },
+      })
+      if (eventError) throw new Error(eventError.message)
+      console.info('[UTOPIAINTEL] Accepted capture projected into site records', { captureId: capture.captureId, pageKind: classification.pageKind })
     }
 
     return response({
