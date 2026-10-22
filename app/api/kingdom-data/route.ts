@@ -22,7 +22,7 @@ type CaptureRow = {
 
 function details(row: CaptureRow) {
   const existing = row.parsed_payload?.kingdom_details
-  if (existing && Array.isArray(existing.provinces)) return existing
+  if (existing && Array.isArray(existing.provinces) && existing.provinces.length) return existing
   return parseKingdomStructured(row.raw_text || '', row.raw_payload || {}, row.parsed_payload || {})
 }
 
