@@ -285,40 +285,51 @@ export async function POST(request: Request) {
       const pageSteward = runPageSteward(classification.pageKind, parsedPayload, rawPayload)
       const existing = await supabase.from('spartan_intel_records').select('id').eq('capture_id', capture.captureId).maybeSingle()
       if (existing.error) throw new Error(existing.error.message)
+      const capturedMs = Date.parse(receivedAt)
+      const expiresAt = classification.retentionClass === 'intel_48h'
+        ? new Date(capturedMs + 48 * 60 * 60 * 1000).toISOString()
+        : null
+      const structuredPayload = {
+        ...parsedPayload,
+        pageSteward: { handled: pageSteward.handled, fields: pageSteward.fields, payload: pageSteward.payload },
+      }
+      const recordFields = {
+        source_vault_id: vaultReceipt.id,
+        user_id: account.id,
+        province_id: account.id,
+        kingdom_id: account.province_location,
+        target_kingdom_id: kingdomCode && kingdomCode !== account.province_location ? kingdomCode : null,
+        target_province_id: null,
+        visibility: kingdomCode && kingdomCode !== account.province_location ? 'enemy' : 'own',
+        captured_at: receivedAt,
+        source: 'utopiaintel',
+        source_id: fingerprint,
+        url: capture.url,
+        page_kind: classification.pageKind,
+        classification_source: classification.source,
+        classification_confidence: classification.confidence,
+        classification_reason: classification.reason,
+        age: null,
+        game_year: null,
+        game_tick: null,
+        retention_class: classification.retentionClass,
+        expires_at: expiresAt,
+        raw_text: rawText || null,
+        raw_payload: rawPayload,
+        parsed_payload: structuredPayload,
+        content_hash: contentHash,
+      }
       if (!existing.data) {
-        const capturedMs = Date.parse(receivedAt)
-        const expiresAt = classification.retentionClass === 'intel_48h'
-          ? new Date(capturedMs + 48 * 60 * 60 * 1000).toISOString()
-          : null
-        const structuredPayload = {
-          ...parsedPayload,
-          pageSteward: { handled: pageSteward.handled, fields: pageSteward.fields, payload: pageSteward.payload },
-        }
         const { error: projectionError } = await supabase.from('spartan_intel_records').insert({
           capture_id: capture.captureId,
-          source_vault_id: vaultReceipt.id,
-          user_id: account.id,
-          province_id: account.id,
-          kingdom_id: account.province_location,
-          target_kingdom_id: kingdomCode && kingdomCode !== account.province_location ? kingdomCode : null,
-          target_province_id: null,
-          visibility: kingdomCode && kingdomCode !== account.province_location ? 'enemy' : 'own',
-          captured_at: receivedAt,
-          source: 'utopiaintel',
-          source_id: fingerprint,
-          url: capture.url,
-          page_kind: classification.pageKind,
-          classification_source: classification.source,
-          classification_confidence: classification.confidence,
-          classification_reason: classification.reason,
-          retention_class: classification.retentionClass,
-          expires_at: expiresAt,
-          raw_text: rawText || null,
-          raw_payload: rawPayload,
-          parsed_payload: structuredPayload,
-          content_hash: contentHash,
+          ...recordFields,
         })
         if (projectionError && projectionError.code !== '23505') throw new Error(projectionError.message)
+      } else {
+        // Refresh a matching fingerprint too: older versions may have stored the
+        // same receipt before the kingdom grid parser/classifier existed.
+        const { error: refreshError } = await supabase.from('spartan_intel_records').update(recordFields).eq('capture_id', capture.captureId)
+        if (refreshError) throw new Error(refreshError.message)
       }
       const { error: eventError } = await supabase.from('spartan_steward_events').insert({
         steward_key: 'storage',
