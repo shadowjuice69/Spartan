@@ -244,7 +244,34 @@ export function parseThrone(text: string) {
     nextTickMinutes: head ? toNum(head[4]) : null,
     race: (t.match(/Race (.+?) Soldiers/) || [])[1] ? clean((t.match(/Race (.+?) Soldiers/) as RegExpMatchArray)[1]) : null,
     ruler: (t.match(/Ruler (.+?) (?:Strongarms|[A-Z][a-z]+s) /) || [])[1] || null,
-    buildingEfficiency: per(/Building Eff\. (\d+)%/),
+    buildingEfficiency: per(/Building Eff\. ([\d.]+)%/),
+    acres: per(/Land ([\d,]+)/),
+    networth: per(/Networth ([\d,]+)/),
+    gold: per(/Money (-?[\d,]+)/),
+    food: per(/Food (-?[\d,]+)/),
+    runes: per(/Runes (-?[\d,]+)/),
+    peons: per(/Peasants ([\d,]+)/),
+    soldiers: per(/Soldiers ([\d,]+)/),
+    thieves: per(/Thieves ([\d,]+)/),
+    wizards: per(/Wizards ([\d,]+)/),
+    war_horses: per(/War Horses ([\d,]+)/),
+    prisoners: per(/Prisoners ([\d,]+)/),
+    offense: per(/Off\. Points ([\d,]+)/),
+    defense: per(/Def\. Points ([\d,]+)/),
+    unitCounts: (() => {
+      const excluded = new Set(['race','ruler','land','peasants','building eff.','money','food','runes','trade balance','networth','off. points','def. points'])
+      const counts: Record<string, number> = {}
+      for (const line of String(text || '').split(/\r?\n/)) {
+        const cells = line.split(/\t+/).map(clean)
+        for (let i = 0; i + 1 < cells.length; i += 2) {
+          const name = cells[i].replace(/:$/, '').trim()
+          if (!name || excluded.has(name.toLowerCase())) continue
+          const value = toNum(cells[i + 1])
+          if (value !== null && /[A-Za-z]/.test(name)) counts[name] = value
+        }
+      }
+      return counts
+    })(),
     tradeBalance: per(/Trade Balance (-?[\d,]+)/),
     ratios: {
       offSpa: per(/([\d.]+)ospa/), defSpa: per(/([\d.]+)dspa/), peasantsPerAcre: per(/([\d.]+)ppa/),
