@@ -61,7 +61,7 @@ export async function GET() {
 
   try {
     const [commit, pulls] = await Promise.all([
-      github<typeof main>('commits/main'),
+      github<{ sha?: string }>('commits/main'),
       github<PullRequest[]>('pulls?state=open&per_page=100&sort=updated&direction=desc'),
     ])
     mainSha = commit?.sha || null
