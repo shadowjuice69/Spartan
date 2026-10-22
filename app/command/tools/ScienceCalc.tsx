@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { calculateCategoryAllocation } from "@/lib/spartan/science-calculator"
+import { normalizeScience } from "@/lib/spartan/science-plan"
 import {
   AGE117_CAP, AGE117_CAPPED, SCIENCES, SCIENTIFIC_INSIGHTS, REVELATION, SCIENTIST_BOOKS_PER_TICK,
   defByName, impliedExtraMod, norm, personalityMod, scienceBonus, spawnRate, type Opts, type ScienceCat,
@@ -113,7 +114,7 @@ export default function ScienceCalc() {
     const known = new Set(SCIENCES.map((d) => d.name.toLowerCase()))
     for (const cat of CATS) {
       const key = CAT_KEY[cat]
-      for (const r of calculateCategoryAllocation(key, build.science[key] || {}, num(catBooks[key] || "")).rows) {
+      for (const r of calculateCategoryAllocation(key, normalizeScience(build.science, build.raw_science_text)[key] || {}, num(catBooks[key] || "")).rows) {
         const k = r.name.toLowerCase()
         if (!known.has(k)) { unknown.push(r.name); continue }
         planned[k] = r.books
