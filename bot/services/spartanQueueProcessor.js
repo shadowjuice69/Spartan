@@ -132,30 +132,33 @@ async function writeProvinceHistory(sb, flow, state, canonical) {
 function deriveIntelTarget(text) {
   const normalized = String(text || '').replace(/\s+/g, ' ').trim();
   const patterns = [
-    /(?:to|at|against|target(?:ed|ing)?(?:\s+province)?|arrive at)\s+(?:\*\*)?#?(\\d+)\\s+([^(*—:]+?)(?:\\s*\\*\\*)?\\s*\\((\\d+:\\d+)\\)/i,
-    /(?:from|by)\s+(?:an?\s+)?(?:unknown\s+province|province)?\\s*(?:from\\s+)?([^(*—:]+?)\\s*\\((\\d+:\\d+)\\)/i,
-    /#(\\d+)\\s+([^—:]+?)\\s*\\((\\d+:\\d+)\\)/i
+    /(?:to|at|against|target(?:ed|ing)?(?:\s+province)?|arrive at)\s+(?:\*\*)?#?(\d+)\s+([^(*—:]+?)(?:\s*\*\*)?\s*\((\d+:\d+)\)/i,
+    /(?:from|by)\s+(?:an?\s+)?(?:unknown\s+province|province)?\s*(?:from\s+)?([^(*—:]+?)\s*\((\d+:\d+)\)/i,
+    /#(\d+)\s+([^—:]+?)\s*\((\d+:\d+)\)/i,
+    // Utopia's bot ops feed places the target after a pipe, e.g. "| ggs (5:3)".
+    /\|\s*(?:\*\*)?([^|()]+?)\s*\((\d+:\d+)\)/i
   ];
   for (const re of patterns) {
     const m = normalized.match(re);
-    if (m) {
-      if (m.length === 4) return { slot: m[1] || null, name: m[2]?.trim() || null, kingdom: m[3] || null };
-      if (m.length === 3) return { slot: null, name: m[1]?.trim() || null, kingdom: m[2] || null };
-    }
+    if (!m) continue;
+    if (m.length === 4) return { slot: m[1] || null, name: m[2]?.trim() || null, kingdom: m[3] || null };
+    if (m.length === 3) return { slot: null, name: m[1]?.trim() || null, kingdom: m[2] || null };
   }
-  const kingdom = normalized.match(/(?:target kingdom|kingdom(?:\s+mate)?|from).*?\\((\\d+:\\d+)\\)/i)?.[1] || null;
+  const kingdom = normalized.match(/(?:target kingdom|kingdom(?:\s+mate)?|from).*?\((\d+:\d+)\)/i)?.[1] || null;
   return kingdom ? { slot: null, name: null, kingdom } : null;
 }
 
 function deriveIntelIdentity(pageKind, text, flow) {
   const normalized = String(text || '').replace(/\s+/g, ' ').trim();
-  const actor = normalized.match(/#(\\d+)\\s+([^—:]+?)(?:\\s+—|:)/i);
   const target = deriveIntelTarget(normalized);
+  const operation = normalized.match(/<<__([^_]+?)__>>/i)?.[1]
+    ?.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim() || '';
+  const actor = normalized.match(/#(\d+)\s+([^—:]+?)(?:\s+—|:)/i);
   const identityType = ['thievery', 'news', 'aid', 'magic', 'attack'].includes(pageKind) && target ? 'target' : 'actor';
   const identity = identityType === 'target'
-    ? [target?.kingdom || '', target?.slot || '', target?.name || ''].join('|').toLowerCase()
-    : [flow.kingdom_id || '', actor?.[1] || '', actor?.[2]?.trim() || ''].join('|').toLowerCase();
-  return identity.replace(/\\s+/g, ' ').trim() || null;
+    ? [target?.kingdom || '', target?.slot || '', target?.name || '', operation].join('|').toLowerCase()
+    : [flow.kingdom_id || '', actor?.[1] || '', actor?.[2]?.trim() || '', operation || normalized.slice(0, 100)].join('|').toLowerCase();
+  return identity.replace(/\s+/g, ' ').trim() || null;
 }
 
 async function removePreviousIntelProjection(sb, pageKind, kingdomId, intelKey, currentCaptureId) {
