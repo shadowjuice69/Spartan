@@ -125,7 +125,7 @@ export async function GET(request: Request) {
       (allowKingdomView
         ? db.from('spartan_state_projection').select('province_id,kingdom_id,state,version,source_flow_id,updated_at').eq('kingdom_id', kingdom)
         : db.from('spartan_state_projection').select('province_id,kingdom_id,state,version,source_flow_id,updated_at').eq('kingdom_id', kingdom).or(`province_id.eq.${account.id},province_id.eq.${provinceName}`)).order('updated_at', { ascending: false }).limit(100),
-      db.from('spartan_province_history').select('*').eq('user_id', user.id).eq('province_id', provinceName).order('observed_at', { ascending: true }).limit(200),
+      db.from('spartan_province_history').select('*').eq('user_id', user.id).eq('province_id', account.id).eq('kingdom_id', kingdom).order('observed_at', { ascending: true }).limit(200),
       (allowKingdomView
         ? db.from('spartan_data_flow').select('flow_id,page_kind,province_id,kingdom_id,received_at,status,processed_at,payload').eq('kingdom_id', kingdom)
         : db.from('spartan_data_flow').select('flow_id,page_kind,province_id,kingdom_id,received_at,status,processed_at,payload').eq('province_id', account.id).eq('kingdom_id', kingdom)).order('received_at', { ascending: false }).limit(250),
