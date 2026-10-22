@@ -15,7 +15,7 @@ export const dynamic = 'force-dynamic'
 
 // Lean on purpose: only small columns, never the full page capture (raw_payload).
 // The old Intel query pulled ~18 MB per request and timed out.
-const COLUMNS = 'id,user_id,visibility,page_kind,url,source,captured_at,created_at,parsed_payload,raw_text'
+const COLUMNS = 'id,user_id,visibility,page_kind,url,source,captured_at,created_at,age,parsed_payload,raw_text'
 const CACHE = new Map<string, { at: number; body: any }>()
 const TTL_MS = 12_000
 
@@ -37,7 +37,7 @@ const KINDS: Record<string, string[]> = {
 
 type Rec = {
   id: string; user_id?: string | null; visibility?: string | null; page_kind: string; url: string; source: string | null; captured_at: string | null
-  created_at: string; parsed_payload: any; raw_text: string | null
+  created_at: string; age?: number | string | null; parsed_payload: any; raw_text: string | null
 }
 
 function fail(error: any): never {
@@ -209,9 +209,32 @@ export async function GET(request: Request) {
       return NextResponse.json(commandBody)
     }
 
+    // Science books reset each age. Never let a previous-age council capture feed live totals.
+    // Explicit record ages must match current_age. Untagged captures are usable only if captured
+    // after the recorded start of that age; if the age/reset marker is unavailable, fail closed.
+    let currentAge: number | null = null
+    let ageStartedAt: string | null = null
+    if (page === 'science') {
+      const ageSetting = await db.from('bot_settings').select('value').eq('key', 'current_age').maybeSingle()
+      const parsedAge = Number(ageSetting.data?.value)
+      currentAge = Number.isInteger(parsedAge) && parsedAge > 0 ? parsedAge : null
+      if (currentAge !== null) {
+        const ageLog = await db.from('spartan_age_log').select('created_at').eq('new_age', currentAge).order('created_at', { ascending: false }).limit(1).maybeSingle()
+        ageStartedAt = ageLog.data?.created_at || null
+      }
+    }
+
     const recordsResult = await db.from('spartan_intel_records').select(COLUMNS).in('page_kind', KINDS[page]).or(scope).order('created_at', { ascending: false }).limit(90)
     if (recordsResult.error) fail(recordsResult.error)
-    const records = ((recordsResult.data || []) as Rec[]).filter(r => !(sharedPages.has(page) && r.visibility === 'own' && r.user_id !== user.id))
+    let records = ((recordsResult.data || []) as Rec[]).filter(r => !(sharedPages.has(page) && r.visibility === 'own' && r.user_id !== user.id))
+    if (page === 'science') {
+      const startMs = ageStartedAt ? Date.parse(ageStartedAt) : NaN
+      records = currentAge === null ? [] : records.filter((r) => {
+        if (r.age != null && Number.isFinite(Number(r.age))) return Number(r.age) === currentAge
+        const capturedMs = Date.parse(when(r))
+        return Number.isFinite(startMs) && Number.isFinite(capturedMs) && capturedMs >= startMs
+      })
+    }
 
     // Time series of the province's own numbers (one row per throne visit).
     const historyResult = await db
@@ -248,6 +271,7 @@ export async function GET(request: Request) {
       const councils = allByPath(records, '/wol/game/council_science')
       const latest = councils[0] || null
       const sciencePage = latestByPath(records, '/wol/game/science')
+      body.scienceStatus = { currentAge, hasCurrentAgeData: Boolean(latest), message: latest ? null : 'No current-age science data' }
       body.model = {
         current: latest?.raw_text ? parseScience(latest.raw_text) : null,
         capturedAt: latest ? when(latest) : null,
