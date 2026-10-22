@@ -49,7 +49,7 @@ export async function GET(req:NextRequest){
   const ageStartMs=ageStartedAt?Date.parse(ageStartedAt):NaN
 
   if(Number.isInteger(currentAge)&&currentAge>0&&Number.isFinite(ageStartMs)){
-    const accountResult=await sb.from("spartan_accounts").select("id").ilike("province_name",p.province_name).eq("province_location",p.kingdom_code).limit(1)
+    const accountResult=await sb.from("spartan_accounts").select("id").eq("province_name",p.province_name).eq("province_location",p.kingdom_code).limit(1)
     if(accountResult.error)throw accountResult.error
     const account=accountResult.data?.[0]
     if(account?.id){
