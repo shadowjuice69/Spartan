@@ -19,8 +19,12 @@ function unwrap(payload: unknown): AnyRecord {
   const merged: AnyRecord = { ...root }
   const nestedKeys = ['data', 'payload', 'parsed', 'page', 'state', 'data_simple', 'fields', 'extracted', 'snapshot']
   for (const key of nestedKeys) {
-    const nested = obj(parseRecord(root[key]))
-    if (Object.keys(nested).length) Object.assign(merged, unwrap(nested))
+    const parsedNested = parseRecord(root[key])
+    const nested = obj(parsedNested)
+    if (Object.keys(nested).length) {
+      merged[key] = nested
+      Object.assign(merged, unwrap(nested))
+    }
   }
   return merged
 }
