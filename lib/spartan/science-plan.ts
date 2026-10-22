@@ -33,9 +33,6 @@ export interface CategoryPlan {
 // Older stored builds may contain numeric weights or legacy raw science text.
 // Normalize those formats at read time; never write back or mutate the saved build.
 const emptyScience = (): Record<CategoryKey, ScienceCategory> => ({ economy: {}, military: {}, arcane: {} })
-const hasEntries = (value: Record<CategoryKey, ScienceCategory>) =>
-  CATEGORY_KEYS.some((key) => Object.keys(value[key]).length > 0)
-
 export function normalizeScience(value: unknown, rawText?: unknown): Record<CategoryKey, ScienceCategory> {
   const result = emptyScience()
   const source = value && typeof value === 'object' && !Array.isArray(value)
@@ -51,7 +48,7 @@ export function normalizeScience(value: unknown, rawText?: unknown): Record<Cate
     if (typeof raw === 'number' && Number.isFinite(raw) && raw >= 0) return { type: 'weight', value: raw }
     if (typeof raw === 'string') {
       const text = raw.trim()
-      const m = text.match(/^(\\d+(?:\\.\\d+)?)\\s*(%|x)?$/i)
+      const m = text.match(/^(\d+(?:\.\d+)?)\s*(%|x)?$/i)
       if (!m) return null
       const n = Number(m[1])
       return Number.isFinite(n) && n >= 0
