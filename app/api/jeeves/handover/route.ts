@@ -28,13 +28,22 @@ async function github<T>(path: string): Promise<T> {
     'X-GitHub-Api-Version': '2022-11-28',
     'User-Agent': 'Spartan-Jeeves-Handover',
   }
-  if (process.env.GITHUB_TOKEN) headers.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`
+  const token = process.env.GITHUB_TOKEN?.trim()
+  if (!token) throw new Error('GITHUB_TOKEN is not configured in Render; authenticated GitHub read access is required.')
+  headers.Authorization = `Bearer ${token}`
   const response = await fetch(`https://api.github.com/repos/shadowjuice69/Spartan/${path}`, {
     headers,
-    cache: 'no-store',
+    next: { revalidate: 300 },
     signal: AbortSignal.timeout(7000),
   })
-  if (!response.ok) throw new Error(`GitHub returned HTTP ${response.status}`)
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null) as { message?: string } | null
+    const remaining = response.headers.get('x-ratelimit-remaining')
+    const detail = response.status === 403 && remaining === '0'
+      ? 'GitHub API rate limit exhausted; verify GITHUB_TOKEN and retry after the rate-limit reset.'
+      : (payload?.message || 'GitHub API request was denied.')
+    throw new Error(`GitHub returned HTTP ${response.status}: ${detail}`)
+  }
   return response.json() as Promise<T>
 }
 
@@ -79,23 +88,51 @@ export async function GET() {
   }
 
   try {
-    const { data, error } = await db
-      .from('spartan_system_issues')
-      .select('issue_id,subsystem,endpoint,severity,error_message,last_detected_at,occurrence_count,commit_sha')
-      .eq('status', 'open')
-      .order('last_detected_at', { ascending: false })
-      .limit(12)
-    if (error) throw error
-    issues = (data || []).map((row: any) => ({
-      id: String(row.issue_id),
-      subsystem: String(row.subsystem || 'unknown'),
-      endpoint: String(row.endpoint || ''),
-      severity: String(row.severity || 'warning'),
-      message: String(row.error_message || 'No diagnostic detail recorded').slice(0, 500),
-      lastDetectedAt: row.last_detected_at || null,
-      occurrences: Number(row.occurrence_count || 1),
-      commitSha: row.commit_sha || null,
-    }))
+    const allRows: any[] = []
+    let offset = 0
+    let reachedEnd = false
+    const pageSize = 1000
+    while (offset < 10000) {
+      const { data, error } = await db
+        .from('spartan_system_issues')
+        .select('issue_id,subsystem,endpoint,severity,error_message,last_detected_at,occurrence_count,commit_sha')
+        .eq('status', 'open')
+        .order('last_detected_at', { ascending: false })
+        .range(offset, offset + pageSize - 1)
+      if (error) throw error
+      const page = data || []
+      allRows.push(...page)
+      if (page.length < pageSize) { reachedEnd = true; break }
+      offset += page.length
+    }
+    if (!reachedEnd) throw new Error('Open issue queue exceeds 10000 rows; issue aggregation is incomplete.')
+    const grouped = new Map<string, any>()
+    for (const row of allRows) {
+      const subsystem = String(row.subsystem || 'unknown')
+      const endpoint = String(row.endpoint || '')
+      const severity = String(row.severity || 'warning')
+      const message = String(row.error_message || 'No diagnostic detail recorded').slice(0, 500)
+      const key = [subsystem, endpoint, severity, message].join('|')
+      const existing = grouped.get(key)
+      if (existing) {
+        existing.occurrences += Number(row.occurrence_count || 1)
+        if (row.last_detected_at && (!existing.lastDetectedAt || row.last_detected_at > existing.lastDetectedAt)) {
+          existing.id = String(row.issue_id)
+          existing.lastDetectedAt = row.last_detected_at
+          existing.commitSha = row.commit_sha || null
+        }
+      } else {
+        grouped.set(key, {
+          id: String(row.issue_id), subsystem, endpoint, severity, message,
+          lastDetectedAt: row.last_detected_at || null,
+          occurrences: Number(row.occurrence_count || 1),
+          commitSha: row.commit_sha || null,
+        })
+      }
+    }
+    issues = Array.from(grouped.values())
+      .sort((a, b) => String(b.lastDetectedAt || '').localeCompare(String(a.lastDetectedAt || '')))
+      .slice(0, 12)
     issueSearchComplete = true
     sourceStatus.supabase = 'ok'
   } catch (error) {
