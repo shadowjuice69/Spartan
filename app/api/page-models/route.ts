@@ -319,7 +319,7 @@ export async function GET(request: Request) {
         const provinces = mergeGrids(recent)[kd] || []
         return { kd, own: kd === ownKd, source: recent[0].url, capturedAt: recent[0].at, captures: recent.length, provinces }
       }).sort((a, b) => Number(b.own) - Number(a.own) || Date.parse(b.capturedAt) - Date.parse(a.capturedAt))
-      const statsRow = rows.find(r => /\/stats$/.test(String(r.url || '').split('?')[0]))
+      const statsRow = rows.find(r => /Our KD\s*-|Enemy KD\s*-/.test(String(r.raw_text || '')))
       const armies = armiesFrom(byKd[ownKd] || []).filter(a => (a.secondsRemaining ?? 0) > 0)
       body.model = { kingdoms, stats: parseStats(statsRow?.raw_text), statsAt: statsRow ? statsRow.captured_at || statsRow.created_at : null, armies, ownKd, ownName: account.province_name }
       body.fields = []
