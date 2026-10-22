@@ -110,13 +110,13 @@ export async function GET(_request: NextRequest) {
         confidence: intel?.classification_confidence ?? null,
         reason: intel?.classification_reason || (!flow ? 'No matching processing-flow row found' : !intel ? 'Capture exists but no Intel projection matched it' : 'Destination inferred from existing classification'),
       }
-    }).filter((row: any) => row.isOperation || row.status !== 'routed')
+    }).filter((row: any) => row.status !== 'routed')
 
     const counts = {
       visible: rows.length,
       missingProjection: rows.filter((row: any) => row.status === 'missing_projection').length,
       needsClassification: rows.filter((row: any) => row.status === 'needs_classification').length,
-      routed: (captures || []).length - rows.length,
+      routed: (captures || []).filter((capture: any) => { const intel = recordByVault.get(String(capture.id)) || recordByCapture.get(String(capture.capture_id)); return Boolean(intel && !['bot_event', 'unknown'].includes(String(intel.page_kind || 'unknown'))); }).length,
       operationCaptures: (captures || []).filter((capture: any) => {
         const metadata = capture.parsed_payload?.data?.metadata || {}
         return /<<__[^_]+__>>/i.test(String(capture.raw_text || '')) && (metadata.author_bot === true || metadata.author_bot === 'true')
