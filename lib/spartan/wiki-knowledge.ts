@@ -54,8 +54,8 @@ export async function resolveWikiKnowledge(
     .order('age_number', { ascending: false })
     .limit(20)
 
-  const candidateAges = !ageError
-    ? [...new Set((ageRows ?? []).map((row: { age_number?: number | string }) => Number(row.age_number)).filter((age: number) => Number.isInteger(age) && age > 0))].sort((a, b) => b - a)
+  const candidateAges: number[] = !ageError
+    ? Array.from(new Set<number>((ageRows ?? []).map((row: { age_number?: number | string }) => Number(row.age_number)).filter((age: number) => Number.isInteger(age) && age > 0))).sort((a: number, b: number) => b - a)
     : [Number(source.age_number)]
 
   let activeAge = 0
