@@ -270,9 +270,9 @@ export async function POST(request: Request) {
       confidence: stewardship.confidence,
       steward_results: stewardship.results,
       canonical_payload: stewardship.decision === 'accept' ? parsedPayload : {},
-      knowledge_source: knowledge.sourceKey,
-      knowledge_age: knowledge.age,
-      knowledge_refs: knowledge.refs,
+      knowledge_source: knowledge?.sourceKey ?? null,
+      knowledge_age: knowledge?.age ?? null,
+      knowledge_refs: knowledge?.refs ?? {},
     })
     if (stewardError) throw new Error(stewardError.message)
 
