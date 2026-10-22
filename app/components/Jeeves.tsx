@@ -43,6 +43,7 @@ type Handover = {
   checkedAt: string;
   deployment: { service: string; deployedSha: string | null; mainSha: string | null; matchesMain: boolean };
   proposals: { number: number; title: string; url: string; updatedAt: string; headSha: string | null; draft: boolean; labels: string[] }[];
+  openPullRequests: { number: number; title: string; url: string; updatedAt: string; headSha: string | null; draft: boolean; labels: string[]; jeevesProposal: boolean }[];
   proposalSearchComplete: boolean;
   issues: { id: string; subsystem: string; endpoint: string; severity: string; message: string; lastDetectedAt: string | null; occurrences: number; commitSha: string | null }[];
   issueSearchComplete: boolean;
@@ -306,10 +307,10 @@ export default function Jeeves() {
                   </p>
                   {!handover.proposalSearchComplete && <div className="jeeves-alert">GitHub proposal check failed. Queue status is unknown.</div>}
                   {handover.proposalSearchComplete && handover.proposals.length === 0 && <p>No open proposals matching the Jeeves proposal title/label convention were found.</p>}
-                  {handover.proposals.map((proposal) => (
+                  {handover.openPullRequests.map((proposal) => (
                     <div key={proposal.number} style={{ padding: "10px 0", borderTop: "1px solid rgba(255,255,255,.07)" }}>
                       <a href={proposal.url} target="_blank" rel="noreferrer" style={{ color: "#d8ff54", fontSize: 12 }}>PR #{proposal.number}: {proposal.title}</a>
-                      <div style={{ color: "#ffcc85", fontSize: 9, letterSpacing: ".1em", marginTop: 5 }}>PENDING CHATGPT REVIEW · HEAD {proposal.headSha?.slice(0, 7) || "UNKNOWN"}</div>
+                      <div style={{ color: "#ffcc85", fontSize: 9, letterSpacing: ".1em", marginTop: 5 }}>{proposal.jeevesProposal ? "JEEVES PROPOSAL · PENDING REVIEW" : "OPEN PULL REQUEST · REVIEW STATUS NOT ASSUMED"} · HEAD {proposal.headSha?.slice(0, 7) || "UNKNOWN"}</div>
                     </div>
                   ))}
                   <div style={{ marginTop: 12, color: "#67f0b0", fontSize: 9, fontWeight: 900, letterSpacing: ".15em" }}>OPEN SYSTEM ISSUES ({handover.issueSearchComplete ? handover.issues.length : "UNKNOWN"})</div>
