@@ -215,12 +215,24 @@ export async function GET(request: Request) {
     let currentAge: number | null = null
     let ageStartedAt: string | null = null
     if (page === 'science') {
-      const ageSetting = await db.from('bot_settings').select('value').eq('key', 'current_age').maybeSingle()
-      const parsedAge = Number(ageSetting.data?.value)
-      currentAge = Number.isInteger(parsedAge) && parsedAge > 0 ? parsedAge : null
+      const [ageSetting, latestAgeLog] = await Promise.all([
+        db.from('bot_settings').select('value').eq('key', 'current_age').maybeSingle(),
+        db.from('spartan_age_log').select('new_age,created_at').order('created_at', { ascending: false }).limit(1).maybeSingle(),
+      ])
+      if (ageSetting.error) fail(ageSetting.error)
+      if (latestAgeLog.error) fail(latestAgeLog.error)
+      const configuredAge = Number(ageSetting.data?.value)
+      const loggedAge = Number(latestAgeLog.data?.new_age)
+      currentAge = Number.isInteger(configuredAge) && configuredAge > 0
+        ? configuredAge
+        : Number.isInteger(loggedAge) && loggedAge > 0 ? loggedAge : null
+
       if (currentAge !== null) {
         const ageLog = await db.from('spartan_age_log').select('created_at').eq('new_age', currentAge).order('created_at', { ascending: false }).limit(1).maybeSingle()
-        ageStartedAt = ageLog.data?.created_at || null
+        if (ageLog.error) fail(ageLog.error)
+        ageStartedAt = ageLog.data?.created_at
+          || (loggedAge === currentAge ? latestAgeLog.data?.created_at : null)
+          || null
       }
     }
 
