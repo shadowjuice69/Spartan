@@ -390,7 +390,7 @@ export async function POST(request: Request) {
       if (eventError) return NextResponse.json({ error: eventError.message }, { status: 500 })
     }
 
-    return NextResponse.json({ ok: true, captured: Boolean(capture), events: body.events?.length ?? 0, snapshotStored: true, storedInVault: Boolean(capture), stewardDecision: captureSteward?.decision ?? snapshotSteward.decision, knowledgeSource: snapshotKnowledge.sourceKey, knowledgeAge: snapshotKnowledge.age })
+    return NextResponse.json({ ok: true, captured: Boolean(capture), events: body.events?.length ?? 0, snapshotStored: true, storedInVault: Boolean(capture), stewardDecision: captureSteward?.decision ?? snapshotSteward.decision, knowledgeSource: snapshotKnowledge?.sourceKey ?? null, knowledgeAge: snapshotKnowledge?.age ?? null })
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Capture failed' }, { status: 500 })
   }
