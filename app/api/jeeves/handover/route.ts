@@ -45,6 +45,7 @@ export async function GET() {
   const checkedAt = new Date().toISOString()
   const sourceStatus = { github: 'pending', supabase: 'pending' } as Record<string, string>
   let main: { sha?: string; commit?: { message?: string; committer?: { date?: string } }; html_url?: string } | null = null
+  let openPullRequests: { number: number; title: string; url: string; updatedAt: string; headSha: string | null; draft: boolean; labels: string[]; jeevesProposal: boolean }[] = []
   let proposals: { number: number; title: string; url: string; updatedAt: string; headSha: string | null; draft: boolean; labels: string[] }[] = []
   let proposalSearchComplete = false
   let issues: { id: string; subsystem: string; endpoint: string; severity: string; message: string; lastDetectedAt: string | null; occurrences: number; commitSha: string | null }[] = []
@@ -122,10 +123,10 @@ export async function GET() {
     `Production matches main: ${deployment.matchesMain ? 'yes' : deployedSha && mainSha ? 'no' : 'unknown'}`,
     `Proposal check: ${proposalSearchComplete ? 'complete' : 'INCOMPLETE'}`,
     ...(proposalSearchComplete
-      ? proposals.length
-        ? proposals.map((pr) => `PENDING REVIEW: PR #${pr.number} ${pr.title} | head ${pr.headSha || 'unknown'} | ${pr.url}`)
-        : ['No open Jeeves proposals found by title prefix or jeeves-proposal label.']
-      : ['Could not verify pending Jeeves proposals; do not assume the queue is empty.']),
+      ? openPullRequests.length
+        ? openPullRequests.map((pr) => `${pr.jeevesProposal ? 'JEEVES PROPOSAL — PENDING REVIEW' : 'OPEN PULL REQUEST — REVIEW STATUS NOT ASSUMED'}: PR #${pr.number} ${pr.title} | head ${pr.headSha || 'unknown'} | ${pr.url}`)
+        : ['No open pull requests were found.']
+      : ['Could not verify open pull requests or Jeeves proposals; do not assume the queue is empty.']),
     `System issue check: ${issueSearchComplete ? 'complete' : 'INCOMPLETE'}`,
     ...(issueSearchComplete
       ? issues.length
@@ -141,6 +142,7 @@ export async function GET() {
     checkedAt,
     deployment,
     proposals,
+    openPullRequests,
     proposalSearchComplete,
     issues,
     issueSearchComplete,
