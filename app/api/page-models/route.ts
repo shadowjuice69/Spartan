@@ -338,7 +338,7 @@ export async function GET(request: Request) {
           for (const k of NUMS) nums[k] = toNum(pp[k]) ?? toNum((parsedThrone as any)[k])
           return {
             id: r.id, at: when(r), province: String(pp.province_name || x.province || ''), kd: String(pp.kingdom_code || x.kd || ''),
-            nums, armiesDaysLeft: toNum(pp.armies_days_left), armiesLastAcres: toNum(pp.armies_last_acres), extras: x,
+            nums, armiesDaysLeft: toNum(pp.armies_days_left), armiesLastAcres: toNum(pp.armies_last_acres), extras: { ...x, unitCounts: parsedThrone.unitCounts },
           }
         })
         .filter(sn => sn.province)
