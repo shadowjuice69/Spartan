@@ -51,7 +51,7 @@ export async function GET() {
 
   const checkedAt = new Date().toISOString()
   const sourceStatus = { github: 'pending', supabase: 'pending' } as Record<string, string>
-  let main: { sha?: string; commit?: { message?: string; committer?: { date?: string } }; html_url?: string } | null = null
+  let mainSha: string | null = null
   let openPullRequests: { number: number; title: string; url: string; updatedAt: string; headSha: string | null; draft: boolean; labels: string[]; jeevesProposal: boolean }[] = []
   let proposals: { number: number; title: string; url: string; updatedAt: string; headSha: string | null; draft: boolean; labels: string[] }[] = []
   let proposalSearchComplete = false
@@ -64,7 +64,7 @@ export async function GET() {
       github<typeof main>('commits/main'),
       github<PullRequest[]>('pulls?state=open&per_page=100&sort=updated&direction=desc'),
     ])
-    main = commit
+    mainSha = commit?.sha || null
     openPullRequests = pulls.map((pr) => {
       const labels = (pr.labels || []).map((label) => String(label.name || ''))
       const jeevesProposal = /^\[jeeves proposal\]/i.test(pr.title) || labels.some((label) => label.toLowerCase() === 'jeeves-proposal')
@@ -104,7 +104,6 @@ export async function GET() {
   }
 
   const deployedSha = process.env.RENDER_GIT_COMMIT || process.env.RENDER_GIT_COMMIT_SHA || null
-  const mainSha = main?.sha || null
   const deployment = {
     service: process.env.RENDER_SERVICE_NAME || 'sparta-west',
     deployedSha,
