@@ -43,17 +43,17 @@ function metricRows(rows:Row[], section:string){
     intel:["Acres","Networth","Offense","Defense","WPA","TPA","Thieves","Wizards","Mana","Stealth","Runes","Gold","Food"]
   }
   const defs:[string,RegExp][]=[
-    ["Acres",/([\\d,.]+) acres/i],["Offense",/(?:offense|off)\\s*[:=]?\\s*([\\d,.]+)/i],
-    ["Defense",/(?:defense|def)\\s*[:=]?\\s*([\\d,.]+)/i],["WPA",/wpa\\s*[:=]?\\s*([\\d.]+)/i],
-    ["TPA",/tpa\\s*[:=]?\\s*([\\d.]+)/i],["Build Efficiency",/(?:build efficiency|\\bBE\\b)\\s*[:=]?\\s*([\\d.]+)\\s*%?/i],
-    ["Wages",/wages?\\s*[:=]?\\s*([\\d.]+)\\s*%?/i],["Mana",/mana\\s*[:=]?\\s*([\\d.]+)\\s*%?/i],
-    ["Stealth",/stealth\\s*[:=]?\\s*([\\d.]+)\\s*%?/i],["Kills",/killed\\s+(?:about\\s+)?([\\d,.]+)\\s+enemy troops/i],
-    ["Losses",/lost\\s+([\\d,.]+)\\s+/i],["Prisoners",/imprisoned\\s+([\\d,.]+)/i],
-    ["Runes",/(?:gather|have|with)\\s+([\\d,.]+)\\s+runes?/i],["Thieves",/([\\d,.]+)\\s+thieves?/i],
-    ["Wizards",/([\\d,.]+)\\s+wizards?/i],["Soldiers",/([\\d,.]+)\\s+soldiers?/i],
-    ["War Horses",/([\\d,.]+)\\s+(?:war\\s+)?horses?/i],["Gold",/([\\d,.]+)\\s+gold(?:\\s+coins?)?/i],
-    ["Food",/([\\d,.]+)\\s+(?:bushels|food)/i],["Books",/([\\d,.]+)\\s+books?/i],
-    ["Networth",/(?:NW|networth|net worth)\\s*[:=]?\\s*([\\d,.]+)/i]
+    ["Acres",/([\d,.]+) acres/i],["Offense",/(?:offense|off)\s*[:=]?\s*([\d,.]+)/i],
+    ["Defense",/(?:defense|def)\s*[:=]?\s*([\d,.]+)/i],["WPA",/wpa\s*[:=]?\s*([\d.]+)/i],
+    ["TPA",/tpa\s*[:=]?\s*([\d.]+)/i],["Build Efficiency",/(?:build efficiency|\bBE\b)\s*[:=]?\s*([\d.]+)\s*%?/i],
+    ["Wages",/wages?\s*[:=]?\s*([\d.]+)\s*%?/i],["Mana",/mana\s*[:=]?\s*([\d.]+)\s*%?/i],
+    ["Stealth",/stealth\s*[:=]?\s*([\d.]+)\s*%?/i],["Kills",/killed\s+(?:about\s+)?([\d,.]+)\s+enemy troops/i],
+    ["Losses",/lost\s+([\d,.]+)\s+/i],["Prisoners",/imprisoned\s+([\d,.]+)/i],
+    ["Runes",/(?:gather|have|with)\s+([\d,.]+)\s+runes?/i],["Thieves",/([\d,.]+)\s+thieves?/i],
+    ["Wizards",/([\d,.]+)\s+wizards?/i],["Soldiers",/([\d,.]+)\s+soldiers?/i],
+    ["War Horses",/([\d,.]+)\s+(?:war\s+)?horses?/i],["Gold",/([\d,.]+)\s+gold(?:\s+coins?)?/i],
+    ["Food",/([\d,.]+)\s+(?:bushels|food)/i],["Books",/([\d,.]+)\s+books?/i],
+    ["Networth",/(?:NW|networth|net worth)\s*[:=]?\s*([\d,.]+)/i]
   ]
   const wanted=new Set(sets[section]||sets.intel),out:{label:string,value:number}[]=[]
   for(const [label,re] of defs){
@@ -70,18 +70,18 @@ function metricRows(rows:Row[], section:string){
 }
 function summaryFor(r:Row,section:string){
   const defs:Record<string,Array<[string,RegExp]>>={
-    military:[["ACRES",/([\\d,.]+) acres/i],["OFF",/(?:offense|off)\\s*[:=]?\\s*([\\d,.]+)/i],["DEF",/(?:defense|def)\\s*[:=]?\\s*([\\d,.]+)/i],["KILLS",/killed\\s+(?:about\\s+)?([\\d,.]+)/i],["LOSSES",/lost\\s+([\\d,.]+)/i]],
-    magic:[["RUNES",/(?:gather|have|with)\\s+([\\d,.]+) runes?/i],["MANA",/mana\\s*([\\d.]+)%/i]],
-    thievery:[["ACRES",/([\\d,.]+) ac/i],["NW",/(?:NW|networth)\\s*[:=]?\\s*([\\d,.]+)/i],["THIEVES",/([\\d,.]+) thieves?/i],["STEALTH",/stealth\\s*([\\d.]+)%/i]],
-    science:[["RUNES",/(?:gather|have|with)\\s+([\\d,.]+) runes?/i],["BOOKS",/([\\d,.]+) books?/i],["MANA",/mana\\s*([\\d.]+)%/i]],
-    buildings:[["ACRES",/([\\d,.]+) acres?/i],["BE",/(?:build efficiency|\\bBE\\b)\\s*[:=]?\\s*([\\d.]+)%?/i]],
-    kingdom:[["ACRES",/([\\d,.]+) acres?/i],["NW",/(?:NW|networth)\\s*[:=]?\\s*([\\d,.]+)/i]],
-    throne:[["ACRES",/([\\d,.]+) acres?/i],["NW",/(?:NW|networth)\\s*[:=]?\\s*([\\d,.]+)/i],["OFF",/(?:offense|off)\\s*[:=]?\\s*([\\d,.]+)/i],["DEF",/(?:defense|def)\\s*[:=]?\\s*([\\d,.]+)/i]],
-    news:[["ACRES",/([\\d,.]+) acres?/i],["KILLS",/killed\\s+(?:about\\s+)?([\\d,.]+)/i],["LOSSES",/lost\\s+([\\d,.]+)/i]],
-    "war-room":[["ACRES",/([\\d,.]+) acres?/i],["KILLS",/killed\\s+(?:about\\s+)?([\\d,.]+)/i],["LOSSES",/lost\\s+([\\d,.]+)/i]],
-    aid:[["SOLDIERS",/([\\d,.]+) soldiers?/i],["GOLD",/([\\d,.]+) gold/i]],
-    exploration:[["ACRES",/([\\d,.]+) acres?/i],["NW",/(?:NW|networth)\\s*[:=]?\\s*([\\d,.]+)/i]],
-    intel:[["ACRES",/([\\d,.]+) acres?/i],["NW",/(?:NW|networth)\\s*[:=]?\\s*([\\d,.]+)/i],["OFF",/(?:offense|off)\\s*[:=]?\\s*([\\d,.]+)/i],["DEF",/(?:defense|def)\\s*[:=]?\\s*([\\d,.]+)/i]]
+    military:[["ACRES",/([\d,.]+) acres/i],["OFF",/(?:offense|off)\s*[:=]?\s*([\d,.]+)/i],["DEF",/(?:defense|def)\s*[:=]?\s*([\d,.]+)/i],["KILLS",/killed\s+(?:about\s+)?([\d,.]+)/i],["LOSSES",/lost\s+([\d,.]+)/i]],
+    magic:[["RUNES",/(?:gather|have|with)\s+([\d,.]+) runes?/i],["MANA",/mana\s*([\d.]+)%/i]],
+    thievery:[["ACRES",/([\d,.]+) ac/i],["NW",/(?:NW|networth)\s*[:=]?\s*([\d,.]+)/i],["THIEVES",/([\d,.]+) thieves?/i],["STEALTH",/stealth\s*([\d.]+)%/i]],
+    science:[["RUNES",/(?:gather|have|with)\s+([\d,.]+) runes?/i],["BOOKS",/([\d,.]+) books?/i],["MANA",/mana\s*([\d.]+)%/i]],
+    buildings:[["ACRES",/([\d,.]+) acres?/i],["BE",/(?:build efficiency|\bBE\b)\s*[:=]?\s*([\d.]+)%?/i]],
+    kingdom:[["ACRES",/([\d,.]+) acres?/i],["NW",/(?:NW|networth)\s*[:=]?\s*([\d,.]+)/i]],
+    throne:[["ACRES",/([\d,.]+) acres?/i],["NW",/(?:NW|networth)\s*[:=]?\s*([\d,.]+)/i],["OFF",/(?:offense|off)\s*[:=]?\s*([\d,.]+)/i],["DEF",/(?:defense|def)\s*[:=]?\s*([\d,.]+)/i]],
+    news:[["ACRES",/([\d,.]+) acres?/i],["KILLS",/killed\s+(?:about\s+)?([\d,.]+)/i],["LOSSES",/lost\s+([\d,.]+)/i]],
+    "war-room":[["ACRES",/([\d,.]+) acres?/i],["KILLS",/killed\s+(?:about\s+)?([\d,.]+)/i],["LOSSES",/lost\s+([\d,.]+)/i]],
+    aid:[["SOLDIERS",/([\d,.]+) soldiers?/i],["GOLD",/([\d,.]+) gold/i]],
+    exploration:[["ACRES",/([\d,.]+) acres?/i],["NW",/(?:NW|networth)\s*[:=]?\s*([\d,.]+)/i]],
+    intel:[["ACRES",/([\d,.]+) acres?/i],["NW",/(?:NW|networth)\s*[:=]?\s*([\d,.]+)/i],["OFF",/(?:offense|off)\s*[:=]?\s*([\d,.]+)/i],["DEF",/(?:defense|def)\s*[:=]?\s*([\d,.]+)/i]]
   }
   const source=JSON.stringify(r.metrics||{})+" "+JSON.stringify(r.payload?.data||r.payload||{})+" "+textOf(r)
   const parts=(defs[section]||defs.intel).map(([label,re])=>{const m=source.match(re);return m?label+" "+Number(String(m[1]).replace(/,/g,"")).toLocaleString():null}).filter(Boolean)
