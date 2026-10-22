@@ -58,7 +58,7 @@ export default function IntelBacklogPage() {
   return (
     <Shell title="Intel Backlog" eyebrow="SPARTAN // BACKLOG STEWARD" accent={C.cyan}
       subtitle="A traceable recovery queue for captured Discord Intel. Originals remain in the vault; this view identifies missing projections and unclassified messages."
-      loading={loading} error={error} reload={load}>
+      data={model} loading={loading} error={error} reload={load}>
       {!model && loading && <Skeletons count={5} />}
       {model && (
         <>
