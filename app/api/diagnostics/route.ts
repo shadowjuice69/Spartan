@@ -33,10 +33,10 @@ export async function GET() {
     timed('province_registry', async () => { const {error}=await db.from('spartan_province_registry').select('province_id').eq('user_id',user.id).limit(1); if(error) throw error; return 'query ok' }),
     timed('clock_data', async () => {
       const {data:account,error:a}=await db.from('spartan_accounts').select('id,province_name,province_location').eq('auth_user_id',user.id).maybeSingle(); if(a) throw a; if(!account) throw new Error('account missing')
-      const {data:registry,error:r}=await db.from('spartan_province_registry').select('province_id').eq('user_id',user.id).order('updated_at',{ascending:false}).limit(1).maybeSingle(); if(r) throw r; if(!registry?.province_id) throw new Error('province registry link missing')
+      const {data:registry,error:r}=await db.from('spartan_province_registry').select('province_id,province_name,kingdom_code').eq('user_id',user.id).eq('province_name',account.province_name).eq('kingdom_code',account.province_location).order('updated_at',{ascending:false}).limit(1).maybeSingle(); if(r) throw r; if(!registry?.province_id) throw new Error('current province registry link missing')
       // The authoritative clock reader uses spartan_intel_records. The capture vault is an ingestion/history store and may not contain normalized Throne rows.
       const provinceIds=[...new Set([String(account.id),String(registry.province_id)].filter(Boolean))]
-      const {data:capture,error:c}=await db.from('spartan_intel_records').select('id,raw_text,parsed_payload').in('province_id',provinceIds).eq('page_kind','throne').order('captured_at',{ascending:false}).limit(100); if(c) throw c
+      const {data:capture,error:c}=await db.from('spartan_intel_records').select('id,raw_text,parsed_payload').in('province_id',provinceIds).eq('kingdom_id',account.province_location).eq('page_kind','throne').order('captured_at',{ascending:false}).limit(100); if(c) throw c
       const datePattern=/\b(?:January|February|March|April|May|June|July)\s+\d{1,2}(?:st|nd|rd|th)?[,]?\s*(?:of\s+)?YR\s*\d+/i
       const found=(capture||[]).some((row:any)=>datePattern.test(String(row.raw_text||'')) || datePattern.test(JSON.stringify(row.parsed_payload||{})))
       if(!found) throw new Error('no authoritative throne date capture in spartan_intel_records for the linked province')
@@ -49,7 +49,7 @@ export async function GET() {
     }),
     timed('intel_records', async () => { const {error}=await db.from('spartan_intel_records').select('id').limit(1); if(error) throw error; return 'query ok' }),
     timed('steward_registry', async () => { const {error}=await db.from('spartan_steward_registry').select('steward_key').limit(1); if(error) throw error; return 'query ok' }),
-    timed('event_history', async () => { const {error}=await db.from('spartan_event_history').select('id').eq('province_id',(await db.from('spartan_province_registry').select('province_id').eq('user_id',user.id).limit(1).maybeSingle()).data?.province_id || '').limit(1); if(error) throw error; return 'query ok' }),
+    timed('event_history', async () => { const {data:account,error:a}=await db.from('spartan_accounts').select('id,province_location').eq('auth_user_id',user.id).maybeSingle(); if(a) throw a; if(!account) throw new Error('account missing'); const {error}=await db.from('spartan_event_history').select('id').eq('province_id',account.id).eq('kingdom_id',account.province_location).limit(1); if(error) throw error; return 'query ok' }),
     timed('render_dependency', async () => { const target=process.env.SPARTAN_RENDER_HEALTH_TARGET?.trim(); if(!target) return 'external Render dependency not configured'; const controller=new AbortController(); const timeout=setTimeout(()=>controller.abort(),5000); try { const response=await fetch(target,{cache:'no-store',signal:controller.signal,headers:{Accept:'application/json'}}); if(!response.ok) throw new Error(`HTTP ${response.status}`); return 'external dependency ok' } finally { clearTimeout(timeout) } }),
   ])
   const failed=checks.filter(c=>!c.ok), slow=checks.filter(c=>c.latencyMs>=1000)

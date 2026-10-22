@@ -121,8 +121,9 @@ async function canonicalCaptureIdentity(supabase: any, capture: AnyRecord, owner
   const registry = await supabase
     .from('spartan_province_registry')
     .select('province_id,province_name,kingdom_code,user_id')
-    .eq('province_id', owner.accountId)
     .eq('user_id', owner.authUserId)
+    .eq('province_name', owner.provinceName)
+    .eq('kingdom_code', owner.kingdomCode)
     .maybeSingle()
   if (registry.error) throw new Error(registry.error.message)
 

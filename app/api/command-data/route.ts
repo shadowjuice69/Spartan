@@ -120,18 +120,18 @@ export async function GET(request: Request) {
     const [registryResult, kingdomRegistryResult, projectionResult, historyResult, flowResult, vaultResult, wikiResult, stewardResult] = await Promise.all([
       (allowKingdomView
         ? db.from('spartan_province_registry').select('*').eq('kingdom_code', kingdom)
-        : db.from('spartan_province_registry').select('*').eq('province_id', account.id)).order('slot', { ascending: true }),
+        : db.from('spartan_province_registry').select('*').eq('user_id', user.id).eq('province_name', provinceName).eq('kingdom_code', kingdom)).order('slot', { ascending: true }),
       allowKingdomView ? db.from('spartan_kingdom_registry').select('*').eq('kingdom_code', kingdom).maybeSingle() : Promise.resolve({ data: null, error: null }),
       (allowKingdomView
         ? db.from('spartan_state_projection').select('province_id,kingdom_id,state,version,source_flow_id,updated_at').eq('kingdom_id', kingdom)
-        : db.from('spartan_state_projection').select('province_id,kingdom_id,state,version,source_flow_id,updated_at').or(`province_id.eq.${account.id},province_id.eq.${provinceName}`)).order('updated_at', { ascending: false }).limit(100),
-      db.from('spartan_province_history').select('*').eq('user_id', user.id).eq('province_id', provinceName).order('observed_at', { ascending: true }).limit(200),
+        : db.from('spartan_state_projection').select('province_id,kingdom_id,state,version,source_flow_id,updated_at').eq('kingdom_id', kingdom).or(`province_id.eq.${account.id},province_id.eq.${provinceName}`)).order('updated_at', { ascending: false }).limit(100),
+      db.from('spartan_province_history').select('*').eq('user_id', user.id).eq('province_id', account.id).eq('kingdom_id', kingdom).order('observed_at', { ascending: true }).limit(200),
       (allowKingdomView
         ? db.from('spartan_data_flow').select('flow_id,page_kind,province_id,kingdom_id,received_at,status,processed_at,payload').eq('kingdom_id', kingdom)
-        : db.from('spartan_data_flow').select('flow_id,page_kind,province_id,kingdom_id,received_at,status,processed_at,payload').eq('province_id', account.id)).order('received_at', { ascending: false }).limit(250),
+        : db.from('spartan_data_flow').select('flow_id,page_kind,province_id,kingdom_id,received_at,status,processed_at,payload').eq('province_id', account.id).eq('kingdom_id', kingdom)).order('received_at', { ascending: false }).limit(250),
       (allowKingdomView
         ? db.from('spartan_capture_vault').select('id,capture_id,page_kind,province_id,kingdom_id,captured_at,source,url,parsed_payload,raw_payload').eq('kingdom_id', kingdom)
-        : db.from('spartan_capture_vault').select('id,capture_id,page_kind,province_id,kingdom_id,captured_at,source,url,parsed_payload,raw_payload').eq('province_id', account.id)).order('captured_at', { ascending: false }).limit(250),
+        : db.from('spartan_capture_vault').select('id,capture_id,page_kind,province_id,kingdom_id,captured_at,source,url,parsed_payload,raw_payload').eq('province_id', account.id).eq('kingdom_id', kingdom)).order('captured_at', { ascending: false }).limit(250),
       db.from('spartan_wiki_knowledge_registry').select('source_key,source_name,authoritative,active'),
       db.from('spartan_steward_registry').select('steward_key,name,enabled,last_run_at,last_status,processed_count,quarantined_count,error_count').order('steward_key'),
     ])
