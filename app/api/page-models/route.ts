@@ -306,7 +306,8 @@ export async function GET(request: Request) {
       const g = await db.from('spartan_intel_records')
         .select('id,url,created_at,captured_at,parsed_payload,raw_text,grid:raw_payload->grid')
         .eq('page_kind', 'intel').or(scope).order('created_at', { ascending: false }).limit(60)
-      const rows: any[] = g.error ? [] : g.data || []
+      if (g.error) fail(g.error)
+      const rows: any[] = g.data || []
       const captures: GridCapture[] = rows
         .filter(r => Array.isArray(r.grid?.rows) && r.parsed_payload?.kingdom_code)
         .map(r => ({ kd: String(r.parsed_payload.kingdom_code), at: r.captured_at || r.created_at, url: String(r.url || '').replace(/^https?:\/\/[^/]+/, '').replace(/[?#].*$/, '') || '/', rows: r.grid.rows }))
@@ -333,7 +334,8 @@ export async function GET(request: Request) {
           const pp: any = r.parsed_payload
           const x = parseThroneText(r.raw_text)
           const nums: Record<string, number | null> = {}
-          for (const k of NUMS) nums[k] = toNum(pp[k])
+          const parsedThrone = parseThrone(r.raw_text || '')
+          for (const k of NUMS) nums[k] = toNum(pp[k]) ?? toNum((parsedThrone as any)[k])
           return {
             id: r.id, at: when(r), province: String(pp.province_name || x.province || ''), kd: String(pp.kingdom_code || x.kd || ''),
             nums, armiesDaysLeft: toNum(pp.armies_days_left), armiesLastAcres: toNum(pp.armies_last_acres), extras: x,
@@ -380,7 +382,8 @@ export async function GET(request: Request) {
         if (d.code && !byCode.has(d.code)) byCode.set(d.code, { ...d, capturedAt: when(r) })
       }
       const gridResult = await db.from('spartan_intel_records').select('id,created_at,url,grid:raw_payload->grid').eq('page_kind', 'intel').or(scope).order('created_at', { ascending: false }).limit(40)
-      const gridRecs = gridResult.error ? [] : gridResult.data || []
+      if (gridResult.error) fail(gridResult.error)
+      const gridRecs = gridResult.data || []
       const roster = new Map<string, any>()
       for (const g of gridRecs as any[]) {
         const rows = parseGridRows(g.grid)
