@@ -32,8 +32,18 @@ function unwrap(payload: unknown): AnyRecord {
 function pick(source: AnyRecord, keys: string[]) {
   const out: AnyRecord = {}
   for (const key of keys) {
-    const value = source[key]
+    let value = source[key]
     if (value === undefined || value === null) continue
+    if (key === 'data_simple') {
+      value = parseRecord(value)
+      if (typeof value === 'string') {
+        const trimmed = value.trim()
+        if (!trimmed) continue
+        // The original text remains in parsed_payload; keep only a compact
+        // steward summary here to avoid duplicating large page bodies.
+        value = { type: 'text', length: value.length, preview: trimmed.slice(0, 500) }
+      }
+    }
     if (typeof value === 'string' && !value.trim()) continue
     if (Array.isArray(value) && value.length === 0) continue
     if (value && typeof value === 'object' && !Array.isArray(value) && Object.keys(value as AnyRecord).length === 0) continue
