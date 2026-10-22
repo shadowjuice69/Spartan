@@ -8,6 +8,7 @@ const BATCH_SIZE = Math.max(1, Math.min(50, Number(process.env.SPARTAN_PROCESSOR
 const WORKER_ID = process.env.RENDER_INSTANCE_ID || `spartan-${process.pid}-${crypto.randomBytes(3).toString('hex')}`;
 let timer = null;
 let running = false;
+let startupBackfillRunning = false;
 function compact(value) { return Object.fromEntries(Object.entries(value || {}).filter(([, v]) => v !== undefined && v !== null)); }
 async function loadCapture(sb, flow) {
   if (!flow?.capture_id) return null;
@@ -465,13 +466,13 @@ async function failOne(sb, job, error) {
   await sb.from('spartan_data_flow').update({ status: terminal ? 'failed' : 'retry', stage: 'processor', current_stage: 'processor', error: { message: error.message, worker: WORKER_ID, attempts } }).eq('flow_id', job.flow_id);
 }
 async function processBatch() {
-  if (running) return; const sb = supabaseService.getClient(); if (!sb) return; running = true;
+  if (running || startupBackfillRunning) return; const sb = supabaseService.getClient(); if (!sb) return; running = true;
   try {
     const { data: jobs, error } = await sb.rpc('claim_spartan_queue', { p_worker: WORKER_ID, p_limit: BATCH_SIZE });
     if (error) throw new Error(`claim_spartan_queue: ${error.message}`); if (!jobs?.length) return;
     for (const job of jobs) { try { const result = await processOne(sb, job); if (!result.quarantined) logger.info(`[SPARTAN PROCESSOR] completed queue=${result.queueId} flow=${result.flowId} page=${result.pageKind || ''} version=${result.version}`); } catch (error) { logger.error(`[SPARTAN PROCESSOR] queue=${job.id} flow=${job.flow_id} failed: ${error.stack || error.message}`); try { await failOne(sb, job, error); } catch (failError) { logger.error(`[SPARTAN PROCESSOR] failure bookkeeping failed: ${failError.message}`); } } }
   } catch (error) { logger.error(`[SPARTAN PROCESSOR LOOP] ${error.stack || error.message}`); } finally { running = false; }
 }
-function start() { if (timer) return; if (process.env.SPARTAN_PROCESSOR_ENABLED === 'false') { logger.info('[SPARTAN PROCESSOR] disabled by SPARTAN_PROCESSOR_ENABLED=false'); return; } stewardSystem.start(); logger.info(`[SPARTAN PROCESSOR] starting worker=${WORKER_ID} interval=${INTERVAL_MS}ms batch=${BATCH_SIZE}`); const sb = supabaseService.getClient(); backfillMissingBotIntel(sb).catch(error => logger.error(`[SPARTAN INTEL BACKFILL] failed: ${error.stack || error.message}`)).finally(() => processBatch()); timer = setInterval(processBatch, INTERVAL_MS); }
+function start() { if (timer || startupBackfillRunning) return; if (process.env.SPARTAN_PROCESSOR_ENABLED === 'false') { logger.info('[SPARTAN PROCESSOR] disabled by SPARTAN_PROCESSOR_ENABLED=false'); return; } stewardSystem.start(); logger.info(`[SPARTAN PROCESSOR] starting worker=${WORKER_ID} interval=${INTERVAL_MS}ms batch=${BATCH_SIZE}`); const sb = supabaseService.getClient(); startupBackfillRunning = true; backfillMissingBotIntel(sb).catch(error => logger.error(`[SPARTAN INTEL BACKFILL] failed: ${error.stack || error.message}`)).finally(() => { startupBackfillRunning = false; processBatch(); timer = setInterval(processBatch, INTERVAL_MS); }); }
 function stop() { if (timer) clearInterval(timer); timer = null; }
 module.exports = { start, stop, processBatch, processOne };
