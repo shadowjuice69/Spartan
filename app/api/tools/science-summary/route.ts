@@ -17,16 +17,18 @@ function parseEffect(value:any){
 export async function GET(req:NextRequest){
  try{
   const u=new URL(req.url)
-  const province=u.searchParams.get("province")?.trim()||""
+  const provinceInput=u.searchParams.get("province")?.trim()||""
+  const selected=provinceInput.match(/^(.*)\s+\((\d+:\d+)\)$/)
+  const province=(selected?.[1]||provinceInput).trim()
+  const selectedKingdom=selected?.[2]||""
   const libraries=Number(u.searchParams.get("libraries")||0)
   const books=JSON.parse(u.searchParams.get("books")||"{}")
   const sb=createClient(process.env.SUPABASE_URL!,process.env.SUPABASE_SERVICE_ROLE_KEY!)
   if(!province)return NextResponse.json({error:"Enter your province name for the science summary."},{status:400})
 
-  const pv=await sb.from("spartan_province_registry")
-    .select("province_id,province_name,kingdom_code,metadata")
-    .eq("province_name",province)
-    .limit(1)
+  const pv=selectedKingdom
+    ? await sb.from("spartan_province_registry").select("province_id,province_name,kingdom_code,metadata").eq("province_name",province).eq("kingdom_code",selectedKingdom).limit(1)
+    : await sb.from("spartan_province_registry").select("province_id,province_name,kingdom_code,metadata").eq("province_name",province).limit(1)
 
   if(pv.error||!pv.data?.length)return NextResponse.json({error:"Province not found in Spartan's current province registry."},{status:404})
 
