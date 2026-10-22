@@ -11,7 +11,7 @@ let running = false;
 function compact(value) { return Object.fromEntries(Object.entries(value || {}).filter(([, v]) => v !== undefined && v !== null)); }
 async function loadCapture(sb, flow) {
   if (!flow?.capture_id) return null;
-  const { data, error } = await sb.from('spartan_capture_vault').select('id,capture_id,source,province_id,kingdom_id,page_kind,url,raw_text,raw_payload,parsed_payload,content_hash,captured_at').eq('capture_id', flow.capture_id).order('id', { ascending: false }).limit(1).maybeSingle();
+  const { data, error } = await sb.from('spartan_capture_vault').select('id,capture_id,source,province_id,kingdom_id,page_kind,url,raw_text,raw_payload,parsed_payload,content_hash,captured_at,user_id').eq('capture_id', flow.capture_id).order('id', { ascending: false }).limit(1).maybeSingle();
   if (error) throw new Error(`capture lookup: ${error.message}`);
   return data || null;
 }
@@ -174,7 +174,7 @@ async function removePreviousIntelProjection(sb, pageKind, kingdomId, intelKey, 
   return Array.isArray(data) ? data.length : 0;
 }
 
-async function syncBotIntelRecord(sb, flow, capture, state) {
+async function syncBotIntelRecord(sb, flow, capture, state, options = {}) {
   if (flow.source !== 'discord-bot' || flow.page_kind !== 'bot_event') return null;
 
   const payload = capture?.parsed_payload || {};
@@ -312,7 +312,20 @@ async function syncBotIntelRecord(sb, flow, capture, state) {
     }
   };
 
-  await removePreviousIntelProjection(sb, pageKind, flow.kingdom_id || null, intelKey, flow.capture_id);
+  if (options.skipIfFreshKeyExists) {
+    let existingKeyQuery = sb.from('spartan_intel_records')
+      .select('id,capture_id')
+      .eq('page_kind', pageKind)
+      .eq('parsed_payload->classification->>intel_key', intelKey)
+      .neq('capture_id', flow.capture_id)
+      .limit(1);
+    if (sourceKingdom) existingKeyQuery = existingKeyQuery.eq('kingdom_id', sourceKingdom);
+    const { data: existingKeyRows, error: existingKeyError } = await existingKeyQuery;
+    if (existingKeyError) throw new Error(`bot Intel backfill key check: ${existingKeyError.message}`);
+    if (existingKeyRows?.length) return { pageKind, confidence, intelKey, skippedExisting: true };
+  } else {
+    await removePreviousIntelProjection(sb, pageKind, flow.kingdom_id || null, intelKey, flow.capture_id);
+  }
 
   const { error } = await sb.from('spartan_intel_records').upsert({
     capture_id: flow.capture_id,
@@ -345,7 +358,59 @@ async function syncBotIntelRecord(sb, flow, capture, state) {
   }, { onConflict: 'capture_id,intel_type,province_id,kingdom_id' });
 
   if (error) throw new Error(`bot intel projection: ${error.message}`);
-  return { pageKind, confidence };
+  return { pageKind, confidence, intelKey, kingdomId: sourceKingdom, skippedExisting: false };
+}
+
+async function backfillMissingBotIntel(sb) {
+  if (!sb) return { checked: 0, recovered: 0, skipped: 0 };
+  const { data: captures, error: captureError } = await sb.from('spartan_capture_vault')
+    .select('id,capture_id,source,province_id,kingdom_id,page_kind,url,raw_text,raw_payload,parsed_payload,content_hash,captured_at,user_id')
+    .eq('source', 'discord-bot')
+    .like('raw_text', '%<<__%')
+    .like('raw_text', '%__>>%')
+    .order('captured_at', { ascending: false })
+    .limit(1000);
+  if (captureError) throw new Error(`bot Intel backfill capture scan: ${captureError.message}`);
+  const candidates = (captures || []).filter(capture => {
+    const metadata = capture?.parsed_payload?.data?.metadata || {};
+    return (metadata.author_bot === true || metadata.author_bot === 'true') &&
+      String(capture.raw_text || '').includes('<<__') && String(capture.raw_text || '').includes('__>>');
+  });
+  if (!candidates.length) return { checked: 0, recovered: 0, skipped: 0 };
+  const captureIds = candidates.map(capture => capture.capture_id).filter(Boolean);
+  const { data: flows, error: flowError } = await sb.from('spartan_data_flow')
+    .select('*').eq('source', 'discord-bot').eq('page_kind', 'bot_event').in('capture_id', captureIds);
+  if (flowError) throw new Error(`bot Intel backfill flow scan: ${flowError.message}`);
+  const flowByCapture = new Map((flows || []).map(flow => [flow.capture_id, flow]));
+  const { data: existingRows, error: existingError } = await sb.from('spartan_intel_records')
+    .select('capture_id,source_vault_id').eq('source', 'discord-bot').limit(10000);
+  if (existingError) throw new Error(`bot Intel backfill existing-record scan: ${existingError.message}`);
+  const existingCaptures = new Set();
+  for (const row of existingRows || []) {
+    if (row.capture_id) existingCaptures.add(String(row.capture_id));
+    if (row.source_vault_id != null) existingCaptures.add(`vault:${row.source_vault_id}`);
+  }
+  let recovered = 0;
+  let skipped = 0;
+  // Newest-first plus key checks preserves the latest record for each operation identity.
+  for (const capture of candidates) {
+    if (!capture.capture_id || existingCaptures.has(String(capture.capture_id)) || existingCaptures.has(`vault:${capture.id}`)) {
+      skipped++;
+      continue;
+    }
+    const flow = flowByCapture.get(capture.capture_id);
+    if (!flow) { skipped++; continue; }
+    const state = extractState(flow, capture);
+    const result = await syncBotIntelRecord(sb, flow, capture, state, { skipIfFreshKeyExists: true });
+    if (result?.skippedExisting) skipped++;
+    else if (result) {
+      recovered++;
+      existingCaptures.add(String(capture.capture_id));
+      existingCaptures.add(`vault:${capture.id}`);
+    } else skipped++;
+  }
+  logger.info(`[SPARTAN INTEL BACKFILL] checked=${candidates.length} recovered=${recovered} skipped=${skipped}`);
+  return { checked: candidates.length, recovered, skipped };
 }
 
 async function syncNewsEvents(sb, flow, state) {
@@ -407,6 +472,6 @@ async function processBatch() {
     for (const job of jobs) { try { const result = await processOne(sb, job); if (!result.quarantined) logger.info(`[SPARTAN PROCESSOR] completed queue=${result.queueId} flow=${result.flowId} page=${result.pageKind || ''} version=${result.version}`); } catch (error) { logger.error(`[SPARTAN PROCESSOR] queue=${job.id} flow=${job.flow_id} failed: ${error.stack || error.message}`); try { await failOne(sb, job, error); } catch (failError) { logger.error(`[SPARTAN PROCESSOR] failure bookkeeping failed: ${failError.message}`); } } }
   } catch (error) { logger.error(`[SPARTAN PROCESSOR LOOP] ${error.stack || error.message}`); } finally { running = false; }
 }
-function start() { if (timer) return; if (process.env.SPARTAN_PROCESSOR_ENABLED === 'false') { logger.info('[SPARTAN PROCESSOR] disabled by SPARTAN_PROCESSOR_ENABLED=false'); return; } stewardSystem.start(); logger.info(`[SPARTAN PROCESSOR] starting worker=${WORKER_ID} interval=${INTERVAL_MS}ms batch=${BATCH_SIZE}`); processBatch(); timer = setInterval(processBatch, INTERVAL_MS); }
+function start() { if (timer) return; if (process.env.SPARTAN_PROCESSOR_ENABLED === 'false') { logger.info('[SPARTAN PROCESSOR] disabled by SPARTAN_PROCESSOR_ENABLED=false'); return; } stewardSystem.start(); logger.info(`[SPARTAN PROCESSOR] starting worker=${WORKER_ID} interval=${INTERVAL_MS}ms batch=${BATCH_SIZE}`); const sb = supabaseService.getClient(); backfillMissingBotIntel(sb).catch(error => logger.error(`[SPARTAN INTEL BACKFILL] failed: ${error.stack || error.message}`)).finally(() => processBatch()); timer = setInterval(processBatch, INTERVAL_MS); }
 function stop() { if (timer) clearInterval(timer); timer = null; }
 module.exports = { start, stop, processBatch, processOne };
