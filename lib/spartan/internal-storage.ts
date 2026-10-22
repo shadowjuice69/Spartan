@@ -111,7 +111,14 @@ async function processOne(db: Db, item: any) {
 
   const deleted = await db.from('spartan_capture_vault').delete().eq('id', work.source_vault_id).select('id')
   if (deleted.error) throw new Error(deleted.error.message)
-  if (!deleted.data?.length) throw new Error('Vault source could not be deleted after destination verification.')
+  if (!deleted.data?.length) {
+    // A prior attempt may already have removed the temporary source after the
+    // destination was written. Treat that as idempotent success only when the
+    // source really is absent; a remaining source is still a hard failure.
+    const sourceCheck = await db.from('spartan_capture_vault').select('id').eq('id', work.source_vault_id).maybeSingle()
+    if (sourceCheck.error) throw new Error(sourceCheck.error.message)
+    if (sourceCheck.data) throw new Error('Vault source could not be deleted after destination verification.')
+  }
   const removed = await db.from('spartan_internal_storage').delete().eq('id', work.id)
   if (removed.error) throw new Error(removed.error.message)
 
@@ -120,20 +127,62 @@ async function processOne(db: Db, item: any) {
     confidence: classification.confidence, pageStewardHandled: pageSteward.handled, pageStewardFields: pageSteward.fields }
 }
 
+async function recordStorageCycle(db: Db, cycle: { requested: number; staged: number; processed: number; failed: number; fatal?: boolean; reason?: string }) {
+  try {
+    const { data: current, error } = await db.from('spartan_steward_registry')
+      .select('processed_count,error_count,quarantined_count,metadata')
+      .eq('steward_key', 'storage').maybeSingle()
+    if (error) throw new Error(error.message)
+    const now = new Date().toISOString()
+    const status = cycle.fatal ? 'fail' : cycle.failed > 0 ? 'warn' : 'pass'
+    const metadata = {
+      ...jsonObject(current?.metadata),
+      system: 'spartan',
+      last_cycle: { ...cycle, status, at: now },
+    }
+    const values = {
+      last_run_at: now,
+      last_status: status,
+      processed_count: Number(current?.processed_count ?? 0) + cycle.processed,
+      error_count: Number(current?.error_count ?? 0) + (cycle.fatal ? 1 : cycle.failed),
+      metadata,
+      updated_at: now,
+    }
+    const write = current
+      ? await db.from('spartan_steward_registry').update(values).eq('steward_key', 'storage')
+      : await db.from('spartan_steward_registry').insert({
+          steward_key: 'storage', name: 'Storage Steward', role: 'capture routing and durable verification',
+          enabled: true, interval_ms: 300000, quarantined_count: 0, ...values,
+        })
+    if (write.error) throw new Error(write.error.message)
+  } catch (error) {
+    console.error('[STORAGE STEWARD] registry health update failed:', error instanceof Error ? error.message : String(error))
+  }
+}
+
 /** Shared worker used by both the HTTP steward endpoint and capture ingestion.
  * Calling it directly avoids a fragile self-HTTP request from inside Render.
  */
 export async function processStorageQueue(db: Db, requestedLimit = 10, captureId?: string): Promise<ProcessingResult> {
   const limit = Math.min(Math.max(numberValue(requestedLimit) ?? 10, 1), 25)
-  const staged = await stageVault(db, limit, captureId)
-  let query = db.from('spartan_internal_storage').select('*').eq('processing_status', 'stored')
-  if (captureId) query = query.eq('capture_id', captureId)
-  const { data: items, error } = await query.order('created_at', { ascending: true }).limit(limit)
-  if (error) throw new Error(error.message)
+  let staged = 0
+  let items: any[] = []
+  try {
+    staged = await stageVault(db, limit, captureId)
+    let query = db.from('spartan_internal_storage').select('*').eq('processing_status', 'stored')
+    if (captureId) query = query.eq('capture_id', captureId)
+    const { data, error } = await query.order('created_at', { ascending: true }).limit(limit)
+    if (error) throw new Error(error.message)
+    items = data ?? []
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    await recordStorageCycle(db, { requested: limit, staged, processed: 0, failed: 1, fatal: true, reason: message })
+    throw error
+  }
 
   const results: any[] = []
   const failures: any[] = []
-  for (const item of items ?? []) {
+  for (const item of items) {
     try {
       const result = await processOne(db, item)
       if (!result.skipped) results.push(result)
@@ -146,5 +195,6 @@ export async function processStorageQueue(db: Db, requestedLimit = 10, captureId
       }).eq('id', item.id)
     }
   }
+  await recordStorageCycle(db, { requested: limit, staged, processed: results.length, failed: failures.length })
   return { requested: limit, staged, processed: results.length, failed: failures.length, results, failures }
 }
