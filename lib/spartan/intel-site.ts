@@ -109,7 +109,7 @@ export function remainingSeconds(value: unknown): number | null {
   if (typeof value === 'number') return Number.isFinite(value) ? value : null
   const raw = text(value).toLowerCase()
   if (!raw) return null
-  const matches = [...raw.matchAll(/(\\d+(?:\\.\\d+)?)\\s*([dhms])\\b/g)]
+  const matches = [...raw.matchAll(/(\d+(?:\.\d+)?)\s*([dhms])\b/g)]
   if (!matches.length) return val(raw)
   return matches.reduce((total, match) => total + Number(match[1]) * ({ d: 86400, h: 3600, m: 60, s: 1 }[match[2] as 'd' | 'h' | 'm' | 's']), 0)
 }
