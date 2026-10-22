@@ -114,7 +114,7 @@ function Science(){
         const list=Array.isArray(data.provinces)?data.provinces:[]
         setProvinces(list)
         setProvinceError(list.length?"":"No provinces were found in Spartan's province registry.")
-        if(list.length)setProvince(list[0].province_name)
+        if(list.length)setProvince(list[0].province_name + (list[0].kingdom_code ? " (" + list[0].kingdom_code + ")" : ""))
       })
       .catch(err=>{if(active)setProvinceError(err.message||"Could not load Spartan provinces.")})
       .finally(()=>{if(active)setProvinceLoading(false)})
@@ -147,7 +147,7 @@ function Science(){
         <span style={label}>Spartan province</span>
         <select style={input} value={province} onChange={e=>{setProvince(e.target.value);setResult(null)}} disabled={provinceLoading||provinces.length===0}>
           <option value="">{provinceLoading?"Loading Spartan provinces…":"Choose a province…"}</option>
-          {provinces.map(p=><option key={p.province_name} value={p.province_name}>{p.province_name}{p.kingdom_code?" — "+p.kingdom_code:""}</option>)}
+          {provinces.map(p=><option key={p.province_name + "|" + (p.kingdom_code || "")} value={p.province_name + (p.kingdom_code ? " (" + p.kingdom_code + ")" : "")}>{p.province_name}{p.kingdom_code?" — "+p.kingdom_code:""}</option>)}
         </select>
         {provinceError&&<span style={{display:"block",fontSize:10,color:"#ff9b9b",marginTop:5}}>{provinceError}</span>}
         {!provinceError&&<span style={{display:"block",fontSize:10,color:"#718091",marginTop:5}}>{provinces.length} province{provinces.length===1?"":"s"} loaded from Spartan's registry.</span>}
