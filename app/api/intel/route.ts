@@ -156,12 +156,16 @@ export async function POST(request: Request) {
       .update(JSON.stringify([sourceUrl, province, dataHtml, dataSimple]))
       .digest('hex')
 
+    const pageKind = inferPageKind(sourceUrl)
+    const intelGrid = pageKind === 'intel' ? parseKingdomIntelGrid(dataHtml, sourceUrl, dataSimple) : null
+    const urlKd = sourceUrl.match(/\/(?:kingdom_intel|kingdom_details)\/(\d+)\/(\d+)(?:\/|$|[?#])/i)
+    const kingdomCode = intelGrid?.kingdomCode || (urlKd ? urlKd[1] + ':' + urlKd[2] : null)
     const capture = {
-      captureId: `utopiaintel-${fingerprint}`,
+      captureId: 'utopiaintel-${fingerprint}',
       capturedAt: receivedAt,
       source: 'utopiaintel',
       sourceId: fingerprint,
-      pageKind: inferPageKind(sourceUrl),
+      pageKind,
       url: sourceUrl || undefined,
       provinceName: account.province_name,
       province: account.province_name,
@@ -177,11 +181,13 @@ export async function POST(request: Request) {
         data_simple: dataSimple,
         url: sourceUrl,
         prov: province,
+        ...(intelGrid?.grid ? { grid: intelGrid.grid } : {}),
       },
       parsedPayload: {
         url: sourceUrl,
         prov: province,
         data_simple: dataSimple,
+        ...(kingdomCode ? { kingdom_code: kingdomCode } : {}),
       },
     }
 
