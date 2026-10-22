@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useMemo, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import type { ParsedScience } from "@/lib/spartan/build-parser"
-import { buildPlan, type LiveCategory } from "@/lib/spartan/science-plan"
+import { buildPlan, normalizeScience, type LiveCategory } from "@/lib/spartan/science-plan"
 import { NAV_COMMAND as navCommand, NAV_INTEL as navIntel } from '@/lib/spartan/nav'
 
 
@@ -295,7 +295,7 @@ function BuildDetail({ id, races, personalities, onBack, onDeleted }: { id: stri
     }
   }, [build, currentAge])
 
-  const plan = useMemo(() => build ? buildPlan(build.science, live?.cats || null, books) : [], [build, live, books])
+  const plan = useMemo(() => build ? buildPlan(normalizeScience(build.science, build.raw_science_text), live?.cats || null, books) : [], [build, live, books])
   const pct = (n: number) => `${n > 0 ? "+" : ""}${n.toFixed(1)}%`
   const raceRule = build?.race_rule_snapshot || null
   const personalityRule = build?.personality_rule_snapshot || null
@@ -372,6 +372,7 @@ function BuildDetail({ id, races, personalities, onBack, onDeleted }: { id: stri
       {mil.notes && <p style={{ fontSize:11, color:"#8993a1", fontStyle:"italic" }}>{mil.notes}</p>}
 
       <h3 style={{ fontSize:12, color:"#67f0b0", letterSpacing:".1em", marginTop:20 }}>SCIENCE PLAN</h3>
+      {plan.every((p) => p.rows.length === 0) && <p style={{ fontSize:11, color:"#ffb35c" }}>This saved build has no readable science targets or weights. Spartan checked the structured science data and legacy science text. The saved build has not been changed; add science targets/weights to restore its Science Plan.</p>}
       <p style={{ fontSize:10, color:"#687686", margin:"0 0 10px" }}>
         {live
           ? `Using your live books from the Science council page${live.at ? ` (captured ${new Date(live.at).toLocaleString()})` : ""}. Type a number to plan for a different book count.`
