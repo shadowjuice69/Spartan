@@ -16,12 +16,24 @@ async function timed(name: string, fn: () => Promise<string | undefined>): Promi
 }
 async function recordIssue(db: any, check: Check, checkedAt: string) {
   const endpoint = `/diagnostics/${check.name}`
-  const { data: existing } = await db.from('spartan_system_issues').select('issue_id,occurrence_count').eq('subsystem','diagnostics').eq('endpoint',endpoint).eq('status','open').maybeSingle()
+  const { data: existing, error: lookupError } = await db.from('spartan_system_issues').select('issue_id,occurrence_count').eq('subsystem','diagnostics').eq('endpoint',endpoint).eq('status','open').order('last_detected_at',{ascending:false}).limit(1).maybeSingle()
+  if (lookupError) throw lookupError
   if (existing) {
-    await db.from('spartan_system_issues').update({ last_detected_at: checkedAt, occurrence_count: Number(existing.occurrence_count || 0) + 1, error_message: check.detail || 'Diagnostic check failed' }).eq('issue_id', existing.issue_id)
+    const { error } = await db.from('spartan_system_issues').update({ last_detected_at: checkedAt, occurrence_count: Number(existing.occurrence_count || 0) + 1, error_message: check.detail || 'Diagnostic check failed' }).eq('issue_id', existing.issue_id)
+    if (error) throw error
   } else {
-    await db.from('spartan_system_issues').insert({ subsystem:'diagnostics', endpoint, severity:'error', status:'open', error_message:check.detail || 'Diagnostic check failed', first_detected_at:checkedAt, last_detected_at:checkedAt, occurrence_count:1, deployment_id:process.env.RENDER_SERVICE_ID || null, commit_sha:process.env.RENDER_GIT_COMMIT || process.env.RENDER_GIT_COMMIT_SHA || null, metadata:{ check:check.name, latencyMs:check.latencyMs } })
+    const { error } = await db.from('spartan_system_issues').insert({ subsystem:'diagnostics', endpoint, severity:'error', status:'open', error_message:check.detail || 'Diagnostic check failed', first_detected_at:checkedAt, last_detected_at:checkedAt, occurrence_count:1, deployment_id:process.env.RENDER_SERVICE_ID || null, commit_sha:process.env.RENDER_GIT_COMMIT || process.env.RENDER_GIT_COMMIT_SHA || null, metadata:{ check:check.name, latencyMs:check.latencyMs } })
+    if (error) throw error
   }
+}
+
+async function resolveIssues(db: any, checkedAt: string, filters: { subsystem: string; endpoint: string }, reason: string) {
+  const { error } = await db.from('spartan_system_issues')
+    .update({ status: 'resolved', resolved_at: checkedAt })
+    .eq('status', 'open')
+    .eq('subsystem', filters.subsystem)
+    .eq('endpoint', filters.endpoint)
+  if (error) throw new Error(`Could not resolve recovered issue ${filters.subsystem} ${filters.endpoint}: ${error.message}`)
 }
 
 export async function GET() {
@@ -53,7 +65,15 @@ export async function GET() {
     timed('render_dependency', async () => { const target=process.env.SPARTAN_RENDER_HEALTH_TARGET?.trim(); if(!target) return 'external Render dependency not configured'; const controller=new AbortController(); const timeout=setTimeout(()=>controller.abort(),5000); try { const response=await fetch(target,{cache:'no-store',signal:controller.signal,headers:{Accept:'application/json'}}); if(!response.ok) throw new Error(`HTTP ${response.status}`); return 'external dependency ok' } finally { clearTimeout(timeout) } }),
   ])
   const failed=checks.filter(c=>!c.ok), slow=checks.filter(c=>c.latencyMs>=1000)
-  for(const check of failed) await recordIssue(db,check,checkedAt)
+  for (const check of checks) {
+    if (check.ok) await resolveIssues(db, checkedAt, { subsystem: 'diagnostics', endpoint: `/diagnostics/${check.name}` }, `Diagnostic ${check.name} passed`)
+    else await recordIssue(db, check, checkedAt)
+  }
+  // A successful, fully healthy response is direct evidence that the diagnostics endpoint recovered.
+  // Do not clear these client-reported failures while any underlying diagnostic remains unhealthy.
+  if (failed.length === 0) {
+    await resolveIssues(db, checkedAt, { subsystem: 'client', endpoint: '/api/diagnostics' }, 'Diagnostics endpoint returned a healthy response')
+  }
   return NextResponse.json({ ok:failed.length===0, status:failed.length?'degraded':slow.length?'slow':'healthy', checkedAt, totalLatencyMs:Math.max(...checks.map(c=>c.latencyMs)), failedChecks:failed.length, slowChecks:slow.length, checks, deployment:{ commit:process.env.RENDER_GIT_COMMIT || process.env.RENDER_GIT_COMMIT_SHA || null, service:process.env.RENDER_SERVICE_NAME || null } }, { status:failed.length?503:200 })
 }
 
