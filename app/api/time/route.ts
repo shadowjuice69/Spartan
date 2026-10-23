@@ -74,11 +74,10 @@ async function resolveAnchor(): Promise<Anchor> {
     const gameDate = findGameDate(capture.raw_text) ?? findGameDate(capture.parsed_payload)
     const captured = new Date(capture.captured_at)
     if (!gameDate || !Number.isFinite(captured.getTime())) continue
-    // Game ticks align to real UTC hour boundaries, not capture time.\n    const nextTickAt = new Date(Math.floor(captured.getTime() / TICK_MS) * TICK_MS + TICK_MS)
+    // Game ticks align to real UTC hour boundaries, not capture time.
+    const nextTickAt = new Date(Math.floor(captured.getTime() / TICK_MS) * TICK_MS + TICK_MS)
     if (!Number.isFinite(nextTickAt.getTime())) continue
-    const boundary = nextTickAt.getTime() - TICK_MS
-    const tick = gameDate.day
-    return { ...gameDate, tick, capturedAt: captured.toISOString(), nextTickAt: nextTickAt.toISOString(), source: 'spartan_intel_records.throne' }
+    return { ...gameDate, capturedAt: captured.toISOString(), nextTickAt: nextTickAt.toISOString(), source: 'spartan_intel_records.throne' }
   }
   throw new Error('No Throne capture containing an authoritative Utopia date has been stored yet.')
 }
@@ -87,10 +86,8 @@ export async function GET() {
   try {
     const now = new Date(); const anchor = await resolveAnchor(); const boundary = Date.parse(anchor.nextTickAt) - TICK_MS
     const elapsedTicks = Math.max(0, Math.floor((now.getTime() - boundary) / TICK_MS))
-    const totalTicks = (anchor.tick - 1) + elapsedTicks
-    const elapsedDays = Math.floor(totalTicks / TICKS_PER_DAY)
-    const tick = (totalTicks % TICKS_PER_DAY) + 1
-    const date = fromCalendarDayIndex(calendarDayIndex(anchor.year, anchor.month, anchor.day) + elapsedDays)
+    const date = fromCalendarDayIndex(calendarDayIndex(anchor.year, anchor.month, anchor.day) + elapsedTicks)
+    const tick = date.day
     const nextTick = new Date(boundary + (elapsedTicks + 1) * TICK_MS)
     return NextResponse.json({
       now: now.toISOString(),
