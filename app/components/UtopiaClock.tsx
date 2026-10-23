@@ -23,11 +23,11 @@ const DAYS_PER_YEAR = DAYS_PER_MONTH * MONTHS_PER_YEAR
 const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July']
 
 function dayIndex(date: GameDate) {
-  return (date.year - 1) * DAYS_PER_YEAR + (date.month - 1) * DAYS_PER_MONTH + (date.day - 1)
+  return date.year * DAYS_PER_YEAR + (date.month - 1) * DAYS_PER_MONTH + (date.day - 1)
 }
 function fromDayIndex(value: number) {
   const absolute = Math.max(0, value)
-  const year = Math.floor(absolute / DAYS_PER_YEAR) + 1
+  const year = Math.floor(absolute / DAYS_PER_YEAR)
   const withinYear = absolute % DAYS_PER_YEAR
   return { year, month: Math.floor(withinYear / DAYS_PER_MONTH) + 1, day: withinYear % DAYS_PER_MONTH + 1 }
 }
@@ -47,7 +47,7 @@ function readCache(): ClockData | null {
     const raw = window.localStorage.getItem(CACHE_KEY)
     if (!raw) return null
     const value = JSON.parse(raw) as ClockData
-    if (!value?.utopia?.year || !value?.nextTickAt || !value?.anchorCapturedAt) return null
+    if (!value?.utopia || !Number.isInteger(value.utopia.year) || value.utopia.year < 0 || !value?.nextTickAt || !value?.anchorCapturedAt) return null
     if (!Number.isFinite(Date.parse(value.nextTickAt))) return null
     return value
   } catch { return null }
@@ -73,7 +73,7 @@ export default function UtopiaClock() {
         const response = await fetch('/api/time', { cache: 'no-store', headers: { 'Cache-Control': 'no-cache' } })
         const value = await response.json().catch(() => ({}))
         if (!response.ok) throw new Error(value.error || 'Utopia date sync unavailable')
-        if (!value?.utopia?.year || !value?.nextTickAt || !value?.now) throw new Error('Utopia date sync returned incomplete data')
+        if (!value?.utopia || !Number.isInteger(value.utopia.year) || value.utopia.year < 0 || !value?.nextTickAt || !value?.now) throw new Error('Utopia date sync returned incomplete data')
         if (!Number.isFinite(Date.parse(value.nextTickAt)) || !Number.isFinite(Date.parse(value.now))) throw new Error('Utopia date sync returned invalid timestamps')
         if (!mounted) return
         const verified = value as ClockData
@@ -126,7 +126,7 @@ export default function UtopiaClock() {
         <div className="time-cell utopia-time">
           <span className="time-kicker">UTOPIA CALENDAR</span>
           <strong>{date ? `Age date · ${month} ${date.day}, YR${date.year}` : 'Waiting for Intel date'}</strong>
-          <small>{date ? `TICK ${date.tick} / 24 · 24 DAYS PER MONTH` : 'Last trusted Intel date loads when available'}</small>
+          <small>{date ? `DAY ${date.day} / 24 · 1 HOURLY TICK = 1 UTOPIA DAY` : 'Last trusted Intel date loads when available'}</small>
         </div>
         <div className="time-cell tick-time">
           <span className="time-kicker">NEXT HOURLY TICK</span>
