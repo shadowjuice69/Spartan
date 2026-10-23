@@ -5,7 +5,6 @@ import { createClient } from '@/lib/supabase/server'
 export const dynamic = 'force-dynamic'
 
 const TICK_MS = 3_600_000
-const TICKS_PER_DAY = 24
 const DAYS_PER_MONTH = 24
 const MONTHS_PER_YEAR = 7
 const DAYS_PER_YEAR = DAYS_PER_MONTH * MONTHS_PER_YEAR
