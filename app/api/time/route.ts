@@ -30,7 +30,7 @@ function parseGameDate(v: unknown): GameDate | null {
   let month = MONTH_NAMES.findIndex(n => n.toLowerCase() === word) + 1
   if (!month) month = MONTH_ABBR.findIndex(n => n === word.slice(0, 3)) + 1
   const day = Number(m[2]); const year = Number(m[3])
-  if (!month || !Number.isInteger(day) || day < 1 || day > DAYS_PER_MONTH || !Number.isInteger(year) || year < 1) return null
+  if (!month || !Number.isInteger(day) || day < 1 || day > DAYS_PER_MONTH || !Number.isInteger(year) || year < 0) return null
   return { year, month, day }
 }
 function findGameDate(v: unknown): GameDate | null {
@@ -52,16 +52,16 @@ function findNextTickMs(v: unknown): number | null {
   for (const child of Object.values(v as Record<string, unknown>)) { const found = findNextTickMs(child); if (found !== null) return found }
   return null
 }
-function calendarDayIndex(year: number, month: number, day: number) { return (year - 1) * DAYS_PER_YEAR + (month - 1) * DAYS_PER_MONTH + (day - 1) }
+function calendarDayIndex(year: number, month: number, day: number) { return year * DAYS_PER_YEAR + (month - 1) * DAYS_PER_MONTH + (day - 1) }
 function fromCalendarDayIndex(value: number) {
   const absolute = Math.max(0, value)
-  const year = Math.floor(absolute / DAYS_PER_YEAR) + 1
+  const year = Math.floor(absolute / DAYS_PER_YEAR)
   const withinYear = absolute % DAYS_PER_YEAR
   const month = Math.floor(withinYear / DAYS_PER_MONTH) + 1
   const day = (withinYear % DAYS_PER_MONTH) + 1
   return { year, month, day }
 }
-function daysUntilNextYear(year: number, month: number, day: number) { return Math.max(0, year * DAYS_PER_YEAR - calendarDayIndex(year, month, day)) }
+function daysUntilNextYear(year: number, month: number, day: number) { return Math.max(0, (year + 1) * DAYS_PER_YEAR - calendarDayIndex(year, month, day)) }
 
 async function resolveAnchor(): Promise<Anchor> {
   const auth = await createClient(); const { data: { user } } = await auth.auth.getUser()
@@ -89,10 +89,10 @@ async function resolveAnchor(): Promise<Anchor> {
     const captured = new Date(capture.captured_at)
     if (!gameDate || !Number.isFinite(captured.getTime())) continue
     const delay = findNextTickMs(capture.raw_text) ?? findNextTickMs(capture.parsed_payload)
-    const nextTickAt = delay !== null ? new Date(captured.getTime() + delay) : new Date(Math.floor(captured.getTime() / TICK_MS) * TICK_MS + TICK_MS)
+    // Game ticks align to real UTC hour boundaries; use the capture's countdown only as diagnostic context.\n    const nextTickAt = new Date(Math.floor(captured.getTime() / TICK_MS) * TICK_MS + TICK_MS)
     if (!Number.isFinite(nextTickAt.getTime())) continue
     const boundary = nextTickAt.getTime() - TICK_MS
-    const tick = new Date(boundary).getUTCHours() + 1
+    const tick = gameDate.day
     return { ...gameDate, tick, capturedAt: captured.toISOString(), nextTickAt: nextTickAt.toISOString(), source: 'spartan_intel_records.throne' }
   }
   throw new Error('No Throne capture containing an authoritative Utopia date has been stored yet.')
