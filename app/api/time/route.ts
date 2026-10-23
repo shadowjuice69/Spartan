@@ -38,19 +38,6 @@ function findGameDate(v: unknown): GameDate | null {
   for (const child of Object.values(v as Record<string, unknown>)) { const found = findGameDate(child); if (found) return found }
   return null
 }
-function parseNextTickMs(v: unknown): number | null {
-  const s = text(v).replace(/\s+/g, ' ')
-  const m = s.match(/next\s+tick\s*:?\s*(\d+)\s*(minute|minutes|hour|hours)/i)
-  if (!m) return null
-  const amount = Number(m[1]); if (!Number.isFinite(amount) || amount < 0) return null
-  return amount * (m[2].toLowerCase().startsWith('hour') ? 3_600_000 : 60_000)
-}
-function findNextTickMs(v: unknown): number | null {
-  const direct = parseNextTickMs(v); if (direct !== null) return direct
-  if (!v || typeof v !== 'object' || Array.isArray(v)) return null
-  for (const child of Object.values(v as Record<string, unknown>)) { const found = findNextTickMs(child); if (found !== null) return found }
-  return null
-}
 function calendarDayIndex(year: number, month: number, day: number) { return year * DAYS_PER_YEAR + (month - 1) * DAYS_PER_MONTH + (day - 1) }
 function fromCalendarDayIndex(value: number) {
   const absolute = Math.max(0, value)
@@ -87,8 +74,7 @@ async function resolveAnchor(): Promise<Anchor> {
     const gameDate = findGameDate(capture.raw_text) ?? findGameDate(capture.parsed_payload)
     const captured = new Date(capture.captured_at)
     if (!gameDate || !Number.isFinite(captured.getTime())) continue
-    const delay = findNextTickMs(capture.raw_text) ?? findNextTickMs(capture.parsed_payload)
-    // Game ticks align to real UTC hour boundaries; use the capture's countdown only as diagnostic context.\n    const nextTickAt = new Date(Math.floor(captured.getTime() / TICK_MS) * TICK_MS + TICK_MS)
+    // Game ticks align to real UTC hour boundaries, not capture time.\n    const nextTickAt = new Date(Math.floor(captured.getTime() / TICK_MS) * TICK_MS + TICK_MS)
     if (!Number.isFinite(nextTickAt.getTime())) continue
     const boundary = nextTickAt.getTime() - TICK_MS
     const tick = gameDate.day
