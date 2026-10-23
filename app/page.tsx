@@ -1,6 +1,7 @@
 "use client";
 
 import { logout } from "./login/actions";
+import UtopiaClock from "./components/UtopiaClock";
 import {
   C, DataTable, Donut, Empty, Gauge, Grid, HBars, LineChart, Panel, Shell, Skeletons, Stat, Tag,
   ago, compact, fmt, pct, seriesFrom, usePageModel,
@@ -114,6 +115,7 @@ export default function Home() {
       reload={reload}
       right={<form action={logout}><button className="sp-btn" type="submit">Log out</button></form>}
     >
+      <UtopiaClock />
       {!data && !error && <Skeletons count={8} />}
       {data && !hasAny && (
         <Panel>
