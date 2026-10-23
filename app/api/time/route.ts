@@ -12,7 +12,7 @@ const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'Ju
 const MONTH_ABBR = MONTH_NAMES.map(m => m.slice(0, 3).toLowerCase())
 
 type GameDate = { year: number; month: number; day: number }
-type Anchor = GameDate & { tick: number; capturedAt: string; nextTickAt: string; source: string }
+type Anchor = GameDate & { capturedAt: string; nextTickAt: string; source: string }
 
 function adminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
