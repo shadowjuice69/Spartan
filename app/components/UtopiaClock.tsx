@@ -107,7 +107,7 @@ export default function UtopiaClock() {
   const month = date ? monthNames[date.month - 1] : ''
   const tabletTime = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true }).format(new Date(liveNow))
   const tabletDate = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(liveNow))
-  const daysUntilNextYear = date ? Math.max(0, date.year * DAYS_PER_YEAR - dayIndex(date)) : 0
+  const daysUntilNextYear = date ? Math.max(0, (date.year + 1) * DAYS_PER_YEAR - dayIndex(date)) : 0
 
   return (
     <>
