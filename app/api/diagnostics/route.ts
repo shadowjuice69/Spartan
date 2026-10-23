@@ -48,9 +48,17 @@ export async function GET() {
       const {data:registry,error:r}=await db.from('spartan_province_registry').select('province_id,province_name,kingdom_code').eq('user_id',user.id).eq('province_name',account.province_name).eq('kingdom_code',account.province_location).order('updated_at',{ascending:false}).limit(1).maybeSingle(); if(r) throw r; if(!registry?.province_id) throw new Error('current province registry link missing')
       // The authoritative clock reader uses spartan_intel_records. The capture vault is an ingestion/history store and may not contain normalized Throne rows.
       const provinceIds=[...new Set([String(account.id),String(registry.province_id)].filter(Boolean))]
-      const {data:capture,error:c}=await db.from('spartan_intel_records').select('id,raw_text,parsed_payload').in('province_id',provinceIds).eq('kingdom_id',account.province_location).eq('page_kind','throne').order('captured_at',{ascending:false}).limit(100); if(c) throw c
       const datePattern=/\b(?:January|February|March|April|May|June|July)\s+\d{1,2}(?:st|nd|rd|th)?[,]?\s*(?:of\s+)?YR\s*\d+/i
-      const found=(capture||[]).some((row:any)=>datePattern.test(String(row.raw_text||'')) || datePattern.test(JSON.stringify(row.parsed_payload||{})))
+      const hasDate=(rows:any[]) => (rows||[]).some((row:any)=>datePattern.test(String(row.raw_text||'')) || datePattern.test(JSON.stringify(row.parsed_payload||{})))
+      const {data:capture,error:c}=await db.from('spartan_intel_records').select('id,raw_text,parsed_payload').in('province_id',provinceIds).eq('kingdom_id',account.province_location).eq('page_kind','throne').order('captured_at',{ascending:false}).limit(100); if(c) throw c
+      let found=hasDate(capture||[])
+      // Universal Capture may retain an older province_id for a valid current-user capture.
+      // Authenticated owner + current kingdom is a narrow fallback and excludes prior-age KD 6:9 history.
+      if(!found) {
+        const {data:ownedCapture,error:ownedError}=await db.from('spartan_intel_records').select('id,raw_text,parsed_payload').eq('user_id',user.id).eq('kingdom_id',account.province_location).eq('page_kind','throne').order('captured_at',{ascending:false}).limit(100)
+        if(ownedError) throw ownedError
+        found=hasDate(ownedCapture||[])
+      }
       if(!found) throw new Error('no authoritative throne date capture in spartan_intel_records for the linked province')
       return 'clock source ready'
     }),
