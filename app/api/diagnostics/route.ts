@@ -27,7 +27,7 @@ async function recordIssue(db: any, check: Check, checkedAt: string) {
   }
 }
 
-async function resolveIssues(db: any, checkedAt: string, filters: { subsystem: string; endpoint: string }, reason: string) {
+async function resolveIssues(db: any, checkedAt: string, filters: { subsystem: string; endpoint: string }) {
   const { error } = await db.from('spartan_system_issues')
     .update({ status: 'resolved', resolved_at: checkedAt })
     .eq('status', 'open')
@@ -66,13 +66,13 @@ export async function GET() {
   ])
   const failed=checks.filter(c=>!c.ok), slow=checks.filter(c=>c.latencyMs>=1000)
   for (const check of checks) {
-    if (check.ok) await resolveIssues(db, checkedAt, { subsystem: 'diagnostics', endpoint: `/diagnostics/${check.name}` }, `Diagnostic ${check.name} passed`)
+    if (check.ok) await resolveIssues(db, checkedAt, { subsystem: 'diagnostics', endpoint: `/diagnostics/${check.name}` })
     else await recordIssue(db, check, checkedAt)
   }
   // A successful, fully healthy response is direct evidence that the diagnostics endpoint recovered.
   // Do not clear these client-reported failures while any underlying diagnostic remains unhealthy.
   if (failed.length === 0) {
-    await resolveIssues(db, checkedAt, { subsystem: 'client', endpoint: '/api/diagnostics' }, 'Diagnostics endpoint returned a healthy response')
+    await resolveIssues(db, checkedAt, { subsystem: 'client', endpoint: '/api/diagnostics' })
   }
   return NextResponse.json({ ok:failed.length===0, status:failed.length?'degraded':slow.length?'slow':'healthy', checkedAt, totalLatencyMs:Math.max(...checks.map(c=>c.latencyMs)), failedChecks:failed.length, slowChecks:slow.length, checks, deployment:{ commit:process.env.RENDER_GIT_COMMIT || process.env.RENDER_GIT_COMMIT_SHA || null, service:process.env.RENDER_SERVICE_NAME || null } }, { status:failed.length?503:200 })
 }
