@@ -38,6 +38,12 @@ function findGameDate(v: unknown): GameDate | null {
   for (const child of Object.values(v as Record<string, unknown>)) { const found = findGameDate(child); if (found) return found }
   return null
 }
+function findAge(v: unknown): number | null {
+  if (typeof v === 'string') { const match = v.match(/\bAge\s+(\d+)\b/i); return match ? Number(match[1]) : null }
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return null
+  for (const child of Object.values(v as Record<string, unknown>)) { const found = findAge(child); if (found !== null) return found }
+  return null
+}
 function calendarDayIndex(year: number, month: number, day: number) { return year * DAYS_PER_YEAR + (month - 1) * DAYS_PER_MONTH + (day - 1) }
 function fromCalendarDayIndex(value: number) {
   const absolute = Math.max(0, value)
@@ -74,6 +80,14 @@ async function resolveAnchor(): Promise<Anchor> {
     const gameDate = findGameDate(capture.raw_text) ?? findGameDate(capture.parsed_payload)
     const captured = new Date(capture.captured_at)
     if (!gameDate || !Number.isFinite(captured.getTime())) continue
+    const gameAge = findAge(capture.raw_text) ?? findAge(capture.parsed_payload)
+    const gameTick = `${MONTH_NAMES[gameDate.month - 1]} ${gameDate.day}, YR${gameDate.year}`
+    if (capture.game_year !== gameDate.year || capture.game_tick !== gameTick || (gameAge !== null && capture.age !== gameAge)) {
+      const patch: Record<string, unknown> = { game_year: gameDate.year, game_tick: gameTick }
+      if (gameAge !== null) patch.age = gameAge
+      const { error: updateError } = await db.from('spartan_intel_records').update(patch).eq('id', capture.id)
+      if (updateError) throw updateError
+    }
     // Game ticks align to real UTC hour boundaries, not capture time.
     const nextTickAt = new Date(Math.floor(captured.getTime() / TICK_MS) * TICK_MS + TICK_MS)
     if (!Number.isFinite(nextTickAt.getTime())) continue
