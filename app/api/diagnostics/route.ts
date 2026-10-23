@@ -16,12 +16,24 @@ async function timed(name: string, fn: () => Promise<string | undefined>): Promi
 }
 async function recordIssue(db: any, check: Check, checkedAt: string) {
   const endpoint = `/diagnostics/${check.name}`
-  const { data: existing } = await db.from('spartan_system_issues').select('issue_id,occurrence_count').eq('subsystem','diagnostics').eq('endpoint',endpoint).eq('status','open').maybeSingle()
+  const { data: existing, error: lookupError } = await db.from('spartan_system_issues').select('issue_id,occurrence_count').eq('subsystem','diagnostics').eq('endpoint',endpoint).eq('status','open').order('last_detected_at',{ascending:false}).limit(1).maybeSingle()
+  if (lookupError) throw lookupError
   if (existing) {
-    await db.from('spartan_system_issues').update({ last_detected_at: checkedAt, occurrence_count: Number(existing.occurrence_count || 0) + 1, error_message: check.detail || 'Diagnostic check failed' }).eq('issue_id', existing.issue_id)
+    const { error } = await db.from('spartan_system_issues').update({ last_detected_at: checkedAt, occurrence_count: Number(existing.occurrence_count || 0) + 1, error_message: check.detail || 'Diagnostic check failed' }).eq('issue_id', existing.issue_id)
+    if (error) throw error
   } else {
-    await db.from('spartan_system_issues').insert({ subsystem:'diagnostics', endpoint, severity:'error', status:'open', error_message:check.detail || 'Diagnostic check failed', first_detected_at:checkedAt, last_detected_at:checkedAt, occurrence_count:1, deployment_id:process.env.RENDER_SERVICE_ID || null, commit_sha:process.env.RENDER_GIT_COMMIT || process.env.RENDER_GIT_COMMIT_SHA || null, metadata:{ check:check.name, latencyMs:check.latencyMs } })
+    const { error } = await db.from('spartan_system_issues').insert({ subsystem:'diagnostics', endpoint, severity:'error', status:'open', error_message:check.detail || 'Diagnostic check failed', first_detected_at:checkedAt, last_detected_at:checkedAt, occurrence_count:1, deployment_id:process.env.RENDER_SERVICE_ID || null, commit_sha:process.env.RENDER_GIT_COMMIT || process.env.RENDER_GIT_COMMIT_SHA || null, metadata:{ check:check.name, latencyMs:check.latencyMs } })
+    if (error) throw error
   }
+}
+
+async function resolveIssues(db: any, checkedAt: string, filters: { subsystem: string; endpoint: string }) {
+  const { error } = await db.from('spartan_system_issues')
+    .update({ status: 'resolved', resolved_at: checkedAt })
+    .eq('status', 'open')
+    .eq('subsystem', filters.subsystem)
+    .eq('endpoint', filters.endpoint)
+  if (error) throw new Error(`Could not resolve recovered issue ${filters.subsystem} ${filters.endpoint}: ${error.message}`)
 }
 
 export async function GET() {
@@ -36,9 +48,17 @@ export async function GET() {
       const {data:registry,error:r}=await db.from('spartan_province_registry').select('province_id,province_name,kingdom_code').eq('user_id',user.id).eq('province_name',account.province_name).eq('kingdom_code',account.province_location).order('updated_at',{ascending:false}).limit(1).maybeSingle(); if(r) throw r; if(!registry?.province_id) throw new Error('current province registry link missing')
       // The authoritative clock reader uses spartan_intel_records. The capture vault is an ingestion/history store and may not contain normalized Throne rows.
       const provinceIds=[...new Set([String(account.id),String(registry.province_id)].filter(Boolean))]
-      const {data:capture,error:c}=await db.from('spartan_intel_records').select('id,raw_text,parsed_payload').in('province_id',provinceIds).eq('kingdom_id',account.province_location).eq('page_kind','throne').order('captured_at',{ascending:false}).limit(100); if(c) throw c
       const datePattern=/\b(?:January|February|March|April|May|June|July)\s+\d{1,2}(?:st|nd|rd|th)?[,]?\s*(?:of\s+)?YR\s*\d+/i
-      const found=(capture||[]).some((row:any)=>datePattern.test(String(row.raw_text||'')) || datePattern.test(JSON.stringify(row.parsed_payload||{})))
+      const hasDate=(rows:any[]) => (rows||[]).some((row:any)=>datePattern.test(String(row.raw_text||'')) || datePattern.test(JSON.stringify(row.parsed_payload||{})))
+      const {data:capture,error:c}=await db.from('spartan_intel_records').select('id,raw_text,parsed_payload').in('province_id',provinceIds).eq('kingdom_id',account.province_location).eq('page_kind','throne').order('captured_at',{ascending:false}).limit(100); if(c) throw c
+      let found=hasDate(capture||[])
+      // Universal Capture may retain an older province_id for a valid current-user capture.
+      // Authenticated owner + current kingdom is a narrow fallback and excludes prior-age KD 6:9 history.
+      if(!found) {
+        const {data:ownedCapture,error:ownedError}=await db.from('spartan_intel_records').select('id,raw_text,parsed_payload').eq('user_id',user.id).eq('kingdom_id',account.province_location).eq('page_kind','throne').order('captured_at',{ascending:false}).limit(100)
+        if(ownedError) throw ownedError
+        found=hasDate(ownedCapture||[])
+      }
       if(!found) throw new Error('no authoritative throne date capture in spartan_intel_records for the linked province')
       return 'clock source ready'
     }),
@@ -53,7 +73,15 @@ export async function GET() {
     timed('render_dependency', async () => { const target=process.env.SPARTAN_RENDER_HEALTH_TARGET?.trim(); if(!target) return 'external Render dependency not configured'; const controller=new AbortController(); const timeout=setTimeout(()=>controller.abort(),5000); try { const response=await fetch(target,{cache:'no-store',signal:controller.signal,headers:{Accept:'application/json'}}); if(!response.ok) throw new Error(`HTTP ${response.status}`); return 'external dependency ok' } finally { clearTimeout(timeout) } }),
   ])
   const failed=checks.filter(c=>!c.ok), slow=checks.filter(c=>c.latencyMs>=1000)
-  for(const check of failed) await recordIssue(db,check,checkedAt)
+  for (const check of checks) {
+    if (check.ok) await resolveIssues(db, checkedAt, { subsystem: 'diagnostics', endpoint: `/diagnostics/${check.name}` })
+    else await recordIssue(db, check, checkedAt)
+  }
+  // A successful, fully healthy response is direct evidence that the diagnostics endpoint recovered.
+  // Do not clear these client-reported failures while any underlying diagnostic remains unhealthy.
+  if (failed.length === 0) {
+    await resolveIssues(db, checkedAt, { subsystem: 'client', endpoint: '/api/diagnostics' })
+  }
   return NextResponse.json({ ok:failed.length===0, status:failed.length?'degraded':slow.length?'slow':'healthy', checkedAt, totalLatencyMs:Math.max(...checks.map(c=>c.latencyMs)), failedChecks:failed.length, slowChecks:slow.length, checks, deployment:{ commit:process.env.RENDER_GIT_COMMIT || process.env.RENDER_GIT_COMMIT_SHA || null, service:process.env.RENDER_SERVICE_NAME || null } }, { status:failed.length?503:200 })
 }
 

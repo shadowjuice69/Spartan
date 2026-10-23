@@ -96,6 +96,21 @@ async function resolveAnchor(): Promise<Anchor> {
   throw new Error('No Throne capture containing an authoritative Utopia date has been stored yet.')
 }
 
+async function resolveRecoveredClockIssues(checkedAt: string) {
+  try {
+    const db = adminClient()
+    const { error } = await db.from('spartan_system_issues')
+      .update({ status: 'resolved', resolved_at: checkedAt })
+      .eq('status', 'open')
+      .eq('subsystem', 'clock')
+      .eq('endpoint', '/api/time')
+    if (error) throw error
+  } catch (error) {
+    // Keep a valid clock response available even if issue bookkeeping is temporarily unavailable.
+    console.error('[CLOCK] Could not resolve recovered /api/time issues:', error instanceof Error ? error.message : 'unknown error')
+  }
+}
+
 export async function GET() {
   try {
     const now = new Date(); const anchor = await resolveAnchor(); const boundary = Date.parse(anchor.nextTickAt) - TICK_MS
@@ -103,6 +118,7 @@ export async function GET() {
     const date = fromCalendarDayIndex(calendarDayIndex(anchor.year, anchor.month, anchor.day) + elapsedTicks)
     const tick = date.day
     const nextTick = new Date(boundary + (elapsedTicks + 1) * TICK_MS)
+    await resolveRecoveredClockIssues(now.toISOString())
     return NextResponse.json({
       now: now.toISOString(),
       chicagoTime: now.toLocaleString('en-US', { timeZone: 'America/Chicago', hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true }),
