@@ -68,7 +68,7 @@ async function resolveAnchor(): Promise<Anchor> {
   }
   if (!registry?.province_id) throw new Error('Your Spartan province is not linked to the Utopia clock.')
 
-  const { data: captures, error: captureError } = await db.from('spartan_intel_records').select('captured_at,raw_text,parsed_payload,page_kind').in('province_id', [...new Set([String(account.id), String(registry.province_id)].filter(Boolean))]).eq('kingdom_id', account.province_location || '').eq('page_kind', 'throne').order('captured_at', { ascending: false }).limit(100)
+  const { data: captures, error: captureError } = await db.from('spartan_intel_records').select('id,captured_at,raw_text,parsed_payload,page_kind,age,game_year,game_tick').in('province_id', [...new Set([String(account.id), String(registry.province_id)].filter(Boolean))]).eq('kingdom_id', account.province_location || '').eq('page_kind', 'throne').order('captured_at', { ascending: false }).limit(100)
   if (captureError) throw captureError
   for (const capture of captures ?? []) {
     const gameDate = findGameDate(capture.raw_text) ?? findGameDate(capture.parsed_payload)
