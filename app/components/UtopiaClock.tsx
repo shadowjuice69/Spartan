@@ -36,9 +36,8 @@ function advanceClock(data: ClockData, now: number) {
   const passedTicks = Number.isFinite(nextTick) && now >= nextTick
     ? Math.floor((now - nextTick) / TICK_MS) + 1
     : 0
-  const totalTick = data.utopia.tick - 1 + passedTicks
-  const date = fromDayIndex(dayIndex(data.utopia) + Math.floor(totalTick / 24))
-  const tick = totalTick % 24 + 1
+  const date = fromDayIndex(dayIndex(data.utopia) + passedTicks)
+  const tick = date.day
   const nextTickAt = (Number.isFinite(nextTick) ? nextTick : now + TICK_MS) + passedTicks * TICK_MS
   return { date: { ...date, tick }, nextTickAt, passedTicks }
 }
