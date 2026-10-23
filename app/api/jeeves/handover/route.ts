@@ -65,6 +65,7 @@ export async function GET() {
   let proposals: { number: number; title: string; url: string; updatedAt: string; headSha: string | null; draft: boolean; labels: string[] }[] = []
   let proposalSearchComplete = false
   let issues: { id: string; subsystem: string; endpoint: string; severity: string; message: string; lastDetectedAt: string | null; occurrences: number; commitSha: string | null }[] = []
+  let resolvedIssues: { id: string; subsystem: string; endpoint: string; message: string; resolvedAt: string | null; occurrences: number }[] = []
   let issueSearchComplete = false
   const warnings: string[] = []
 
@@ -133,6 +134,22 @@ export async function GET() {
     issues = Array.from(grouped.values())
       .sort((a, b) => String(b.lastDetectedAt || '').localeCompare(String(a.lastDetectedAt || '')))
       .slice(0, 12)
+    const { data: resolvedRows, error: resolvedError } = await db
+      .from('spartan_system_issues')
+      .select('issue_id,subsystem,endpoint,error_message,resolved_at,occurrence_count')
+      .eq('status', 'resolved')
+      .not('resolved_at', 'is', null)
+      .order('resolved_at', { ascending: false })
+      .limit(12)
+    if (resolvedError) throw resolvedError
+    resolvedIssues = (resolvedRows || []).map((row: any) => ({
+      id: String(row.issue_id),
+      subsystem: String(row.subsystem || 'unknown'),
+      endpoint: String(row.endpoint || ''),
+      message: String(row.error_message || 'Resolved issue'),
+      resolvedAt: row.resolved_at || null,
+      occurrences: Number(row.occurrence_count || 1),
+    }))
     issueSearchComplete = true
     sourceStatus.supabase = 'ok'
   } catch (error) {
@@ -167,6 +184,10 @@ export async function GET() {
         ? issues.map((issue) => `OPEN ISSUE [${issue.severity}] ${issue.subsystem} ${issue.endpoint}: ${issue.message} (occurrences: ${issue.occurrences})`)
         : ['No open issues found in spartan_system_issues.']
       : ['Could not verify the open system issue queue.']),
+    `Recently resolved issues: ${issueSearchComplete ? resolvedIssues.length : 'unavailable'}`,
+    ...(issueSearchComplete && resolvedIssues.length
+      ? resolvedIssues.slice(0, 8).map((issue) => `COMPLETED ${issue.subsystem} ${issue.endpoint}: ${issue.message} (resolved: ${issue.resolvedAt || 'timestamp unavailable'})`)
+      : []),
     ...(warnings.length ? ['Warnings: ' + warnings.join(' | ')] : []),
     'Approval rule: proposal discovery and reporting do not authorize a build, merge, database mutation, or deployment.',
   ].join('\n')
@@ -180,6 +201,7 @@ export async function GET() {
     openPullRequests,
     proposalSearchComplete,
     issues,
+    resolvedIssues,
     issueSearchComplete,
     sourceStatus,
     warnings,
