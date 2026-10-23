@@ -134,22 +134,40 @@ export async function GET() {
     issues = Array.from(grouped.values())
       .sort((a, b) => String(b.lastDetectedAt || '').localeCompare(String(a.lastDetectedAt || '')))
       .slice(0, 12)
+    const resolvedSince = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
     const { data: resolvedRows, error: resolvedError } = await db
       .from('spartan_system_issues')
       .select('issue_id,subsystem,endpoint,error_message,resolved_at,occurrence_count')
       .eq('status', 'resolved')
       .not('resolved_at', 'is', null)
+      .gte('resolved_at', resolvedSince)
       .order('resolved_at', { ascending: false })
-      .limit(12)
+      .limit(1000)
     if (resolvedError) throw resolvedError
-    resolvedIssues = (resolvedRows || []).map((row: any) => ({
-      id: String(row.issue_id),
-      subsystem: String(row.subsystem || 'unknown'),
-      endpoint: String(row.endpoint || ''),
-      message: String(row.error_message || 'Resolved issue'),
-      resolvedAt: row.resolved_at || null,
-      occurrences: Number(row.occurrence_count || 1),
-    }))
+    const completed = new Map<string, any>()
+    for (const row of resolvedRows || []) {
+      const subsystem = String(row.subsystem || 'unknown')
+      const endpoint = String(row.endpoint || '')
+      const message = String(row.error_message || 'Resolved issue').slice(0, 500)
+      const key = [subsystem, endpoint, message].join('|')
+      const existing = completed.get(key)
+      if (existing) {
+        existing.occurrences += Number(row.occurrence_count || 1)
+        if (row.resolved_at && (!existing.resolvedAt || row.resolved_at > existing.resolvedAt)) {
+          existing.id = String(row.issue_id)
+          existing.resolvedAt = row.resolved_at
+        }
+      } else {
+        completed.set(key, {
+          id: String(row.issue_id), subsystem, endpoint, message,
+          resolvedAt: row.resolved_at || null,
+          occurrences: Number(row.occurrence_count || 1),
+        })
+      }
+    }
+    resolvedIssues = Array.from(completed.values())
+      .sort((a, b) => String(b.resolvedAt || '').localeCompare(String(a.resolvedAt || '')))
+      .slice(0, 12)
     issueSearchComplete = true
     sourceStatus.supabase = 'ok'
   } catch (error) {
