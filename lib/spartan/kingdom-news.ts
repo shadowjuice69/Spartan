@@ -94,7 +94,12 @@ export function parseKingdomNews(text: string, ownName = ''): NewsEvent[] {
   }
   return events
 }
-export const eventKey = (e: NewsEvent) => e.text
+export const eventKey = (e: NewsEvent) => [
+  e.gameDate.toLowerCase(), e.type,
+  e.attacker ? `${key(e.attacker.name)}@${e.attacker.kd || ''}` : '',
+  e.defender ? `${key(e.defender.name)}@${e.defender.kd || ''}` : '',
+  e.acres, e.books,
+].join('|')
 export function mergeNews(texts: string[], ownName = ''): NewsEvent[] {
   const best = new Map<string, { ev: NewsEvent; count: number; order: number }>()
   let order = 0
