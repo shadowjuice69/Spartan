@@ -200,7 +200,7 @@ function isStructuredGameIntelMessage(value) {
     // Structured aid transfer messages.
     /^\s*#?\d+\s*-\s*.+?:\s*We have sent\s+[\d,]+\s+.+?\s+to\s+.+?\(\d+:\d+\)\./i,
     // Structured dragon project/donation/attack messages, including damage contributions.
-    /^\s*(?::dragon_face:|🐉)\s*__DRAGON__\s+.+\b(?:donated\s+[\d,]+\s+gold coins?\s+to fund dragon|sent\s+[\d,]+\s+troops?\s+and weakened dragon by\s+[\d,]+|completed our dragon|begun development of the)\b/i,
+    /^\s*(?::dragon_face:|🐉)\s*__DRAGON__\s+.+\b(?:donated\s+(?:__|\*\*)?[\d,]+\s+gold coins?(?:(?:__|\*\*))?\s+to fund dragon|sent\s+(?:__|\*\*)?[\d,]+\s+troops?(?:(?:__|\*\*))?\s+and weakened dragon by\s+(?:__|\*\*)?[\d,]+|completed our dragon|begun development of the)\b/i,
     /\bDragon at us\s*[—-]\s*.+?\d[\d,]*\s+points of strength left\b/i
   ];
   return patterns.some(pattern => pattern.test(text));
