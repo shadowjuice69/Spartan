@@ -5,6 +5,19 @@ import { authorizeDashboardForAuthUser } from '@/lib/spartan/security'
 const PUBLIC_PATHS = new Set(['/access-denied', '/wiki'])
 
 function deny(request: NextRequest, reason: string) {
+  // API callers need structured errors; browser navigation keeps its redirect.
+  if (request.nextUrl.pathname.startsWith('/api/')) {
+    const unavailable = reason === 'system_error'
+    return NextResponse.json(
+      {
+        error: unavailable ? 'Service temporarily unavailable' : 'Access denied',
+        code: unavailable ? 'SYSTEM_ERROR' : 'ACCESS_DENIED',
+        reason,
+      },
+      { status: unavailable ? 503 : 403, headers: { 'Cache-Control': 'no-store' } }
+    )
+  }
+
   const url = request.nextUrl.clone()
   url.pathname = '/access-denied'
   url.searchParams.set('reason', reason)
