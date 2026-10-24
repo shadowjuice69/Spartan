@@ -12,6 +12,9 @@ export type NewsEvent = {
   defender: Party | null
   acres: number
   books: number
+  troopsLost: number
+  thievesLost: number
+  wizardsLost: number
   text: string
 }
 
@@ -38,7 +41,7 @@ const RULES: { type: NewsEvent['type']; re: RegExp; a: number; d: number; acres?
   { type: 'pillage', re: new RegExp(`^${PARTY}${KD} invaded and pillaged ${PARTY}${KD}$`), a: 1, d: 3 },
 ]
 
-export function parseKingdomNews(text: string): NewsEvent[] {
+export function parseKingdomNews(text: string, ownName = ''): NewsEvent[] {
   const flat = String(text || '').replace(/\s+/g, ' ')
   const start = flat.search(new RegExp(DATE))
   if (start < 0) return []
@@ -52,30 +55,52 @@ export function parseKingdomNews(text: string): NewsEvent[] {
     const dm = gameDate.match(/^([A-Za-z]+) (\d{1,2}) of YR(\d+)$/)!
     const line = rest.replace(/\.$/, '').trim()
     let ev: NewsEvent | null = null
-    for (const r of RULES) {
+    // The UtopiaIntel Province Reporter describes incoming hits differently from Kingdom News.
+    // Parse it too, including troop losses, so the War Room can show hits received and casualties.
+    const incoming = rest.match(/^Forces from (.+?) \\((\\d+:\\d+)\\) came through and ravaged our lands! They captured ([\\d,]+) acres! We lost (.+?) in this battle\\.?/i)
+    if (incoming) {
+      const attacker = party(`${incoming[1]} (${incoming[2]})`)
+      const lossesText = incoming[4]
+      const unitLosses = [...lossesText.matchAll(/([\\d,]+)\\s+([a-z][a-z -]*)/gi)]
+      let troopsLost = 0, thievesLost = 0, wizardsLost = 0
+      for (const loss of unitLosses) {
+        const count = num(loss[1])
+        const unit = loss[2].toLowerCase()
+        if (/thief/.test(unit)) thievesLost += count
+        else if (/wizard/.test(unit)) wizardsLost += count
+        else troopsLost += count
+      }
+      ev = {
+        gameDate, month: dm[1], day: Number(dm[2]), year: Number(dm[3]), type: 'invade',
+        attacker, defender: ownName ? { name: ownName, kd: null, known: true } : null,
+        acres: num(incoming[3]), books: 0, troopsLost, thievesLost, wizardsLost,
+        text: `${gameDate} ${rest}`,
+      }
+    }
+    for (const r of ev ? [] : RULES) {
       const m = line.match(r.re)
       if (!m) continue
       const kdOf = (i: number) => m[i + 1]
       const a = party(`${m[r.a]} (${kdOf(r.a)})`)
       const d = party(`${m[r.d]} (${kdOf(r.d)})`)
       ev = { gameDate, month: dm[1], day: Number(dm[2]), year: Number(dm[3]), type: r.type, attacker: a, defender: d,
-        acres: r.acres ? num(m[r.acres]) : 0, books: r.books ? num(m[r.books]) : 0, text: `${gameDate} ${line}.` }
+        acres: r.acres ? num(m[r.acres]) : 0, books: r.books ? num(m[r.books]) : 0, troopsLost: 0, thievesLost: 0, wizardsLost: 0, text: `${gameDate} ${line}.` }
       break
     }
     if (!ev && /\b(invaded|captured|ambushed|looted|pillaged|raided)\b/.test(line) && line.length < 220) {
-      ev = { gameDate, month: dm[1], day: Number(dm[2]), year: Number(dm[3]), type: 'other', attacker: null, defender: null, acres: 0, books: 0, text: `${gameDate} ${line}.` }
+      ev = { gameDate, month: dm[1], day: Number(dm[2]), year: Number(dm[3]), type: 'other', attacker: null, defender: null, acres: 0, books: 0, troopsLost: 0, thievesLost: 0, wizardsLost: 0, text: `${gameDate} ${line}.` }
     }
     if (ev) events.push(ev)
   }
   return events
 }
 export const eventKey = (e: NewsEvent) => e.text
-export function mergeNews(texts: string[]): NewsEvent[] {
+export function mergeNews(texts: string[], ownName = ''): NewsEvent[] {
   const best = new Map<string, { ev: NewsEvent; count: number; order: number }>()
   let order = 0
   for (const t of texts) {
     const counts = new Map<string, { ev: NewsEvent; n: number }>()
-    for (const e of parseKingdomNews(t)) {
+    for (const e of parseKingdomNews(t, ownName)) {
       const k = eventKey(e)
       const c = counts.get(k)
       if (c) c.n += 1; else counts.set(k, { ev: e, n: 1 })
