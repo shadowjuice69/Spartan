@@ -140,15 +140,18 @@ async function discordAttackNews(db: any, scope: string, ownName: string) {
       const acres = Number(detail[5])
       const direction = attacker.toLowerCase() === own ? 'out' : defender.toLowerCase() === own ? 'in' : 'other'
       if (direction === 'other' || !Number.isFinite(acres)) continue
-      const losses = detail[6].match(/([\d,]+)\s+([a-z][a-z -]*)/i)
-      const lostCount = losses ? Number(losses[1].replace(/,/g, '')) : 0
-      const unit = losses?.[2].toLowerCase() || ''
+      const losses = [...detail[6].matchAll(/([\d,]+)\s+([a-z][a-z -]*)/gi)]
+      let troops = 0, thieves = 0, wizards = 0
+      for (const loss of losses) {
+        const count = Number(loss[1].replace(/,/g, ''))
+        const unit = loss[2].toLowerCase()
+        if (/thief/.test(unit)) thieves += count
+        else if (/wizard/.test(unit)) wizards += count
+        else troops += count
+      }
       const event = {
         at, type: /recaptured/i.test(line) ? 'recapture' : 'invade', attacker, defender,
-        targetKingdom: detail[4], direction, acres,
-        troops: /thief|wizard/i.test(unit) ? 0 : lostCount,
-        thieves: /thief/i.test(unit) ? lostCount : 0,
-        wizards: /wizard/i.test(unit) ? lostCount : 0,
+        targetKingdom: detail[4], direction, acres, troops, thieves, wizards,
         gold: 0, food: 0, runes: 0, source: 'discord-bot',
       }
       const key = [direction, attacker.toLowerCase(), defender.toLowerCase(), acres].join('|')
