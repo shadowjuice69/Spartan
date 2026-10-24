@@ -438,7 +438,7 @@ export async function GET(request: Request) {
     const recordsResult = await db.from('spartan_intel_records').select(COLUMNS).in('page_kind', KINDS[page]).or(scope).order('created_at', { ascending: false }).limit(90)
     if (recordsResult.error) fail(recordsResult.error)
     let records = ((recordsResult.data || []) as Rec[]).filter(r =>
-      !(sharedPages.has(page) && r.visibility === 'own' && r.user_id !== user.id) &&
+      !(sharedPages.has(page) && r.visibility === 'own' && r.user_id !== user.id && r.user_id !== account.id) &&
       (r.source !== 'discord-bot' || isStructuredBotIntelText(r.raw_text))
     )
     if (page === 'science') {
