@@ -616,11 +616,18 @@ export async function GET(request: Request) {
         Number(e.acres || 0), Number(e.books || 0),
       ].join('|')
       const kingdomEvents = n.events.map(e => ({ ...e, source: /Forces from .+? came through and ravaged our lands/i.test(e.text) ? 'MPNEWS' : 'KDNEWS', order: e.at ? Date.parse(e.at) : e.order }))
-      const known = new Set(kingdomEvents.map(signature))
+      // Cross-source dedupe is date-aware: repeat captures collapse, but an attacker
+      // landing the same-sized hit on another day still counts as a separate attack.
+      const datedSignature = (e: any) => {
+        const stamp = e.at ? Date.parse(e.at) : NaN
+        const day = Number.isFinite(stamp) ? new Date(stamp).toISOString().slice(0, 10) : String(e.gameDate || '')
+        return `${signature(e)}|${day}`
+      }
+      const known = new Set(kingdomEvents.map(datedSignature))
       const events = [
         ...kingdomEvents,
-        ...botEvents.filter(e => !known.has(signature(e))).map(e => ({ ...e, source: 'KDNEWS' })),
-        ...[...mpByReport.values()].filter(e => !known.has(signature(e))).map(e => ({ ...e, source: 'MPNEWS' })),
+        ...botEvents.filter(e => !known.has(datedSignature(e))).map(e => ({ ...e, source: 'KDNEWS' })),
+        ...[...mpByReport.values()].filter(e => !known.has(datedSignature(e))).map(e => ({ ...e, source: 'MPNEWS' })),
       ].sort((a, b) => b.order - a.order)
       const latestAt = [...records, ...mpRows].map(when).filter(Boolean).sort((a, b) => Date.parse(b) - Date.parse(a))[0] || null
       body.model = { events, anchor: n.anchor, captures: n.captures + mpRows.length, latestAt, own }
