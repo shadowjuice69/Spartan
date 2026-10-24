@@ -90,10 +90,53 @@ async function newsEvents(db: any, scope: string, own: { name: string; kd: strin
     at: realTimeOf(e, anchor) || (newest ? newest.captured_at || newest.created_at : null),
     approx: !anchor,
     gameDate: e.gameDate, type: e.type, attacker: e.attacker, defender: e.defender,
-    acres: e.acres, books: e.books, side: sideOf(e, own), text: e.text,
+    acres: e.acres, books: e.books, troopsLost: e.troopsLost, thievesLost: e.thievesLost, wizardsLost: e.wizardsLost,
+    side: sideOf(e, own), text: e.text,
     order: dayIndex(e.month, e.day, e.year) ?? 0,
   })).sort((a, b) => b.order - a.order)
   return { events, anchor, captures: rows.length }
+}
+
+// Discord's NEW KDNEWS notifications are already stored as bot news captures, but have no game-date prefix.
+ // Parse only attack lines from that format; ignore unrelated delivery errors and bot notifications.
+async function discordAttackNews(db: any, scope: string, ownName: string) {
+  const result = await db.from('spartan_intel_records').select('created_at,captured_at,raw_text')
+    .eq('page_kind', 'news').eq('source', 'discord-bot').or(scope)
+    .order('created_at', { ascending: false }).limit(100)
+  if (result.error) return []
+  const own = ownName.trim().toLowerCase()
+  const counts = new Map<string, { event: any; count: number }>()
+  for (const row of result.data || []) {
+    const text = String(row.raw_text || '')
+    const perCapture = new Map<string, { event: any; count: number }>()
+    for (const rawLine of text.split(/\\r?\\n/)) {
+      const line = rawLine.replace(/^\\s*:[a-z0-9_]+:\\s*NEW KDNEWS:\\s*/i, '').trim()
+      const m = line.match(/^(\\d+\\s*-\\s*.+?)\\s*\\((\\d+:\\d+)\\)\\s+invaded\\s+(\\d+\\s*-\\s*.+?)\\s*\\((\\d+:\\d+)\\)\\s+and captured\\s+([\\d,]+) acres of land\\.?/i)
+      if (!m) continue
+      const attacker = m[1].replace(/^\\d+\\s*-\\s*/, '').trim()
+      const defender = m[3].replace(/^\\d+\\s*-\\s*/, '').trim()
+      const acres = Number(m[5].replace(/,/g, ''))
+      const direction = attacker.toLowerCase() === own ? 'out' : defender.toLowerCase() === own ? 'in' : 'other'
+      if (direction === 'other' || !Number.isFinite(acres)) continue
+      const at = row.captured_at || row.created_at
+      const event = {
+        at, type: 'invade', attacker, defender,
+        targetKingdom: direction === 'out' ? m[4] : m[2],
+        direction, acres, troops: 0, thieves: 0, wizards: 0,
+        gold: 0, food: 0, runes: 0, source: 'discord-bot',
+      }
+      const key = [attacker.toLowerCase(), m[2], defender.toLowerCase(), m[4], acres].join('|')
+      const prior = perCapture.get(key)
+      if (prior) prior.count += 1
+      else perCapture.set(key, { event, count: 1 })
+    }
+    for (const [key, value] of perCapture) {
+      const prior = counts.get(key)
+      if (!prior) counts.set(key, value)
+      else if (value.count > prior.count) prior.count = value.count
+    }
+  }
+  return [...counts.values()].flatMap(({ event, count }) => Array.from({ length: count }, () => event))
 }
 
 // Command Center: one lean model for the home page. Every section is fetched on its own (newest capture only),
@@ -467,7 +510,7 @@ export async function GET(request: Request) {
             gold: n(e.gold_change), food: n(e.food_change), runes: n(e.runes_change),
           }
         })
-      // Hits from the Kingdom News feed that involve this province (the event history table can be empty).
+      // Hits from the Kingdom News feed, including Province Reporter casualties.
       const own2 = { name: account.province_name, kd: account.province_location || null }
       const fromNews = (await newsEvents(db, kingdomScope, own2)).events
         .filter(e => e.side !== 'other' && e.at)
@@ -476,7 +519,12 @@ export async function GET(request: Request) {
           targetKingdom: (e.side === 'out' ? e.defender?.kd : e.attacker?.kd) || null, direction: e.side,
           acres: e.acres, troops: e.troopsLost || 0, thieves: e.thievesLost || 0, wizards: e.wizardsLost || 0, gold: 0, food: 0, runes: 0,
         }))
-      events.push(...fromNews)
+      // Bot notifications contain attacks the web news feed may not have captured. Avoid adding
+      // a bot duplicate when the same attacker/defender/acres event already came from game news.
+      const botNews = await discordAttackNews(db, kingdomScope, account.province_name)
+      const signature = (e: any) => [String(e.attacker || '').toLowerCase(), String(e.defender || '').toLowerCase(), Number(e.acres || 0)].join('|')
+      const siteSignatures = new Set(fromNews.map(signature))
+      events.push(...fromNews, ...botNews.filter((e: any) => !siteSignatures.has(signature(e))))
       events.sort((a: any, b: any) => Date.parse(b.at) - Date.parse(a.at))
       const militaryRec = allByPath(records, '/wol/game/council_military')[0] || null
       let kingdom: any = null
