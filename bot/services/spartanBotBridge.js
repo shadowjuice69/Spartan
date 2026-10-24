@@ -4,12 +4,21 @@ const crypto = require('crypto');
 
 function clean(value, max = 12000) { return String(value || '').slice(0, max); }
 
-const configuredChannelIds = new Set(
-  (process.env.DISCORD_CHANNEL_IDS || '').split(',').map(id => id.trim()).filter(id => /^\\d{17,20}$/.test(id))
-);
+const generalChannelAllowlist = (process.env.DISCORD_CHANNEL_IDS || '')
+  .split(',')
+  .map(id => id.trim())
+  .filter(id => /^\\d{17,20}$/.test(id));
+const intelChannelId = String(process.env.INTEL_CHANNEL_ID || '').trim();
+const configuredChannelIds = new Set([
+  ...generalChannelAllowlist,
+  ...( /^\\d{17,20}$/.test(intelChannelId) ? [intelChannelId] : [] ),
+]);
 
 function channelIsConfigured(channelId) {
-  if (!configuredChannelIds.size) return true;
+  // Preserve the existing behavior: an empty DISCORD_CHANNEL_IDS means all channels
+  // are accepted. When an allowlist is configured, INTEL_CHANNEL_ID is an extra
+  // allowed channel rather than replacing any existing channel IDs.
+  if (!generalChannelAllowlist.length) return true;
   return configuredChannelIds.has(String(channelId || '').trim());
 }
 
