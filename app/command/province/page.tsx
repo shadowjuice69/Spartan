@@ -13,25 +13,38 @@ export default function ProvincePage() {
   const m = data?.model
   const t = m?.throne
   const f = m?.throneFields || {}
+  const nested = f.throne ?? f.data ?? f.payload ?? f.state ?? f
   const s = m?.state
   const history: any[] = data?.history || []
-  const acres = f.acres ?? s?.land ?? t?.acres
-  const nw = f.networth ?? s?.networth ?? t?.networth
+  const field = (...keys: string[]) => {
+    for (const source of [f, nested, nested?.throne, nested?.data, nested?.payload]) {
+      if (!source || typeof source !== 'object') continue
+      for (const key of keys) if (source[key] != null && source[key] !== '') return source[key]
+    }
+    return null
+  }
+  const unitCount = (...patterns: RegExp[]) => {
+    const units = t?.unitCounts && typeof t.unitCounts === 'object' ? Object.entries(t.unitCounts as Record<string, unknown>) : []
+    const hit = units.find(([name]) => patterns.some(pattern => pattern.test(String(name).replace(/[_-]+/g, ' '))))
+    return hit?.[1] ?? null
+  }
+  const acres = field('acres', 'land') ?? s?.land ?? t?.acres
+  const nw = field('networth', 'nw') ?? s?.networth ?? t?.networth
   const perAcre = (count: unknown) => {
     if (count == null || count === '' || acres == null) return null
     const n = typeof count === 'number' ? count : Number(String(count).replace(/,/g, ''))
     const a = typeof acres === 'number' ? acres : Number(String(acres).replace(/,/g, ''))
     return Number.isFinite(n) && Number.isFinite(a) && a > 0 ? Number((n / a).toFixed(2)) : null
   }
-  // Prefer the ratio printed by Utopia; when capture text omits the suffixes,
-  // derive the same per-acre values from the structured throne payload.
+  // Payloads have appeared both flat and nested, and keys vary between camelCase
+  // and database snake_case. Prefer the printed ratio, then derive from troop counts.
   const ratios = {
-    offSpa: t?.ratios?.offSpa ?? perAcre(f.off_specs),
-    defSpa: t?.ratios?.defSpa ?? perAcre(f.def_specs),
-    peasantsPerAcre: t?.ratios?.peasantsPerAcre ?? perAcre(f.peons ?? f.peasants ?? t?.peons),
-    elitesPerAcre: t?.ratios?.elitesPerAcre ?? perAcre(f.elites),
-    thievesPerAcre: t?.ratios?.thievesPerAcre ?? (f.tpa != null ? Number(f.tpa) : perAcre(f.thieves ?? t?.thieves)),
-    wizardsPerAcre: t?.ratios?.wizardsPerAcre ?? (f.wpa != null ? Number(f.wpa) : perAcre(f.wizards ?? t?.wizards)),
+    offSpa: t?.ratios?.offSpa ?? perAcre(field('off_specs', 'offSpecs', 'offensive_specs', 'offensiveSpecs', 'offensiveSpecialists', 'offensive_specialists') ?? unitCount(/offensive.*spec/i, /off.*spec/i)),
+    defSpa: t?.ratios?.defSpa ?? perAcre(field('def_specs', 'defSpecs', 'defensive_specs', 'defensiveSpecs', 'defensiveSpecialists', 'defensive_specialists') ?? unitCount(/defensive.*spec/i, /def.*spec/i)),
+    peasantsPerAcre: t?.ratios?.peasantsPerAcre ?? perAcre(field('peons', 'peasants') ?? t?.peons),
+    elitesPerAcre: t?.ratios?.elitesPerAcre ?? perAcre(field('elites', 'elite', 'eliteCount', 'elite_count') ?? unitCount(/^elites?$/i)),
+    thievesPerAcre: t?.ratios?.thievesPerAcre ?? (field('tpa') != null ? Number(field('tpa')) : perAcre(field('thieves') ?? t?.thieves ?? unitCount(/^thieves?$/i))),
+    wizardsPerAcre: t?.ratios?.wizardsPerAcre ?? (field('wpa') != null ? Number(field('wpa')) : perAcre(field('wizards') ?? t?.wizards ?? unitCount(/^wizards?$/i))),
   }
   const off = f.offense ?? t?.offense
   const def = f.defense ?? t?.defense
