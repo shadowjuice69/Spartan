@@ -23,10 +23,21 @@ export default function ProvincePage() {
     }
     return null
   }
+  const unitEntries = t?.unitCounts && typeof t.unitCounts === 'object'
+    ? Object.entries(t.unitCounts as Record<string, unknown>)
+    : []
   const unitCount = (...patterns: RegExp[]) => {
-    const units = t?.unitCounts && typeof t.unitCounts === 'object' ? Object.entries(t.unitCounts as Record<string, unknown>) : []
-    const hit = units.find(([name]) => patterns.some(pattern => pattern.test(String(name).replace(/[_-]+/g, ' '))))
+    const hit = unitEntries.find(([name]) => patterns.some(pattern => pattern.test(String(name).replace(/[_-]+/g, ' '))))
     return hit?.[1] ?? null
+  }
+  // Older throne captures use race-specific names (e.g. Griffins, Harpies, Drakes)
+  // instead of the generic Off Spec / Def Spec / Elite labels. When no explicit
+  // elite label exists, the third race-specific unit is the elite in throne order.
+  const raceSpecificUnitCount = (index: number) => {
+    const common = /^(?:soldiers?|off(?:ensive)?\s*spec(?:ialist)?s?|def(?:ensive)?\s*spec(?:ialist)?s?|elites?|merc(?:enaries)?|prisoners?|war\s*horses?|horses?|generals?|thieves?|wizards?|peasants?|gold|money|food|runes|land|networth|building\s*eff\.?|trade\s*balance)$/i
+    const units = unitEntries.filter(([name]) => !common.test(String(name).replace(/[_-]+/g, ' ').trim()))
+    const value = units[index]?.[1]
+    return value == null || value === '' ? null : value
   }
   const acres = field('acres', 'land') ?? s?.land ?? t?.acres
   const nw = field('networth', 'nw') ?? s?.networth ?? t?.networth
@@ -39,10 +50,11 @@ export default function ProvincePage() {
   // Payloads have appeared both flat and nested, and keys vary between camelCase
   // and database snake_case. Prefer the printed ratio, then derive from troop counts.
   const ratios = {
-    offSpa: t?.ratios?.offSpa ?? perAcre(field('off_specs', 'offSpecs', 'offensive_specs', 'offensiveSpecs', 'offensiveSpecialists', 'offensive_specialists') ?? unitCount(/offensive.*spec/i, /off.*spec/i) ?? t?.offSpecs),
-    defSpa: t?.ratios?.defSpa ?? perAcre(field('def_specs', 'defSpecs', 'defensive_specs', 'defensiveSpecs', 'defensiveSpecialists', 'defensive_specialists') ?? unitCount(/defensive.*spec/i, /def.*spec/i) ?? t?.defSpecs),
+    // OSPA / DSPA are total combat points per acre, not specialist counts per acre.
+    offSpa: t?.ratios?.offSpa ?? perAcre(t?.offense ?? field('offense', 'off_points', 'offensePoints')),
+    defSpa: t?.ratios?.defSpa ?? perAcre(t?.defense ?? field('defense', 'def_points', 'defensePoints')),
     peasantsPerAcre: t?.ratios?.peasantsPerAcre ?? perAcre(field('peons', 'peasants') ?? t?.peons),
-    elitesPerAcre: t?.ratios?.elitesPerAcre ?? perAcre(field('elites', 'elite', 'eliteCount', 'elite_count') ?? unitCount(/^elites?$/i) ?? t?.elites),
+    elitesPerAcre: t?.ratios?.elitesPerAcre ?? perAcre(field('elites', 'elite', 'eliteCount', 'elite_count') ?? unitCount(/^elites?$/i, /^elite\s*units?$/i) ?? t?.elites ?? raceSpecificUnitCount(2)),
     thievesPerAcre: t?.ratios?.thievesPerAcre ?? (field('tpa') != null ? Number(field('tpa')) : perAcre(field('thieves') ?? t?.thieves ?? unitCount(/^thieves?$/i))),
     wizardsPerAcre: t?.ratios?.wizardsPerAcre ?? (field('wpa') != null ? Number(field('wpa')) : perAcre(field('wizards') ?? t?.wizards ?? unitCount(/^wizards?$/i))),
   }
