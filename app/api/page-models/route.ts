@@ -568,10 +568,22 @@ export async function GET(request: Request) {
 
     if (page === 'news') {
       const own = { name: account.province_name, kd: account.province_location || null }
-      const n = await newsEvents(db, scope, own, records)
+      // Keep Province Reporter captures in the feed even when recent Discord KDNEWS
+      // reports occupy the generic page-model query's 90-row window.
+      const provinceNewsResult = await db.from('spartan_intel_records').select(COLUMNS)
+        .eq('page_kind', 'news').neq('source', 'discord-bot').or(scope)
+        .order('created_at', { ascending: false }).limit(180)
+      if (provinceNewsResult.error) fail(provinceNewsResult.error)
+      const provinceNewsRows = ((provinceNewsResult.data || []) as Rec[]).filter(r =>
+        !(r.visibility === 'own' && r.user_id !== user.id && r.user_id !== account.id)
+      )
+      const newsRowMap = new Map<string, Rec>()
+      for (const r of [...records, ...provinceNewsRows]) newsRowMap.set(r.id, r)
+      const newsRows = [...newsRowMap.values()]
+      const n = await newsEvents(db, scope, own, newsRows)
       const botEvents = discordKingdomEvents(records, own)
-      // Province Reporter / MPNEWS is stored on the bot_event stream, not always on
-      // page_kind=news. Read that stream separately without changing ingestion.
+      // Province Reporter / MPNEWS may also arrive on the bot_event stream.
+      // Read that stream separately without changing ingestion.
       const mpResult = await db.from('spartan_intel_records').select(COLUMNS)
         .eq('page_kind', 'bot_event').or(`province_id.eq.${account.id},user_id.eq.${account.id},user_id.eq.${user.id},kingdom_id.eq.${account.province_location}`)
         .order('created_at', { ascending: false }).limit(180)
@@ -629,7 +641,7 @@ export async function GET(request: Request) {
         ...botEvents.filter(e => !known.has(datedSignature(e))).map(e => ({ ...e, source: 'KDNEWS' })),
         ...[...mpByReport.values()].filter(e => !known.has(datedSignature(e))).map(e => ({ ...e, source: 'MPNEWS' })),
       ].sort((a, b) => b.order - a.order)
-      const latestAt = [...records, ...mpRows].map(when).filter(Boolean).sort((a, b) => Date.parse(b) - Date.parse(a))[0] || null
+      const latestAt = [...newsRows, ...mpRows].map(when).filter(Boolean).sort((a, b) => Date.parse(b) - Date.parse(a))[0] || null
       body.model = { events, anchor: n.anchor, captures: n.captures + mpRows.length, latestAt, own }
       body.fields = []
     }
