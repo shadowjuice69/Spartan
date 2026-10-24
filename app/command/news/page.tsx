@@ -10,6 +10,7 @@ type Party = { name: string; kd: string | null; known: boolean } | null
 type Ev = {
   at: string | null; approx: boolean; gameDate: string; type: string
   attacker: Party; defender: Party; acres: number; books: number
+  troopsLost?: number; thievesLost?: number; wizardsLost?: number; source?: 'KDNEWS' | 'MPNEWS' | string
   side: 'out' | 'in' | 'other'; text: string; order: number
 }
 
@@ -74,6 +75,22 @@ export default function NewsPage() {
   const attackers = totals(list, e => e.attacker?.name || null, C.lime)
   const victims = totals(list, e => e.defender?.name || null, C.red)
 
+  // Threat board: count only attacks aimed at this province, not general kingdom traffic.
+  const threatMap = new Map<string, { attacker: string; kd: string; hits: number; acres: number; troops: number; thieves: number; wizards: number; latest: string | null; latestOrder: number }>()
+  for (const e of list) {
+    if (e.side !== 'in' || !e.attacker) continue
+    const key = `${e.attacker.name.toLowerCase().trim()}|${e.attacker.kd || ''}`
+    const prior = threatMap.get(key) || { attacker: e.attacker.name, kd: e.attacker.kd || '—', hits: 0, acres: 0, troops: 0, thieves: 0, wizards: 0, latest: null, latestOrder: 0 }
+    prior.hits += 1
+    prior.acres += e.acres || 0
+    prior.troops += e.troopsLost || 0
+    prior.thieves += e.thievesLost || 0
+    prior.wizards += e.wizardsLost || 0
+    if (e.order > prior.latestOrder) { prior.latestOrder = e.order; prior.latest = e.at }
+    threatMap.set(key, prior)
+  }
+  const threats = [...threatMap.values()].sort((a, b) => b.hits - a.hits || b.acres - a.acres || (b.troops + b.thieves + b.wizards) - (a.troops + a.thieves + a.wizards) || b.latestOrder - a.latestOrder)
+
   const board = new Map<string, { kd: string; gained: number; lost: number; hits: number }>()
   const row = (kd: string) => board.get(kd) || { kd, gained: 0, lost: 0, hits: 0 }
   for (const e of list) {
@@ -117,6 +134,19 @@ export default function NewsPage() {
             <Stat label={scoped ? 'Acres lost' : 'Active kingdoms'} value={scoped ? acresLost : scoreboard.length} sub={scoped ? `${taken.length} hit${taken.length === 1 ? '' : 's'} received` : 'Kingdoms in the feed'} color={scoped ? C.red : C.violet} delay={3} />
           </Grid>
 
+          {view !== 'all' && (
+            <Panel title="THREATS TO MY PROVINCE" sub="Ranked by incoming hit count, then acres taken, casualties and recency">
+              {threats.length ? <DataTable<(typeof threats)[number]> initialSort="hits" maxHeight={320} empty="No incoming attacks recorded." columns={[
+                { key: 'attacker', label: 'ENEMY PROVINCE', value: r => r.attacker, render: r => <b style={{ color: C.red }}>{r.attacker}</b> },
+                { key: 'kd', label: 'KINGDOM', value: r => r.kd, render: r => r.kd },
+                { key: 'hits', label: 'HITS', value: r => r.hits, render: r => <b>{fmt(r.hits)}</b>, align: 'right' },
+                { key: 'acres', label: 'ACRES TAKEN', value: r => r.acres, render: r => <span style={{ color: C.red }}>{fmt(r.acres)}</span>, align: 'right' },
+                { key: 'losses', label: 'CASUALTIES', value: r => r.troops + r.thieves + r.wizards, render: r => fmt(r.troops + r.thieves + r.wizards), align: 'right' },
+                { key: 'latestOrder', label: 'LAST HIT', value: r => r.latestOrder, render: r => r.latest ? ago(r.latest) : '—' },
+              ]} rows={threats} /> : <Empty title="No confirmed threats" hint="No incoming attacks against your province have been captured yet." />}
+            </Panel>
+          )}
+
           <Grid>
             <Panel span={8} title="ACRES OVER TIME" sub={scoped ? 'Gained and lost by day' : 'All acres changing hands by day'} delay={1}>
               {days.length > 1 ? <LineChart series={chart} height={230} /> : <Empty title="Not enough days yet" hint="Needs hits on at least two different game days." />}
@@ -146,10 +176,12 @@ export default function NewsPage() {
               <DataTable<Ev> initialSort="order" maxHeight={460} empty="No events in this view." columns={[
                 { key: 'order', label: 'GAME DATE', value: r => r.order, render: r => r.gameDate.replace(' of ', ' ') },
                 { key: 'real', label: 'WHEN', value: r => (r.at ? Date.parse(r.at) : 0), render: r => (r.at ? ago(r.at) : '—') },
+                { key: 'source', label: 'SOURCE', value: r => r.source || 'KDNEWS', render: r => <Tag color={r.source === 'MPNEWS' ? C.amber : C.cyan}>{r.source || 'KDNEWS'}</Tag> },
                 { key: 'type', label: 'TYPE', value: r => r.type, render: r => <Tag color={r.type === 'plunder' ? C.violet : r.type === 'pillage' ? C.amber : C.cyan}>{TYPE_LABEL[r.type] || 'EVENT'}</Tag> },
                 { key: 'att', label: 'ATTACKER', value: r => r.attacker?.name || '', render: r => <span style={{ color: r.side === 'out' ? C.lime : undefined }}>{who(r.attacker)}</span> },
                 { key: 'def', label: 'TARGET', value: r => r.defender?.name || '', render: r => <span style={{ color: r.side === 'in' ? C.red : undefined }}>{who(r.defender)}</span> },
                 { key: 'amt', label: 'TAKEN', value: r => r.acres || r.books, render: r => (r.acres ? `${fmt(r.acres)} acres` : r.books ? `${fmt(r.books)} books` : '—'), align: 'right' },
+                { key: 'casualties', label: 'CASUALTIES', value: r => (r.troopsLost || 0) + (r.thievesLost || 0) + (r.wizardsLost || 0), render: r => { const n = (r.troopsLost || 0) + (r.thievesLost || 0) + (r.wizardsLost || 0); return n ? fmt(n) : '—' }, align: 'right' },
               ]} rows={list} />
             </Panel>
           </Grid>
