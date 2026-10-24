@@ -45,7 +45,7 @@ export default function ReturnTrackerPage() {
       return { ...event, computedReturnAt, hours: hasReturn ? Math.max(0, (explicitReturn - Date.parse(event.at)) / HOUR) : hours,
         confidence: hasReturn || hasHours ? 'reported' as const : 'base' as const, remaining: computedReturnAt - now }
     })
-    .filter(e => e.computedReturnAt > now - 6 * HOUR && Date.parse(e.at) < now + 5 * 60 * 1000)
+    .filter(e => e.computedReturnAt > now && Date.parse(e.at) < now + 5 * 60 * 1000)
     .sort((a, b) => a.computedReturnAt - b.computedReturnAt), [events, ownKingdom, now])
   const outgoing = tracked.filter(e => e.direction === 'out')
   const incoming = tracked.filter(e => e.direction === 'in')
