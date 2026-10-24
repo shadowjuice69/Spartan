@@ -39,10 +39,10 @@ export default function ProvincePage() {
   // Payloads have appeared both flat and nested, and keys vary between camelCase
   // and database snake_case. Prefer the printed ratio, then derive from troop counts.
   const ratios = {
-    offSpa: t?.ratios?.offSpa ?? perAcre(field('off_specs', 'offSpecs', 'offensive_specs', 'offensiveSpecs', 'offensiveSpecialists', 'offensive_specialists') ?? unitCount(/offensive.*spec/i, /off.*spec/i)),
-    defSpa: t?.ratios?.defSpa ?? perAcre(field('def_specs', 'defSpecs', 'defensive_specs', 'defensiveSpecs', 'defensiveSpecialists', 'defensive_specialists') ?? unitCount(/defensive.*spec/i, /def.*spec/i)),
+    offSpa: t?.ratios?.offSpa ?? perAcre(field('off_specs', 'offSpecs', 'offensive_specs', 'offensiveSpecs', 'offensiveSpecialists', 'offensive_specialists') ?? unitCount(/offensive.*spec/i, /off.*spec/i) ?? t?.offSpecs),
+    defSpa: t?.ratios?.defSpa ?? perAcre(field('def_specs', 'defSpecs', 'defensive_specs', 'defensiveSpecs', 'defensiveSpecialists', 'defensive_specialists') ?? unitCount(/defensive.*spec/i, /def.*spec/i) ?? t?.defSpecs),
     peasantsPerAcre: t?.ratios?.peasantsPerAcre ?? perAcre(field('peons', 'peasants') ?? t?.peons),
-    elitesPerAcre: t?.ratios?.elitesPerAcre ?? perAcre(field('elites', 'elite', 'eliteCount', 'elite_count') ?? unitCount(/^elites?$/i)),
+    elitesPerAcre: t?.ratios?.elitesPerAcre ?? perAcre(field('elites', 'elite', 'eliteCount', 'elite_count') ?? unitCount(/^elites?$/i) ?? t?.elites),
     thievesPerAcre: t?.ratios?.thievesPerAcre ?? (field('tpa') != null ? Number(field('tpa')) : perAcre(field('thieves') ?? t?.thieves ?? unitCount(/^thieves?$/i))),
     wizardsPerAcre: t?.ratios?.wizardsPerAcre ?? (field('wpa') != null ? Number(field('wpa')) : perAcre(field('wizards') ?? t?.wizards ?? unitCount(/^wizards?$/i))),
   }
