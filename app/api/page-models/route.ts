@@ -109,12 +109,12 @@ async function discordAttackNews(db: any, scope: string, ownName: string) {
   for (const row of result.data || []) {
     const text = String(row.raw_text || '')
     const perCapture = new Map<string, { event: any; count: number }>()
-    for (const rawLine of text.split(/\\r?\\n/)) {
-      const line = rawLine.replace(/^\\s*:[a-z0-9_]+:\\s*NEW KDNEWS:\\s*/i, '').trim()
-      const m = line.match(/^(\\d+\\s*-\\s*.+?)\\s*\\((\\d+:\\d+)\\)\\s+invaded\\s+(\\d+\\s*-\\s*.+?)\\s*\\((\\d+:\\d+)\\)\\s+and captured\\s+([\\d,]+) acres of land\\.?/i)
+    for (const rawLine of text.split(/\r?\n/)) {
+      const line = rawLine.replace(/^\s*:[a-z0-9_]+:\s*NEW KDNEWS:\s*/i, '').trim()
+      const m = line.match(/^(\d+\s*-\s*.+?)\s*\((\d+:\d+)\)\s+invaded\s+(\d+\s*-\s*.+?)\s*\((\d+:\d+)\)\s+and captured\s+([\d,]+) acres of land\.?/i)
       if (!m) continue
-      const attacker = m[1].replace(/^\\d+\\s*-\\s*/, '').trim()
-      const defender = m[3].replace(/^\\d+\\s*-\\s*/, '').trim()
+      const attacker = m[1].replace(/^\d+\s*-\s*/, '').trim()
+      const defender = m[3].replace(/^\d+\s*-\s*/, '').trim()
       const acres = Number(m[5].replace(/,/g, ''))
       const direction = attacker.toLowerCase() === own ? 'out' : defender.toLowerCase() === own ? 'in' : 'other'
       if (direction === 'other' || !Number.isFinite(acres)) continue
