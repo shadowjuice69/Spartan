@@ -570,6 +570,43 @@ export async function GET(request: Request) {
       const own = { name: account.province_name, kd: account.province_location || null }
       const n = await newsEvents(db, scope, own, records)
       const botEvents = discordKingdomEvents(records, own)
+      // Province Reporter / MPNEWS is stored on the bot_event stream, not always on
+      // page_kind=news. Read that stream separately without changing ingestion.
+      const mpResult = await db.from('spartan_intel_records').select(COLUMNS)
+        .eq('page_kind', 'bot_event').or(scope)
+        .order('created_at', { ascending: false }).limit(180)
+      if (mpResult.error) fail(mpResult.error)
+      const mpRows = ((mpResult.data || []) as Rec[]).filter(r =>
+        !(r.visibility === 'own' && r.user_id !== user.id) &&
+        /Forces from .+?\(\d+:\d+\) came through and ravaged our lands! They captured [\d,]+ acres!/i.test(String(r.raw_text || ''))
+      )
+      const mpByReport = new Map<string, any>()
+      for (const r of mpRows) {
+        const text = String(r.raw_text || '').replace(/\s+/g, ' ').trim()
+        const hit = text.match(/Forces from (.+?)\s*\((\d+:\d+)\) came through and ravaged our lands! They captured ([\d,]+) acres!(?:\s*We lost (.+?) in this battle\.?)?/i)
+        if (!hit) continue
+        const attacker = parseNewsParty(`${hit[1]} (${hit[2]})`)
+        const losses = hit[4] || ''
+        let troopsLost = 0, thievesLost = 0, wizardsLost = 0
+        for (const loss of losses.matchAll(/([\d,]+)\s+([a-z][a-z -]*)/gi)) {
+          const amount = Number(loss[1].replace(/,/g, ''))
+          const unit = loss[2].toLowerCase()
+          if (/thief/.test(unit)) thievesLost += amount
+          else if (/wizard/.test(unit)) wizardsLost += amount
+          else troopsLost += amount
+        }
+        const at = when(r)
+        const stamp = Date.parse(at || '')
+        const event = {
+          at: at || null, approx: true, gameDate: `MPNEWS · ${new Date(Number.isFinite(stamp) ? stamp : Date.now()).toLocaleString('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false })} UTC`,
+          type: 'invade', attacker, defender: { name: own.name, kd: own.kd, known: true },
+          acres: Number(hit[3].replace(/,/g, '')), books: 0, troopsLost, thievesLost, wizardsLost,
+          side: 'in', text, order: Number.isFinite(stamp) ? stamp : 0, source: 'MPNEWS',
+        }
+        // Same raw report captured repeatedly = one event; separate reports remain separate.
+        const reportKey = [text.toLowerCase(), attacker.name.toLowerCase(), attacker.kd || '', event.acres, troopsLost, thievesLost, wizardsLost].join('|')
+        if (!mpByReport.has(reportKey)) mpByReport.set(reportKey, event)
+      }
       const signature = (e: any) => [
         String(e.type || '').toLowerCase(),
         String(e.attacker?.name || '').toLowerCase().replace(/\s+/g, ' ').trim(),
@@ -578,13 +615,15 @@ export async function GET(request: Request) {
         String(e.defender?.kd || ''),
         Number(e.acres || 0), Number(e.books || 0),
       ].join('|')
-      const known = new Set(n.events.map(signature))
+      const kingdomEvents = n.events.map(e => ({ ...e, source: 'KDNEWS', order: e.at ? Date.parse(e.at) : e.order }))
+      const known = new Set(kingdomEvents.map(signature))
       const events = [
-        ...n.events.map(e => ({ ...e, order: e.at ? Date.parse(e.at) : e.order })),
-        ...botEvents.filter(e => !known.has(signature(e))),
+        ...kingdomEvents,
+        ...botEvents.filter(e => !known.has(signature(e))).map(e => ({ ...e, source: 'KDNEWS' })),
+        ...[...mpByReport.values()].filter(e => !known.has(signature(e))).map(e => ({ ...e, source: 'MPNEWS' })),
       ].sort((a, b) => b.order - a.order)
-      const latestAt = records.map(when).filter(Boolean).sort((a, b) => Date.parse(b) - Date.parse(a))[0] || null
-      body.model = { events, anchor: n.anchor, captures: n.captures, latestAt, own }
+      const latestAt = [...records, ...mpRows].map(when).filter(Boolean).sort((a, b) => Date.parse(b) - Date.parse(a))[0] || null
+      body.model = { events, anchor: n.anchor, captures: n.captures + mpRows.length, latestAt, own }
       body.fields = []
     }
 
