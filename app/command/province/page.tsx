@@ -17,6 +17,22 @@ export default function ProvincePage() {
   const history: any[] = data?.history || []
   const acres = f.acres ?? s?.land ?? t?.acres
   const nw = f.networth ?? s?.networth ?? t?.networth
+  const perAcre = (count: unknown) => {
+    if (count == null || count === '' || acres == null) return null
+    const n = typeof count === 'number' ? count : Number(String(count).replace(/,/g, ''))
+    const a = typeof acres === 'number' ? acres : Number(String(acres).replace(/,/g, ''))
+    return Number.isFinite(n) && Number.isFinite(a) && a > 0 ? Number((n / a).toFixed(2)) : null
+  }
+  // Prefer the ratio printed by Utopia; when capture text omits the suffixes,
+  // derive the same per-acre values from the structured throne payload.
+  const ratios = {
+    offSpa: t?.ratios?.offSpa ?? perAcre(f.off_specs),
+    defSpa: t?.ratios?.defSpa ?? perAcre(f.def_specs),
+    peasantsPerAcre: t?.ratios?.peasantsPerAcre ?? perAcre(f.peons ?? f.peasants ?? t?.peons),
+    elitesPerAcre: t?.ratios?.elitesPerAcre ?? perAcre(f.elites),
+    thievesPerAcre: t?.ratios?.thievesPerAcre ?? (f.tpa != null ? Number(f.tpa) : perAcre(f.thieves ?? t?.thieves)),
+    wizardsPerAcre: t?.ratios?.wizardsPerAcre ?? (f.wpa != null ? Number(f.wpa) : perAcre(f.wizards ?? t?.wizards)),
+  }
   const off = f.offense ?? t?.offense
   const def = f.defense ?? t?.defense
   const pop = s?.population
@@ -95,7 +111,7 @@ export default function ProvincePage() {
             </Panel>
             <Panel span={6} title="RATIOS PER ACRE" delay={4}>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10 }}>
-                {t ? [['OFF SPA', t.ratios.offSpa], ['DEF SPA', t.ratios.defSpa], ['PEASANTS', t.ratios.peasantsPerAcre], ['ELITES', t.ratios.elitesPerAcre], ['THIEVES TPA', t.ratios.thievesPerAcre], ['WIZARDS WPA', t.ratios.wizardsPerAcre]].map(([k, v]) => (
+                {t ? [['OFF SPA', ratios.offSpa], ['DEF SPA', ratios.defSpa], ['PEASANTS', ratios.peasantsPerAcre], ['ELITES', ratios.elitesPerAcre], ['THIEVES TPA', ratios.thievesPerAcre], ['WIZARDS WPA', ratios.wizardsPerAcre]].map(([k, v]) => (
                   <div key={String(k)} style={{ padding: 12, borderRadius: 12, background: 'rgba(255,255,255,.04)' }}><div style={label}>{k}</div><b style={{ fontSize: 22 }}>{v ?? '—'}</b></div>
                 )) : <Empty title="No throne capture" hint="Open your Throne." />}
               </div>
