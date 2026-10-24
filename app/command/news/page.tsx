@@ -49,12 +49,18 @@ export default function NewsPage() {
 
   const byDay = new Map<string, { order: number; gained: number; lost: number; total: number }>()
   for (const e of list) {
-    const d = byDay.get(e.gameDate) || { order: e.order, gained: 0, lost: 0, total: 0 }
+    // Put game-feed events (estimated from the current Throne anchor) and
+    // Discord reports (message capture time) on one chronological timeline.
+    const timestamp = e.at ? Date.parse(e.at) : NaN
+    const day = Number.isFinite(timestamp)
+      ? new Date(timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+      : e.gameDate
+    const d = byDay.get(day) || { order: Number.isFinite(timestamp) ? timestamp : e.order, gained: 0, lost: 0, total: 0 }
     const side = view === 'me' ? e.side : kdSide(e)
     if (side === 'out') d.gained += e.acres
     if (side === 'in') d.lost += e.acres
     d.total += e.acres
-    byDay.set(e.gameDate, d)
+    byDay.set(day, d)
   }
   const days = [...byDay.entries()].sort((a, b) => a[1].order - b[1].order)
   const dayLabel = (g: string) => g.replace(/ of YR\d+/, '')
@@ -99,6 +105,10 @@ export default function NewsPage() {
             {chip('kingdom', ownKd ? `My kingdom ${ownKd}` : 'My kingdom')}
             {chip('me', 'My province')}
           </div>
+          <p style={{ fontSize: 11, color: '#8597a8', margin: '-4px 2px 0' }}>
+            {m.latestAt ? `Latest capture ${ago(m.latestAt)}` : 'Waiting for the first usable capture'}
+            {' · '}{all.length.toLocaleString('en-US')} unique events in view
+          </p>
 
           <Grid>
             <Stat label="Hits in feed" value={list.length} sub={`${m.captures} capture${m.captures === 1 ? '' : 's'} read`} color={C.cyan} delay={0} />
@@ -108,7 +118,7 @@ export default function NewsPage() {
           </Grid>
 
           <Grid>
-            <Panel span={8} title="ACRES BY GAME DAY" sub={scoped ? 'Gained and lost per day' : 'All acres changing hands per day'} delay={1}>
+            <Panel span={8} title="ACRES OVER TIME" sub={scoped ? 'Gained and lost by day' : 'All acres changing hands by day'} delay={1}>
               {days.length > 1 ? <LineChart series={chart} height={230} /> : <Empty title="Not enough days yet" hint="Needs hits on at least two different game days." />}
             </Panel>
             <Panel span={4} title="MOST ACTIVE" sub="Acres taken, top attackers" delay={2}>
@@ -144,7 +154,7 @@ export default function NewsPage() {
             </Panel>
           </Grid>
           <p style={{ fontSize: 10, color: '#687686', margin: '4px 2px 0' }}>
-            The feed only shows game dates, so times are estimated to the day from your latest Throne capture. Hits from the same feed captured several times are counted once.
+            Game-feed timestamps are estimated from your latest Throne capture; Discord reports use message capture time. Repeated captures are deduplicated, while separate hits remain separate.
           </p>
         </>
       )}
