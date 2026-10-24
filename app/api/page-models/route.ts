@@ -469,7 +469,7 @@ export async function GET(request: Request) {
         })
       // Hits from the Kingdom News feed that involve this province (the event history table can be empty).
       const own2 = { name: account.province_name, kd: account.province_location || null }
-      const fromNews = (await newsEvents(db, scope, own2)).events
+      const fromNews = (await newsEvents(db, kingdomScope, own2)).events
         .filter(e => e.side !== 'other' && e.at)
         .map(e => ({
           at: e.at, type: e.type, attacker: e.attacker?.name || null, defender: e.defender?.name || null,
