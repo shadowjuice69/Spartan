@@ -197,6 +197,8 @@ async function discordAttackNews(db: any, scope: string, ownName: string) {
       const attacker = detail[1].trim()
       const defender = detail[3].trim()
       const acres = Number(detail[5])
+      const returnMatch = line.match(/\breturn\s*:\s*(\d+(?:\.\d+)?)/i)
+      const returnHours = returnMatch ? Number(returnMatch[1]) : null
       const direction = attacker.toLowerCase() === own ? 'out' : defender.toLowerCase() === own ? 'in' : 'other'
       if (direction === 'other' || !Number.isFinite(acres)) continue
       const losses = [...detail[6].matchAll(/([\d,]+)\s+([a-z][a-z -]*)/gi)]
@@ -212,6 +214,7 @@ async function discordAttackNews(db: any, scope: string, ownName: string) {
         at, type: /recaptured/i.test(line) ? 'recapture' : 'invade', attacker, defender,
         targetKingdom: detail[4], direction, acres, troops, thieves, wizards,
         gold: 0, food: 0, runes: 0, source: 'discord-bot',
+        returnAt: null, travelHours: returnHours != null && Number.isFinite(returnHours) && returnHours > 0 && returnHours <= 72 ? returnHours : null,
       }
       const key = [direction, attacker.toLowerCase(), defender.toLowerCase(), acres].join('|')
       // If the same attack already appeared as NEW KDNEWS in this capture, keep that one.
