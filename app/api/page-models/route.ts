@@ -110,7 +110,7 @@ async function discordAttackNews(db: any, scope: string, ownName: string) {
     const text = String(row.raw_text || '')
     const perCapture = new Map<string, { event: any; count: number }>()
     for (const rawLine of text.split(/\r?\n/)) {
-      const line = rawLine.replace(/^\s*:[a-z0-9_]+:\s*NEW KDNEWS:\s*/i, '').trim()
+      const line = rawLine.replace(/^\s*:[a-z0-9_]+:\s*(?:NEW KDNEWS:\s*)?/i, '').trim()
       const at = row.captured_at || row.created_at
       const m = line.match(/^(\d+\s*-\s*.+?)\s*\((\d+:\d+)\)\s+invaded\s+(\d+\s*-\s*.+?)\s*\((\d+:\d+)\)\s+and captured\s+([\d,]+) acres of land\.?/i)
       if (m) {
