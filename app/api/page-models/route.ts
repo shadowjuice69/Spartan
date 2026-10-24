@@ -40,6 +40,24 @@ type Rec = {
   created_at: string; age?: number | string | null; parsed_payload: any; raw_text: string | null
 }
 
+function isStructuredBotIntelText(value: unknown) {
+  const text = String(value || '').replace(/\u00a0/g, ' ').trim()
+  if (!text) return false
+  return [
+    /(?:^|\n)\s*(?::[a-z0-9_]+:\s*)?.{1,100}\[\*\*.+?\*\*\]\s+attacked\s+__.+?__\s+\(\d+:\d+\)\s*\|\s*(?:captured|recaptured):\s*\*\*?[\d,]+/i,
+    /<<__[^_]{2,80}__\s*(?:\*\*)?\|[^|]{1,100}\(\d+:\d+\)(?:\*\*)?>>\s*\|.{0,180}\b(?:sent|success|fail|failed|resist|immune)\b/i,
+    /\bNEW KDNEWS:\s*.+\(\d+:\d+\).*\b(?:invaded|captured|ambushed|pillaged|looted|attempted an invasion)\b/i,
+    /\bForces from .+?\(\d+:\d+\) came through and ravaged our lands! They captured [\d,]+ acres!/i,
+    /\bWe lost .{1,180} in this battle\.?/i,
+    /\bYour forces arrive at .+?\(\d+:\d+\).{0,220}\b(?:taken|captured|recaptured|repelled)\b/i,
+    /\bYour wizards gather .{0,180}\b(?:the spell succeeds|the spell fails)\b/i,
+    /(?:—|-)\s*Ritual:\s*.+\bcast\s+\*\*\d+\/\d+\*\*/i,
+    /^\s*#?\d+\s*-\s*.+?:\s*We have sent\s+[\d,]+\s+.+?\s+to\s+.+?\(\d+:\d+\)\./i,
+    /^\s*(?::dragon_face:|🐉)\s*__DRAGON__\s+.+\b(?:donated\s+[\d,]+\s+gold coins?\s+to fund dragon|sent\s+[\d,]+\s+troops?\s+and weakened dragon by\s+[\d,]+|completed our dragon|begun development of the)\b/i,
+    /\bDragon at us\s*[—-]\s*.+?\d[\d,]*\s+points of strength left\b/i
+  ].some(pattern => pattern.test(text))
+}
+
 function fail(error: any): never {
   throw new Error(error?.message || error?.details || 'Query failed')
 }
@@ -309,7 +327,10 @@ export async function GET(request: Request) {
 
     const recordsResult = await db.from('spartan_intel_records').select(COLUMNS).in('page_kind', KINDS[page]).or(scope).order('created_at', { ascending: false }).limit(90)
     if (recordsResult.error) fail(recordsResult.error)
-    let records = ((recordsResult.data || []) as Rec[]).filter(r => !(sharedPages.has(page) && r.visibility === 'own' && r.user_id !== user.id))
+    let records = ((recordsResult.data || []) as Rec[]).filter(r =>
+      !(sharedPages.has(page) && r.visibility === 'own' && r.user_id !== user.id) &&
+      (r.source !== 'discord-bot' || isStructuredBotIntelText(r.raw_text))
+    )
     if (page === 'science') {
       const startMs = ageStartedAt ? Date.parse(ageStartedAt) : NaN
       records = currentAge === null ? [] : records.filter((r) => {
