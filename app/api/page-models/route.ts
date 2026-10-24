@@ -579,8 +579,10 @@ export async function GET(request: Request) {
         Number(e.acres || 0), Number(e.books || 0),
       ].join('|')
       const known = new Set(n.events.map(signature))
-      const events = [...n.events, ...botEvents.filter(e => !known.has(signature(e)))]
-        .sort((a, b) => b.order - a.order)
+      const events = [
+        ...n.events.map(e => ({ ...e, order: e.at ? Date.parse(e.at) : e.order })),
+        ...botEvents.filter(e => !known.has(signature(e))),
+      ].sort((a, b) => b.order - a.order)
       const latestAt = records.map(when).filter(Boolean).sort((a, b) => Date.parse(b) - Date.parse(a))[0] || null
       body.model = { events, anchor: n.anchor, captures: n.captures, latestAt, own }
       body.fields = []
