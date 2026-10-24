@@ -4,7 +4,7 @@ import {
   parseBuildings, parseScience, parseMilitary, parseState, parseThrone, parseKingdomDetails,
   parseGridRows, pathOf, toNum,
 } from '@/lib/spartan/page-models'
-import { mergeNews, findGameDate, realTimeOf, sideOf, dayIndex } from '@/lib/spartan/kingdom-news'
+import { mergeNews, findGameDate, realTimeOf, sideOf, dayIndex, party as parseNewsParty } from '@/lib/spartan/kingdom-news'
 import { parseThroneText } from '@/lib/spartan/throne-text'
 import { buildExplorationModel } from '@/lib/spartan/exploration-model'
 import { buildMagicModel } from '@/lib/spartan/magic-model'
@@ -133,6 +133,72 @@ async function gameAnchor(db: any, scope: string) {
     if (d) return { at: row.captured_at || row.created_at, ...d }
   }
   return null
+}
+
+// Discord's NEW KDNEWS messages are structured attack reports too. Include them in News
+// when the browser-captured Kingdom News page is absent, and collapse repeated captures.
+function discordKingdomEvents(rows: Rec[], own: { name: string; kd: string | null }) {
+  const best = new Map<string, { event: any; count: number }>()
+  for (const row of rows) {
+    if (row.source !== 'discord-bot' || !row.raw_text) continue
+    const perCapture = new Map<string, { event: any; count: number }>()
+    for (const rawLine of row.raw_text.split(/\\r?\\n/)) {
+      const line = rawLine.replace(/^\\s*:[a-z0-9_]+:\\s*/i, '').replace(/^NEW KDNEWS:\\s*/i, '').trim()
+      let type: string = 'invade'
+      let attackerText = ''
+      let attackerKd = ''
+      let defenderText = ''
+      let defenderKd = ''
+      let amount = 0
+      let amountKind: 'acres' | 'books' = 'acres'
+      let match = line.match(/^(\\d+\\s*-\\s*.+?)\\s*\\((\\d+:\\d+)\\)\\s+invaded\\s+(\\d+\\s*-\\s*.+?)\\s*\\((\\d+:\\d+)\\)\\s+and captured\\s+([\\d,]+) acres of land\\.?/i)
+      if (match) {
+        [, attackerText, attackerKd, defenderText, defenderKd] = match
+        amount = Number(match[5].replace(/,/g, ''))
+      } else {
+        match = line.match(/^(\\d+\\s*-\\s*.+?)\\s*\\((\\d+:\\d+)\\)\\s+(recaptured|captured)\\s+([\\d,]+) acres of land from\\s+(\\d+\\s*-\\s*.+?)\\s*\\((\\d+:\\d+)\\)/i)
+        if (match) {
+          attackerText = match[1]; attackerKd = match[2]; type = match[3].toLowerCase()
+          amount = Number(match[4].replace(/,/g, '')); defenderText = match[5]; defenderKd = match[6]
+        } else {
+          match = line.match(/^(\\d+\\s*-\\s*.+?)\\s*\\((\\d+:\\d+)\\)\\s+ambushed armies from\\s+(\\d+\\s*-\\s*.+?)\\s*\\((\\d+:\\d+)\\)\\s+and took\\s+([\\d,]+) acres of land/i)
+          if (match) {
+            [, attackerText, attackerKd, defenderText, defenderKd] = match
+            type = 'ambush'; amount = Number(match[5].replace(/,/g, ''))
+          } else {
+            match = line.match(/^(\\d+\\s*-\\s*.+?)\\s*\\((\\d+:\\d+)\\)\\s+attacked and looted\\s+([\\d,]+) books from\\s+(\\d+\\s*-\\s*.+?)\\s*\\((\\d+:\\d+)\\)/i)
+            if (match) {
+              attackerText = match[1]; attackerKd = match[2]; amount = Number(match[3].replace(/,/g, ''))
+              amountKind = 'books'; type = 'plunder'; defenderText = match[4]; defenderKd = match[5]
+            } else continue
+          }
+        }
+      }
+      if (!Number.isFinite(amount) || amount < 0) continue
+      const attacker = parseNewsParty(`${attackerText} (${attackerKd})`)
+      const defender = parseNewsParty(`${defenderText} (${defenderKd})`)
+      const at = row.captured_at || row.created_at
+      const timestamp = Date.parse(at || '')
+      const date = new Date(Number.isFinite(timestamp) ? timestamp : Date.now())
+      const gameDate = date.toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric' })
+      const event = {
+        at: at || null, approx: true, gameDate, type, attacker, defender,
+        acres: amountKind === 'acres' ? amount : 0, books: amountKind === 'books' ? amount : 0,
+        troopsLost: 0, thievesLost: 0, wizardsLost: 0, side: sideOf({ attacker, defender } as any, own),
+        text: line, order: Number.isFinite(timestamp) ? timestamp : 0,
+      }
+      const key = [type, attacker.name.toLowerCase(), attacker.kd || '', defender.name.toLowerCase(), defender.kd || '', event.acres, event.books].join('|')
+      const prior = perCapture.get(key)
+      if (prior) prior.count += 1
+      else perCapture.set(key, { event, count: 1 })
+    }
+    for (const [key, value] of perCapture) {
+      const prior = best.get(key)
+      if (!prior) best.set(key, value)
+      else if (value.count > prior.count) prior.count = value.count
+    }
+  }
+  return [...best.values()].flatMap(({ event, count }) => Array.from({ length: count }, () => event))
 }
 
 // Kingdom News captures (the same feed repeated), merged into one list of events with sides worked out for this province.
@@ -503,7 +569,20 @@ export async function GET(request: Request) {
     if (page === 'news') {
       const own = { name: account.province_name, kd: account.province_location || null }
       const n = await newsEvents(db, scope, own, records)
-      body.model = { events: n.events, anchor: n.anchor, captures: n.captures, own }
+      const botEvents = discordKingdomEvents(records, own)
+      const signature = (e: any) => [
+        String(e.type || '').toLowerCase(),
+        String(e.attacker?.name || '').toLowerCase().replace(/\\s+/g, ' ').trim(),
+        String(e.attacker?.kd || ''),
+        String(e.defender?.name || '').toLowerCase().replace(/\\s+/g, ' ').trim(),
+        String(e.defender?.kd || ''),
+        Number(e.acres || 0), Number(e.books || 0),
+      ].join('|')
+      const known = new Set(n.events.map(signature))
+      const events = [...n.events, ...botEvents.filter(e => !known.has(signature(e)))]
+        .sort((a, b) => b.order - a.order)
+      const latestAt = records.map(when).filter(Boolean).sort((a, b) => Date.parse(b) - Date.parse(a))[0] || null
+      body.model = { events, anchor: n.anchor, captures: n.captures, latestAt, own }
       body.fields = []
     }
 
