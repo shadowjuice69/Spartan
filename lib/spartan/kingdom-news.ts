@@ -18,9 +18,9 @@ export type NewsEvent = {
   text: string
 }
 
-const DATE = '(?:January|February|March|April|May|June|July|August|September|October|November|December) \\d{1,2} of YR\\d+'
-const PARTY = '(An unknown province from .+?|\\d+ - .+?)'
-const KD = ' \\((\\d+:\\d+)\\)'
+const DATE = '(?:January|February|March|April|May|June|July|August|September|October|November|December) \d{1,2} of YR\d+'
+const PARTY = '(An unknown province from .+?|\d+ - .+?)'
+const KD = ' \((\d+:\d+)\)'
 const num = (s: string) => Number(String(s).replace(/,/g, ''))
 
 export function party(raw: string): Party {
@@ -33,11 +33,11 @@ export function party(raw: string): Party {
 }
 
 const RULES: { type: NewsEvent['type']; re: RegExp; a: number; d: number; acres?: number; books?: number }[] = [
-  { type: 'invade', re: new RegExp(`^${PARTY}${KD} invaded ${PARTY}${KD} and captured ([\\d,]+) acres of land$`), a: 1, d: 3, acres: 5 },
-  { type: 'recapture', re: new RegExp(`^${PARTY}${KD} recaptured ([\\d,]+) acres of land from ${PARTY}${KD}$`), a: 1, d: 4, acres: 3 },
-  { type: 'capture', re: new RegExp(`^${PARTY}${KD} captured ([\\d,]+) acres of land from ${PARTY}${KD}$`), a: 1, d: 4, acres: 3 },
-  { type: 'ambush', re: new RegExp(`^${PARTY}${KD} ambushed armies from ${PARTY}${KD} and took ([\\d,]+) acres of land$`), a: 1, d: 3, acres: 5 },
-  { type: 'plunder', re: new RegExp(`^${PARTY}${KD} attacked and looted ([\\d,]+) books from ${PARTY}${KD}$`), a: 1, d: 4, books: 3 },
+  { type: 'invade', re: new RegExp(`^${PARTY}${KD} invaded ${PARTY}${KD} and captured ([\d,]+) acres of land$`), a: 1, d: 3, acres: 5 },
+  { type: 'recapture', re: new RegExp(`^${PARTY}${KD} recaptured ([\d,]+) acres of land from ${PARTY}${KD}$`), a: 1, d: 4, acres: 3 },
+  { type: 'capture', re: new RegExp(`^${PARTY}${KD} captured ([\d,]+) acres of land from ${PARTY}${KD}$`), a: 1, d: 4, acres: 3 },
+  { type: 'ambush', re: new RegExp(`^${PARTY}${KD} ambushed armies from ${PARTY}${KD} and took ([\d,]+) acres of land$`), a: 1, d: 3, acres: 5 },
+  { type: 'plunder', re: new RegExp(`^${PARTY}${KD} attacked and looted ([\d,]+) books from ${PARTY}${KD}$`), a: 1, d: 4, books: 3 },
   { type: 'pillage', re: new RegExp(`^${PARTY}${KD} invaded and pillaged ${PARTY}${KD}$`), a: 1, d: 3 },
 ]
 
@@ -57,11 +57,11 @@ export function parseKingdomNews(text: string, ownName = ''): NewsEvent[] {
     let ev: NewsEvent | null = null
     // The UtopiaIntel Province Reporter describes incoming hits differently from Kingdom News.
     // Parse it too, including troop losses, so the War Room can show hits received and casualties.
-    const incoming = rest.match(/^Forces from (.+?) \\((\\d+:\\d+)\\) came through and ravaged our lands! They captured ([\\d,]+) acres! We lost (.+?) in this battle\\.?/i)
+    const incoming = rest.match(/^Forces from (.+?) \((\d+:\d+)\) came through and ravaged our lands! They captured ([\d,]+) acres! We lost (.+?) in this battle\.?/i)
     if (incoming) {
       const attacker = party(`${incoming[1]} (${incoming[2]})`)
       const lossesText = incoming[4]
-      const unitLosses = [...lossesText.matchAll(/([\\d,]+)\\s+([a-z][a-z -]*)/gi)]
+      const unitLosses = [...lossesText.matchAll(/([\d,]+)\s+([a-z][a-z -]*)/gi)]
       let troopsLost = 0, thievesLost = 0, wizardsLost = 0
       for (const loss of unitLosses) {
         const count = num(loss[1])
