@@ -134,7 +134,7 @@ export default function NewsPage() {
             <Stat label={scoped ? 'Acres lost' : 'Active kingdoms'} value={scoped ? acresLost : scoreboard.length} sub={scoped ? `${taken.length} hit${taken.length === 1 ? '' : 's'} received` : 'Kingdoms in the feed'} color={scoped ? C.red : C.violet} delay={3} />
           </Grid>
 
-          {view !== 'all' && (
+          {view === 'me' && (
             <Panel title="THREATS TO MY PROVINCE" sub="Ranked by incoming hit count, then acres taken, casualties and recency">
               {threats.length ? <DataTable<(typeof threats)[number]> initialSort="hits" maxHeight={320} empty="No incoming attacks recorded." columns={[
                 { key: 'attacker', label: 'ENEMY PROVINCE', value: r => r.attacker, render: r => <b style={{ color: C.red }}>{r.attacker}</b> },
