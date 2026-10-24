@@ -80,11 +80,11 @@ async function gameAnchor(db: any, scope: string) {
 async function newsEvents(db: any, scope: string, own: { name: string; kd: string | null }, records?: Rec[]) {
   let rows = records
   if (!rows) {
-    const r = await db.from('spartan_intel_records').select(COLUMNS).eq('page_kind', 'news').or(scope).order('created_at', { ascending: false }).limit(40)
+    const r = await db.from('spartan_intel_records').select(COLUMNS).eq('page_kind', 'news').neq('source', 'discord-bot').or(scope).order('created_at', { ascending: false }).limit(100)
     rows = r.error ? [] : (r.data || []) as Rec[]
   }
   const anchor = await gameAnchor(db, scope)
-  const merged = mergeNews(rows.map(r => r.raw_text || ''))
+  const merged = mergeNews(rows.map(r => r.raw_text || ''), own.name)
   const newest = rows.find(r => (r.raw_text || '').length > 0)
   const events = merged.map(e => ({
     at: realTimeOf(e, anchor) || (newest ? newest.captured_at || newest.created_at : null),
@@ -474,7 +474,7 @@ export async function GET(request: Request) {
         .map(e => ({
           at: e.at, type: e.type, attacker: e.attacker?.name || null, defender: e.defender?.name || null,
           targetKingdom: (e.side === 'out' ? e.defender?.kd : e.attacker?.kd) || null, direction: e.side,
-          acres: e.acres, troops: 0, thieves: 0, wizards: 0, gold: 0, food: 0, runes: 0,
+          acres: e.acres, troops: e.troopsLost || 0, thieves: e.thievesLost || 0, wizards: e.wizardsLost || 0, gold: 0, food: 0, runes: 0,
         }))
       events.push(...fromNews)
       events.sort((a: any, b: any) => Date.parse(b.at) - Date.parse(a.at))
