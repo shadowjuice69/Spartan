@@ -274,9 +274,9 @@ export function parseThrone(text: string) {
     })(),
     tradeBalance: per(/Trade Balance (-?[\d,]+)/),
     ratios: {
-      offSpa: per(/([\d.]+)ospa/), defSpa: per(/([\d.]+)dspa/), peasantsPerAcre: per(/([\d.]+)ppa/),
-      elitesPerAcre: per(/([\d.]+)epa/), thievesPerAcre: per(/([\d.]+)tpa/), wizardsPerAcre: per(/([\d.]+)wpa/),
-      goldPerAcreK: per(/([\d.]+)k gcpa/),
+      offSpa: per(/([\d.]+)\s*ospa\b/i), defSpa: per(/([\d.]+)\s*dspa\b/i), peasantsPerAcre: per(/([\d.]+)\s*ppa\b/i),
+      elitesPerAcre: per(/([\d.]+)\s*epa\b/i), thievesPerAcre: per(/([\d.]+)\s*tpa\b/i), wizardsPerAcre: per(/([\d.]+)\s*wpa\b/i),
+      goldPerAcreK: per(/([\d.]+)\s*k\s*gcpa\b/i),
     },
     thievesReady: per(/Thieves [\d,]+ \((\d+)%\)/),
     wizardsReady: per(/Wizards [\d,]+ \((\d+)%\)/),
