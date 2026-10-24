@@ -142,8 +142,8 @@ function discordKingdomEvents(rows: Rec[], own: { name: string; kd: string | nul
   for (const row of rows) {
     if (row.source !== 'discord-bot' || !row.raw_text) continue
     const perCapture = new Map<string, { event: any; count: number }>()
-    for (const rawLine of row.raw_text.split(/\\r?\\n/)) {
-      const line = rawLine.replace(/^\\s*:[a-z0-9_]+:\\s*/i, '').replace(/^NEW KDNEWS:\\s*/i, '').trim()
+    for (const rawLine of row.raw_text.split(/\r?\n/)) {
+      const line = rawLine.replace(/^\s*:[a-z0-9_]+:\s*/i, '').replace(/^NEW KDNEWS:\s*/i, '').trim()
       let type: string = 'invade'
       let attackerText = ''
       let attackerKd = ''
@@ -151,22 +151,22 @@ function discordKingdomEvents(rows: Rec[], own: { name: string; kd: string | nul
       let defenderKd = ''
       let amount = 0
       let amountKind: 'acres' | 'books' = 'acres'
-      let match = line.match(/^(\\d+\\s*-\\s*.+?)\\s*\\((\\d+:\\d+)\\)\\s+invaded\\s+(\\d+\\s*-\\s*.+?)\\s*\\((\\d+:\\d+)\\)\\s+and captured\\s+([\\d,]+) acres of land\\.?/i)
+      let match = line.match(/^(\d+\s*-\s*.+?)\s*\((\d+:\d+)\)\s+invaded\s+(\d+\s*-\s*.+?)\s*\((\d+:\d+)\)\s+and captured\s+([\d,]+) acres of land\.?/i)
       if (match) {
         [, attackerText, attackerKd, defenderText, defenderKd] = match
         amount = Number(match[5].replace(/,/g, ''))
       } else {
-        match = line.match(/^(\\d+\\s*-\\s*.+?)\\s*\\((\\d+:\\d+)\\)\\s+(recaptured|captured)\\s+([\\d,]+) acres of land from\\s+(\\d+\\s*-\\s*.+?)\\s*\\((\\d+:\\d+)\\)/i)
+        match = line.match(/^(\d+\s*-\s*.+?)\s*\((\d+:\d+)\)\s+(recaptured|captured)\s+([\d,]+) acres of land from\s+(\d+\s*-\s*.+?)\s*\((\d+:\d+)\)/i)
         if (match) {
           attackerText = match[1]; attackerKd = match[2]; type = match[3].toLowerCase()
           amount = Number(match[4].replace(/,/g, '')); defenderText = match[5]; defenderKd = match[6]
         } else {
-          match = line.match(/^(\\d+\\s*-\\s*.+?)\\s*\\((\\d+:\\d+)\\)\\s+ambushed armies from\\s+(\\d+\\s*-\\s*.+?)\\s*\\((\\d+:\\d+)\\)\\s+and took\\s+([\\d,]+) acres of land/i)
+          match = line.match(/^(\d+\s*-\s*.+?)\s*\((\d+:\d+)\)\s+ambushed armies from\s+(\d+\s*-\s*.+?)\s*\((\d+:\d+)\)\s+and took\s+([\d,]+) acres of land/i)
           if (match) {
             [, attackerText, attackerKd, defenderText, defenderKd] = match
             type = 'ambush'; amount = Number(match[5].replace(/,/g, ''))
           } else {
-            match = line.match(/^(\\d+\\s*-\\s*.+?)\\s*\\((\\d+:\\d+)\\)\\s+attacked and looted\\s+([\\d,]+) books from\\s+(\\d+\\s*-\\s*.+?)\\s*\\((\\d+:\\d+)\\)/i)
+            match = line.match(/^(\d+\s*-\s*.+?)\s*\((\d+:\d+)\)\s+attacked and looted\s+([\d,]+) books from\s+(\d+\s*-\s*.+?)\s*\((\d+:\d+)\)/i)
             if (match) {
               attackerText = match[1]; attackerKd = match[2]; amount = Number(match[3].replace(/,/g, ''))
               amountKind = 'books'; type = 'plunder'; defenderText = match[4]; defenderKd = match[5]
@@ -572,9 +572,9 @@ export async function GET(request: Request) {
       const botEvents = discordKingdomEvents(records, own)
       const signature = (e: any) => [
         String(e.type || '').toLowerCase(),
-        String(e.attacker?.name || '').toLowerCase().replace(/\\s+/g, ' ').trim(),
+        String(e.attacker?.name || '').toLowerCase().replace(/\s+/g, ' ').trim(),
         String(e.attacker?.kd || ''),
-        String(e.defender?.name || '').toLowerCase().replace(/\\s+/g, ' ').trim(),
+        String(e.defender?.name || '').toLowerCase().replace(/\s+/g, ' ').trim(),
         String(e.defender?.kd || ''),
         Number(e.acres || 0), Number(e.books || 0),
       ].join('|')
