@@ -53,7 +53,7 @@ function isStructuredBotIntelText(value: unknown) {
     /\bYour wizards gather .{0,180}\b(?:the spell succeeds|the spell fails)\b/i,
     /(?:—|-)\s*Ritual:\s*.+\bcast\s+\*\*\d+\/\d+\*\*/i,
     /^\s*#?\d+\s*-\s*.+?:\s*We have sent\s+[\d,]+\s+.+?\s+to\s+.+?\(\d+:\d+\)\./i,
-    /^\s*(?::dragon_face:|🐉)\s*__DRAGON__\s+.+\b(?:donated\s+(?:__|\*\*)?[\d,]+\s+gold coins?(?:(?:__|\*\*))?\s+to fund dragon|sent\s+(?:__|\*\*)?[\d,]+\s+troops?(?:(?:__|\*\*))?\s+and weakened dragon by\s+(?:__|\*\*)?[\d,]+|completed our dragon|begun development of the)\b/i,
+    /^\s*(?::dragon_face:|🐉)\s*__DRAGON__\s+.+\b(?:donated\s+(?:__|\*\*)?[\d,]+\s+gold coins?(?:(?:__|\*\*))?\s+to fund dragon|sent\s+(?:__|\*\*)?[\d,]+\s+troops?(?:__|\*\*)?\s+and weakened dragon by\s+(?:__|\*\*)?[\d,]+(?:__|\*\*)?|completed our dragon|begun development of the)\b/i,
     /\bDragon at us\s*[—-]\s*.+?\d[\d,]*\s+points of strength left\b/i
   ].some(pattern => pattern.test(text))
 }
