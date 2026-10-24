@@ -81,8 +81,19 @@ function attackTravelInfo(payload: any, rawText: unknown) {
     if (match) travelHours = Number(match[1])
   }
   if ((travelHours == null || !Number.isFinite(travelHours) || travelHours <= 0) && rawText) {
-    const match = String(rawText).match(/(?:travel|attack|march|return)\s*time\s*[:=—-]?\s*(\d+(?:\.\d+)?)\s*(?:hours?|hrs?|h)\b/i)
-    if (match) travelHours = Number(match[1])
+    const text = String(rawText)
+    // Utopia attack reports commonly state the actual return duration as
+    // "available again in X days". Convert that game-reported duration to hours
+    // before the Return Tracker falls back to generic same-KD/inter-KD estimates.
+    const availableAgain = text.match(/available\s+again\s+in\s+(\d+(?:\.\d+)?)\s*(days?|d|hours?|hrs?|h)\b/i)
+    if (availableAgain) {
+      const amount = Number(availableAgain[1])
+      const unit = availableAgain[2].toLowerCase()
+      travelHours = /^d/.test(unit) ? amount * 24 : amount
+    } else {
+      const match = text.match(/(?:travel|attack|march|return)\s*time\s*[:=—-]?\s*(\d+(?:\.\d+)?)\s*(?:hours?|hrs?|h)\b/i)
+      if (match) travelHours = Number(match[1])
+    }
   }
   if (travelHours != null && (!Number.isFinite(travelHours) || travelHours <= 0 || travelHours > 72)) travelHours = null
   return { returnAt, travelHours }
