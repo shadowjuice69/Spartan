@@ -33,7 +33,7 @@ export default function ReturnTrackerPage() {
     return () => clearInterval(timer)
   }, [])
   const tracked = useMemo(() => events
-    .filter(e => (e.direction === 'out' || e.direction === 'in') && Number.isFinite(Date.parse(e.at)))
+    .filter(e => (e.direction === 'out' || e.direction === 'in') && Number.isFinite(Date.parse(e.at)) && (/attack|invad|ambush|plunder|conquest|massacre|learn|raze|pillag|recapture|traditional march/i.test(String(e.type || '')) || Math.abs(Number(e.acres) || 0) > 0))
     .map(event => {
       const base = baseTravelHours(event, ownKingdom)
       const explicitReturn = event.returnAt ? Date.parse(event.returnAt) : NaN
