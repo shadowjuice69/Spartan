@@ -12,7 +12,7 @@ const HOUR = 3_600_000
 const formatDuration = (ms: number) => {
   const total = Math.max(0, Math.floor(ms / 1000))
   const days = Math.floor(total / 86400), hours = Math.floor((total % 86400) / 3600), minutes = Math.floor((total % 3600) / 60), seconds = total % 60
-  return days ? \`\${days}d \${hours}h \${minutes}m\` : \`\${hours}h \${minutes}m \${seconds}s\`
+  return days ? `${days}d ${hours}h ${minutes}m` : `${hours}h ${minutes}m ${seconds}s`
 }
 const localTime = (ms: number) => new Date(ms).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', second: '2-digit' })
 const typeLabel = (type: string | null) => String(type || 'attack').replace(/[_-]+/g, ' ').replace(/\b\w/g, x => x.toUpperCase())
@@ -61,18 +61,18 @@ export default function ReturnTrackerPage() {
           <Stat label="Active returns" value={tracked.filter(e => e.remaining > 0).length} sub="Tracked from recorded attack events" color={C.cyan} />
           <Stat label="Our armies out" value={outgoing.filter(e => e.remaining > 0).length} sub="Outgoing attacks returning" color={C.lime} />
           <Stat label="Enemy armies out" value={incoming.filter(e => e.remaining > 0).length} sub="Incoming attacks returning" color={C.red} />
-          <Stat label="Next return" value={next ? Math.max(0, Math.ceil(next.remaining / 60000)) : null} format={v => \`\${Math.floor(v / 60)}h \${v % 60}m\`} sub={next ? (next.direction === 'out' ? 'Our army returns' : 'Enemy army returns') : 'No active return countdown'} color={C.amber} />
+          <Stat label="Next return" value={next ? Math.max(0, Math.ceil(next.remaining / 60000)) : null} format={v => `${Math.floor(v / 60)}h ${v % 60}m`} sub={next ? (next.direction === 'out' ? 'Our army returns' : 'Enemy army returns') : 'No active return countdown'} color={C.amber} />
         </Grid>
-        {next && <Panel title="NEXT EXPECTED RETURN" sub={\`\${next.direction === 'out' ? 'Our army' : 'Enemy army'} · \${typeLabel(next.type)}\`}>
+        {next && <Panel title="NEXT EXPECTED RETURN" sub={`${next.direction === 'out' ? 'Our army' : 'Enemy army'} · ${typeLabel(next.type)}`}>
           <div style={{ fontSize: 34, fontWeight: 850, letterSpacing: '-.03em', color: next.direction === 'out' ? C.lime : C.red, fontVariantNumeric: 'tabular-nums' }}>{formatDuration(next.remaining)}</div>
           <div style={{ color: '#9fb0c0', fontSize: 13, marginTop: 8 }}>{next.attacker || 'Unknown attacker'} → {next.defender || 'Unknown defender'}</div>
           <div style={{ color: '#9fb0c0', fontSize: 12, marginTop: 6 }}>Expected: {localTime(next.computedReturnAt)}</div>
         </Panel>}
         <Panel title="OUR ARMIES RETURNING" sub="Outgoing attacks · earliest return first">
-          {outgoing.length ? <div style={{ display: 'grid', gap: 10 }}>{outgoing.map((e, i) => <ReturnRow key={\`\${e.at}|\${e.attacker}|\${e.defender}|\${i}\`} event={e} />)}</div> : <Empty title="No outgoing return timers" hint="Outgoing attacks appear automatically when recognized combat Intel reaches War Room." />}
+          {outgoing.length ? <div style={{ display: 'grid', gap: 10 }}>{outgoing.map((e, i) => <ReturnRow key={`${e.at}|${e.attacker}|${e.defender}|${i}`} event={e} />)}</div> : <Empty title="No outgoing return timers" hint="Outgoing attacks appear automatically when recognized combat Intel reaches War Room." />}
         </Panel>
         <Panel title="ENEMY ARMIES RETURNING" sub="Incoming attacks · earliest return first">
-          {incoming.length ? <div style={{ display: 'grid', gap: 10 }}>{incoming.map((e, i) => <ReturnRow key={\`\${e.at}|\${e.attacker}|\${e.defender}|\${i}\`} event={e} />)}</div> : <Empty title="No incoming return timers" hint="Incoming attacks against your province appear here from recognized combat Intel." />}
+          {incoming.length ? <div style={{ display: 'grid', gap: 10 }}>{incoming.map((e, i) => <ReturnRow key={`${e.at}|${e.attacker}|${e.defender}|${i}`} event={e} />)}</div> : <Empty title="No incoming return timers" hint="Incoming attacks against your province appear here from recognized combat Intel." />}
         </Panel>
         {tracked.some(e => e.confidence === 'base') && <Panel title="TRAVEL-TIME ACCURACY" sub="Transparent estimates, never silent guesses">
           <div style={{ color: '#b8c7d5', fontSize: 13, lineHeight: 1.7 }}>
@@ -80,7 +80,7 @@ export default function ReturnTrackerPage() {
           </div>
         </Panel>}
         {!tracked.length && <Panel><Empty title="No attacks to track yet" hint="As new attack reports are recorded, the tracker will start countdowns automatically. It doesn't delete or modify the source Intel." /></Panel>}
-        <div style={{ color: '#65788a', fontSize: 11, lineHeight: 1.6, marginTop: 4 }}>{completed ? \`\${completed} return timer(s) have elapsed in the recent window. \` : ''}Countdowns update every second. Saved attack timestamps keep timers stable after refresh.</div>
+        <div style={{ color: '#65788a', fontSize: 11, lineHeight: 1.6, marginTop: 4 }}>{completed ? `${completed} return timer(s) have elapsed in the recent window. ` : ''}Countdowns update every second. Saved attack timestamps keep timers stable after refresh.</div>
       </>}
     </Shell>
   )
@@ -95,7 +95,7 @@ function ReturnRow({ event }: { event: TrackedReturn }) {
         <Tag color={event.direction === 'out' ? C.lime : C.red}>{event.direction === 'out' ? 'OUR ARMY' : 'ENEMY ARMY'}</Tag>
         <Tag color={event.confidence === 'reported' ? C.green : C.amber}>{event.confidence === 'reported' ? 'REPORTED TIME' : 'BASE ESTIMATE'}</Tag>
       </div>
-      <div style={{ color: '#8fa1b1', fontSize: 11 }}>{typeLabel(event.type)} · {event.acres ? \`\${Math.abs(event.acres)} acres\` : 'Attack report'} · {event.targetKingdom || 'Target KD unknown'}</div>
+      <div style={{ color: '#8fa1b1', fontSize: 11 }}>{typeLabel(event.type)} · {event.acres ? `${Math.abs(event.acres)} acres` : 'Attack report'} · {event.targetKingdom || 'Target KD unknown'}</div>
       <div style={{ color: '#8fa1b1', fontSize: 11, marginTop: 4 }}>Expected return: {localTime(event.computedReturnAt)} · Duration used: {event.hours.toFixed(2)}h</div>
     </div>
     <div style={{ textAlign: 'right', minWidth: 110 }}>
