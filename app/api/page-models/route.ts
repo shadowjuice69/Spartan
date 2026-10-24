@@ -111,24 +111,49 @@ async function discordAttackNews(db: any, scope: string, ownName: string) {
     const perCapture = new Map<string, { event: any; count: number }>()
     for (const rawLine of text.split(/\r?\n/)) {
       const line = rawLine.replace(/^\s*:[a-z0-9_]+:\s*NEW KDNEWS:\s*/i, '').trim()
+      const at = row.captured_at || row.created_at
       const m = line.match(/^(\d+\s*-\s*.+?)\s*\((\d+:\d+)\)\s+invaded\s+(\d+\s*-\s*.+?)\s*\((\d+:\d+)\)\s+and captured\s+([\d,]+) acres of land\.?/i)
-      if (!m) continue
-      const attacker = m[1].replace(/^\d+\s*-\s*/, '').trim()
-      const defender = m[3].replace(/^\d+\s*-\s*/, '').trim()
-      const acres = Number(m[5].replace(/,/g, ''))
+      if (m) {
+        const attacker = m[1].replace(/^\d+\s*-\s*/, '').trim()
+        const defender = m[3].replace(/^\d+\s*-\s*/, '').trim()
+        const acres = Number(m[5].replace(/,/g, ''))
+        const direction = attacker.toLowerCase() === own ? 'out' : defender.toLowerCase() === own ? 'in' : 'other'
+        if (direction === 'other' || !Number.isFinite(acres)) continue
+        const event = {
+          at, type: 'invade', attacker, defender,
+          targetKingdom: direction === 'out' ? m[4] : m[2],
+          direction, acres, troops: 0, thieves: 0, wizards: 0,
+          gold: 0, food: 0, runes: 0, source: 'discord-bot',
+        }
+        const key = [direction, attacker.toLowerCase(), defender.toLowerCase(), acres].join('|')
+        const prior = perCapture.get(key)
+        if (prior) prior.count += 1
+        else perCapture.set(key, { event, count: 1 })
+        continue
+      }
+
+      // Detailed bot attack reports include the province's own troop losses.
+      const detail = line.match(/^(.+?)\s+\[\*\*(.+?)\*\*\]\s+attacked\s+__(.+?)__\s+\((\d+:\d+)\)\|(?:captured|recaptured):\s*[*\u00a0\s]*(\d+)[*\u00a0\s]*\|loss:\s*[*\u00a0\s]*(.+?)[*\u00a0\s]*\|/i)
+      if (!detail) continue
+      const attacker = detail[1].trim()
+      const defender = detail[3].trim()
+      const acres = Number(detail[5])
       const direction = attacker.toLowerCase() === own ? 'out' : defender.toLowerCase() === own ? 'in' : 'other'
       if (direction === 'other' || !Number.isFinite(acres)) continue
-      const at = row.captured_at || row.created_at
+      const losses = detail[6].match(/([\d,]+)\s+([a-z][a-z -]*)/i)
+      const lostCount = losses ? Number(losses[1].replace(/,/g, '')) : 0
+      const unit = losses?.[2].toLowerCase() || ''
       const event = {
-        at, type: 'invade', attacker, defender,
-        targetKingdom: direction === 'out' ? m[4] : m[2],
-        direction, acres, troops: 0, thieves: 0, wizards: 0,
+        at, type: /recaptured/i.test(line) ? 'recapture' : 'invade', attacker, defender,
+        targetKingdom: detail[4], direction, acres,
+        troops: /thief|wizard/i.test(unit) ? 0 : lostCount,
+        thieves: /thief/i.test(unit) ? lostCount : 0,
+        wizards: /wizard/i.test(unit) ? lostCount : 0,
         gold: 0, food: 0, runes: 0, source: 'discord-bot',
       }
-      const key = [attacker.toLowerCase(), m[2], defender.toLowerCase(), m[4], acres].join('|')
-      const prior = perCapture.get(key)
-      if (prior) prior.count += 1
-      else perCapture.set(key, { event, count: 1 })
+      const key = [direction, attacker.toLowerCase(), defender.toLowerCase(), acres].join('|')
+      // If the same attack already appeared as NEW KDNEWS in this capture, keep that one.
+      if (!perCapture.has(key)) perCapture.set(key, { event, count: 1 })
     }
     for (const [key, value] of perCapture) {
       const prior = counts.get(key)
