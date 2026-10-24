@@ -97,7 +97,7 @@ export function parseKingdomNews(text: string, ownName = ''): NewsEvent[] {
 export const eventKey = (e: NewsEvent) => [
   e.gameDate.toLowerCase(), e.type,
   e.attacker ? `${key(e.attacker.name)}@${e.attacker.kd || ''}` : '',
-  e.defender ? `${key(e.defender.name)}@${e.defender.kd || ''}` : '',
+  e.defender ? key(e.defender.name) : '',
   e.acres, e.books,
 ].join('|')
 export function mergeNews(texts: string[], ownName = ''): NewsEvent[] {
