@@ -577,7 +577,7 @@ export async function GET(request: Request) {
         .order('created_at', { ascending: false }).limit(180)
       if (mpResult.error) fail(mpResult.error)
       const mpRows = ((mpResult.data || []) as Rec[]).filter(r =>
-        !(r.visibility === 'own' && r.user_id !== user.id) &&
+        !(r.visibility === 'own' && r.user_id !== user.id && r.user_id !== account.id) &&
         /Forces from .+?\(\d+:\d+\) came through and ravaged our lands! They captured [\d,]+ acres!/i.test(String(r.raw_text || ''))
       )
       const mpByReport = new Map<string, any>()
@@ -615,7 +615,7 @@ export async function GET(request: Request) {
         String(e.defender?.kd || ''),
         Number(e.acres || 0), Number(e.books || 0),
       ].join('|')
-      const kingdomEvents = n.events.map(e => ({ ...e, source: 'KDNEWS', order: e.at ? Date.parse(e.at) : e.order }))
+      const kingdomEvents = n.events.map(e => ({ ...e, source: /Forces from .+? came through and ravaged our lands/i.test(e.text) ? 'MPNEWS' : 'KDNEWS', order: e.at ? Date.parse(e.at) : e.order }))
       const known = new Set(kingdomEvents.map(signature))
       const events = [
         ...kingdomEvents,
