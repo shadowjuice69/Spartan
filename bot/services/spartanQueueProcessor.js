@@ -177,6 +177,35 @@ async function removePreviousIntelProjection(sb, pageKind, kingdomId, intelKey, 
   return Array.isArray(data) ? data.length : 0;
 }
 
+function isStructuredGameIntelMessage(value) {
+  const text = String(value || '').replace(/\u00a0/g, ' ').trim();
+  if (!text) return false;
+
+  // Require a recognizable game-feed structure, not just a keyword or channel name.
+  // This intentionally excludes free-form chat and tick/status announcements.
+  const patterns = [
+    // Utopia bot's structured attack results with land and unit losses.
+    /(?:^|\n)\s*(?::[a-z0-9_]+:\s*)?.{1,100}\[\*\*.+?\*\*\]\s+attacked\s+__.+?__\s+\(\d+:\d+\)\s*\|\s*(?:captured|recaptured):\s*\*\*?[\d,]+/i,
+    // Structured Magic/Thievery results: explicit operation marker, target KD, and sent/stat fields.
+    /<<__[^_]{2,80}__\s*(?:\*\*)?\|[^|]{1,100}\(\d+:\d+\)(?:\*\*)?>>\s*\|.{0,180}\b(?:sent|success|fail|failed|resist|immune)\b/i,
+    // New Kingdom News feed events.
+    /\bNEW KDNEWS:\s*.+\(\d+:\d+\).*\b(?:invaded|captured|ambushed|pillaged|looted|attempted an invasion)\b/i,
+    // Explicit Province/Kingdom Reporter attack and loss lines.
+    /\bForces from .+?\(\d+:\d+\) came through and ravaged our lands! They captured [\d,]+ acres!/i,
+    /\bWe lost .{1,180} in this battle\.?/i,
+    /\bYour forces arrive at .+?\(\d+:\d+\).{0,220}\b(?:taken|captured|recaptured|repelled)\b/i,
+    // Spell/ritual reports need game-specific wording and a result, not a casual mention.
+    /\bYour wizards gather .{0,180}\b(?:the spell succeeds|the spell fails)\b/i,
+    /(?:—|-)\s*Ritual:\s*.+\bcast\s+\*\*\d+\/\d+\*\*/i,
+    // Structured aid transfer messages.
+    /^\s*#?\d+\s*-\s*.+?:\s*We have sent\s+[\d,]+\s+.+?\s+to\s+.+?\(\d+:\d+\)\./i,
+    // Structured dragon project/donation/attack messages, including damage contributions.
+    /^\s*(?::dragon_face:|🐉)\s*__DRAGON__\s+.+\b(?:donated\s+[\d,]+\s+gold coins?\s+to fund dragon|sent\s+[\d,]+\s+troops?\s+and weakened dragon by\s+[\d,]+|completed our dragon|begun development of the)\b/i,
+    /\bDragon at us\s*[—-]\s*.+?\d[\d,]*\s+points of strength left\b/i
+  ];
+  return patterns.some(pattern => pattern.test(text));
+}
+
 async function syncBotIntelRecord(sb, flow, capture, state, options = {}) {
   if (flow.source !== 'discord-bot' || flow.page_kind !== 'bot_event') return null;
 
@@ -193,6 +222,10 @@ async function syncBotIntelRecord(sb, flow, capture, state, options = {}) {
   // Thievery, and potentially other game operations.
   const authorBot = metadata.author_bot === true || metadata.author_bot === 'true';
   if (!authorBot) return null;
+  if (!isStructuredGameIntelMessage(text)) {
+    logger.info(`[SPARTAN INTEL FILTER] ignored non-game Discord post capture=${flow.capture_id} channel=${channel || 'unknown'}`);
+    return null;
+  }
 
   // These vocabularies are derived directly from the Magic/Mystics and
   // Thievery sections of utopia-wiki.html. The message operation name is
@@ -492,4 +525,4 @@ async function runBacklogSteward() {
 }
 function start() { if (timer || startupBackfillRunning) return; if (process.env.SPARTAN_PROCESSOR_ENABLED === 'false') { logger.info('[SPARTAN PROCESSOR] disabled by SPARTAN_PROCESSOR_ENABLED=false'); return; } stewardSystem.start(); logger.info(`[SPARTAN PROCESSOR] starting worker=${WORKER_ID} interval=${INTERVAL_MS}ms batch=${BATCH_SIZE}`); const sb = supabaseService.getClient(); startupBackfillRunning = true; backfillMissingBotIntel(sb).catch(error => logger.error(`[SPARTAN INTEL BACKFILL] failed: ${error.stack || error.message}`)).finally(() => { startupBackfillRunning = false; processBatch(); timer = setInterval(processBatch, INTERVAL_MS); backlogStewardTimer = setInterval(runBacklogSteward, BACKLOG_STEWARD_INTERVAL_MS); logger.info(`[SPARTAN BACKLOG STEWARD] scheduled interval=${BACKLOG_STEWARD_INTERVAL_MS}ms`); }); }
 function stop() { if (timer) clearInterval(timer); if (backlogStewardTimer) clearInterval(backlogStewardTimer); timer = null; backlogStewardTimer = null; }
-module.exports = { start, stop, processBatch, processOne, runBacklogSteward };
+module.exports = { start, stop, processBatch, processOne, runBacklogSteward, isStructuredGameIntelMessage };
