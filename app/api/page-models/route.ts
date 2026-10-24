@@ -180,7 +180,7 @@ function discordKingdomEvents(rows: Rec[], own: { name: string; kd: string | nul
       const at = row.captured_at || row.created_at
       const timestamp = Date.parse(at || '')
       const date = new Date(Number.isFinite(timestamp) ? timestamp : Date.now())
-      const gameDate = date.toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric' })
+      const gameDate = `Captured ${date.toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric' })}`
       const event = {
         at: at || null, approx: true, gameDate, type, attacker, defender,
         acres: amountKind === 'acres' ? amount : 0, books: amountKind === 'books' ? amount : 0,
