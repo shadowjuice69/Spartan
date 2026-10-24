@@ -58,6 +58,36 @@ function isStructuredBotIntelText(value: unknown) {
   ].some(pattern => pattern.test(text))
 }
 
+
+function attackTravelInfo(payload: any, rawText: unknown) {
+  const p = payload && typeof payload === 'object' ? payload : {}
+  const candidates = [p, p.travel, p.attack, p.combat, p.return].filter((v: any) => v && typeof v === 'object')
+  const read = (keys: string[]) => {
+    for (const obj of candidates) for (const key of keys) {
+      const value = obj[key]
+      if (value == null || value === '') continue
+      if (typeof value === 'number' && Number.isFinite(value)) return value
+      const s = String(value).trim()
+      if (s) return s
+    }
+    return null
+  }
+  const rawReturn = read(['returnAt','return_at','armyReturnAt','army_return_at','returns_at','expected_return_at'])
+  const returnAt = rawReturn && Number.isFinite(Date.parse(String(rawReturn))) ? new Date(String(rawReturn)).toISOString() : null
+  const rawHours = read(['travelHours','travel_hours','travel_time_hours','attackTimeHours','attack_time_hours','march_hours','return_hours'])
+  let travelHours: number | null = typeof rawHours === 'number' ? rawHours : null
+  if (travelHours == null && rawHours != null) {
+    const match = String(rawHours).match(/(\d+(?:\.\d+)?)/)
+    if (match) travelHours = Number(match[1])
+  }
+  if ((travelHours == null || !Number.isFinite(travelHours) || travelHours <= 0) && rawText) {
+    const match = String(rawText).match(/(?:travel|attack|march|return)\s*time\s*[:=—-]?\s*(\d+(?:\.\d+)?)\s*(?:hours?|hrs?|h)\b/i)
+    if (match) travelHours = Number(match[1])
+  }
+  if (travelHours != null && (!Number.isFinite(travelHours) || travelHours <= 0 || travelHours > 72)) travelHours = null
+  return { returnAt, travelHours }
+}
+
 function fail(error: any): never {
   throw new Error(error?.message || error?.details || 'Query failed')
 }
@@ -141,7 +171,7 @@ async function discordAttackNews(db: any, scope: string, ownName: string) {
           at, type: 'invade', attacker, defender,
           targetKingdom: direction === 'out' ? m[4] : m[2],
           direction, acres, troops: 0, thieves: 0, wizards: 0,
-          gold: 0, food: 0, runes: 0, source: 'discord-bot',
+          gold: 0, food: 0, runes: 0, source: 'discord-bot', returnAt: null, travelHours: null,
         }
         const key = [direction, attacker.toLowerCase(), defender.toLowerCase(), acres].join('|')
         const prior = perCapture.get(key)
@@ -542,7 +572,7 @@ export async function GET(request: Request) {
       // Discord/bot-sourced events are left out on purpose; this page only shows game data.
       const eventsResult = await db
         .from('spartan_event_history')
-        .select('occurred_at,event_type,source,attacker,defender,target_kingdom,acres_change,troops_lost,thieves_lost,wizards_lost,gold_change,food_change,runes_change')
+        .select('occurred_at,event_type,source,attacker,defender,target_kingdom,acres_change,troops_lost,thieves_lost,wizards_lost,gold_change,food_change,runes_change,payload,raw_text')
         .eq('user_id', user.id).order('occurred_at', { ascending: false }).limit(300)
       const own = String(account.province_name).trim().toLowerCase()
       const n = (v: unknown) => toNum(v) ?? 0
@@ -553,10 +583,12 @@ export async function GET(request: Request) {
           const defender = e.defender || null
           const direction = attacker && String(attacker).trim().toLowerCase() === own ? 'out'
             : defender && String(defender).trim().toLowerCase() === own ? 'in' : 'other'
+          const travel = attackTravelInfo(e.payload, e.raw_text)
           return {
             at: e.occurred_at, type: e.event_type, attacker, defender, targetKingdom: e.target_kingdom || null, direction,
             acres: n(e.acres_change), troops: n(e.troops_lost), thieves: n(e.thieves_lost), wizards: n(e.wizards_lost),
             gold: n(e.gold_change), food: n(e.food_change), runes: n(e.runes_change),
+            returnAt: travel.returnAt, travelHours: travel.travelHours,
           }
         })
       // Hits from the Kingdom News feed, including Province Reporter casualties.
@@ -567,6 +599,7 @@ export async function GET(request: Request) {
           at: e.at, type: e.type, attacker: e.attacker?.name || null, defender: e.defender?.name || null,
           targetKingdom: (e.side === 'out' ? e.defender?.kd : e.attacker?.kd) || null, direction: e.side,
           acres: e.acres, troops: e.troopsLost || 0, thieves: e.thievesLost || 0, wizards: e.wizardsLost || 0, gold: 0, food: 0, runes: 0,
+          ...attackTravelInfo(null, e.text),
         }))
       // Bot notifications contain attacks the web news feed may not have captured. Avoid adding
       // a bot duplicate when the same attacker/defender/acres event already came from game news.

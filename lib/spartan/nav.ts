@@ -7,6 +7,7 @@ export const NAV_COMMAND: NavItem[] = [
   ['Throne', '/command/throne'],
   ['Kingdom', '/command/kingdom'],
   ['War Room', '/command/war-room'],
+  ['Return Tracker', '/command/returns'],
   ['Build Lab', '/command/build-lab'],
   ['Draft Calc', '/command/draft-calc'],
   ['Calcs', '/command/calcs'],
