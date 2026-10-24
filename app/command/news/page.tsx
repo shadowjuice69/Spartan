@@ -99,6 +99,10 @@ export default function NewsPage() {
             {chip('kingdom', ownKd ? `My kingdom ${ownKd}` : 'My kingdom')}
             {chip('me', 'My province')}
           </div>
+          <p style={{ fontSize: 11, color: '#8597a8', margin: '-4px 2px 0' }}>
+            {m.latestAt ? `Latest capture ${ago(m.latestAt)}` : 'Waiting for the first usable capture'}
+            {' · '}{all.length.toLocaleString('en-US')} unique events in view
+          </p>
 
           <Grid>
             <Stat label="Hits in feed" value={list.length} sub={`${m.captures} capture${m.captures === 1 ? '' : 's'} read`} color={C.cyan} delay={0} />
