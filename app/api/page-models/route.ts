@@ -620,7 +620,19 @@ export async function GET(request: Request) {
       const botNews = await discordAttackNews(db, kingdomScope, account.province_name)
       const signature = (e: any) => [String(e.attacker || '').toLowerCase(), String(e.defender || '').toLowerCase(), Number(e.acres || 0)].join('|')
       const siteSignatures = new Set(fromNews.map(signature))
-      events.push(...fromNews, ...botNews.filter((e: any) => !siteSignatures.has(signature(e))))
+      // Keep Kingdom News as the canonical event/timestamp, but retain the bot report's
+      // explicit return duration when both sources describe the same attack.
+      const mergedNews = fromNews.map((event: any) => {
+        const report = botNews.find((bot: any) =>
+          signature(bot) === signature(event) &&
+          Number.isFinite(Number(bot.travelHours)) &&
+          Number(bot.travelHours) > 0
+        )
+        return report
+          ? { ...event, travelHours: Number(report.travelHours), returnAt: report.returnAt || event.returnAt || null }
+          : event
+      })
+      events.push(...mergedNews, ...botNews.filter((e: any) => !siteSignatures.has(signature(e))))
       events.sort((a: any, b: any) => Date.parse(b.at) - Date.parse(a.at))
       const militaryRec = allByPath(records, '/wol/game/council_military')[0] || null
       let kingdom: any = null
