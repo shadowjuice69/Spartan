@@ -20,6 +20,7 @@ const CAT_COLOR: Record<ScienceCat, string> = { Economy: "#d8ff54", Military: "#
 const CAT_KEY: Record<ScienceCat, "economy" | "military" | "arcane"> = { Economy: "economy", Military: "military", "Arcane Arts": "arcane" }
 const LIVE_NAME: Record<string, ScienceCat> = { economy: "Economy", military: "Military", arcane: "Arcane Arts" }
 type BuildSummary = { id: string; name: string; race: string | null; personality: string | null }
+type ProvinceChoice = { province_name: string; kingdom_code: string | null }
 const matchName = (list: string[], value: string | null | undefined) => (value ? list.find((x) => norm(x) === norm(value)) || "" : "")
 
 const FALLBACK_RACES = ["Avian", "Dark Elf", "Dryad", "Dwarf", "Elf", "Faery", "Gnome", "Halfling", "Human", "Orc", "Undead"]
@@ -50,6 +51,9 @@ export default function ScienceCalc() {
   const [buildId, setBuildId] = useState("")
   const [build, setBuild] = useState<any>(null)
   const [buildMsg, setBuildMsg] = useState("")
+  const [provinces, setProvinces] = useState<ProvinceChoice[]>([])
+  const [selectedProvince, setSelectedProvince] = useState("")
+  const [provinceLoading, setProvinceLoading] = useState(true)
   const [catBooks, setCatBooks] = useState<Record<string, string>>({ economy: "", military: "", arcane: "" })
 
   useEffect(() => {
@@ -71,6 +75,31 @@ export default function ScienceCalc() {
       .catch(() => {})
   }, [])
 
+  useEffect(() => {
+    let active = true
+    fetch("/api/tools/science-summary/provinces", { cache: "no-store" })
+      .then(async (r) => {
+        const j = await r.json()
+        if (!r.ok) throw new Error(j?.error || "Could not load Spartan provinces.")
+        return j
+      })
+      .then((j) => {
+        if (!active) return
+        const list: ProvinceChoice[] = Array.isArray(j?.provinces) ? j.provinces : []
+        setProvinces(list)
+        if (list.length) {
+          const own = list.find((p) => p.province_name.trim().toLowerCase() === "finkster" && p.kingdom_code === "6:8")
+          const first = own || list[0]
+          setSelectedProvince(first.province_name + (first.kingdom_code ? " (" + first.kingdom_code + ")" : ""))
+        } else {
+          setBuildMsg("No provinces were found in Spartan's province registry.")
+        }
+      })
+      .catch((e) => { if (active) setBuildMsg(e instanceof Error ? e.message : "Could not load Spartan provinces.") })
+      .finally(() => { if (active) setProvinceLoading(false) })
+    return () => { active = false }
+  }, [])
+
   function pickBuild(id: string) {
     setBuildId(id)
     setBuildMsg("")
@@ -90,22 +119,33 @@ export default function ScienceCalc() {
 
   function useLiveBooks() {
     setBuildMsg("")
-    fetch("/api/page-models?page=science", { cache: "no-store" })
-      .then((r) => (r.ok ? r.json() : null))
+    if (!selectedProvince) {
+      setBuildMsg("Choose a province first.")
+      return
+    }
+    const query = new URLSearchParams({ province: selectedProvince, libraries: "0", books: "{}" })
+    fetch("/api/tools/science-summary?" + query.toString(), { cache: "no-store" })
+      .then(async (r) => {
+        const j = await r.json()
+        if (!r.ok) throw new Error(j?.error || "Could not read this province's science.")
+        return j
+      })
       .then((j) => {
-        const cats: { name: string; totalBooks: number; booksAvailable: number }[] = j?.model?.current?.categories || []
-        if (j?.scienceStatus?.hasCurrentAgeData === false || !cats.length) {
-          setBuildMsg("No current-age science data. Open Council → Science with the scraper running to capture this age; previous-age books are not used.")
+        const summary = j?.summary || {}
+        if (!j?.capturedAt || String(j?.source || "").startsWith("No current-age")) {
+          setBuildMsg("No current-age science capture for " + selectedProvince + ". Previous-age books are not used; capture the Science page for this age first.")
           return
         }
-        const next: Record<string, string> = { economy: "", military: "", arcane: "" }
-        for (const key of Object.keys(LIVE_NAME)) {
-          const c = cats.find((x) => x.name === LIVE_NAME[key])
-          if (c) next[key] = String((c.totalBooks || 0) + (c.booksAvailable || 0))
+        const next: Record<string, number> = { economy: 0, military: 0, arcane: 0 }
+        for (const def of SCIENCES) {
+          const slug = def.name.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "")
+          const key = CAT_KEY[def.cat]
+          next[key] += Number(summary[slug]?.currentBooks || 0)
         }
-        setCatBooks(next)
+        setCatBooks({ economy: String(next.economy), military: String(next.military), arcane: String(next.arcane) })
+        setBuildMsg("Loaded current-age science books for " + selectedProvince + ".")
       })
-      .catch(() => setBuildMsg("Could not read your live Science page."))
+      .catch((e) => setBuildMsg(e instanceof Error ? e.message : "Could not read this province's science."))
   }
 
   const inBuild = !!build?.science
@@ -162,6 +202,7 @@ export default function ScienceCalc() {
       </p>
       <h3 style={h3}>USE A BUILD FROM YOUR LIBRARY</h3>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 12, alignItems: "end" }}>
+        <div><span style={label}>PROVINCE</span><select style={input} value={selectedProvince} onChange={(e) => { setSelectedProvince(e.target.value); setBuildMsg("") }} disabled={provinceLoading || provinces.length === 0}><option value="">{provinceLoading ? "Loading provinces…" : "Choose province"}</option>{provinces.map((p) => { const value = p.province_name + (p.kingdom_code ? " (" + p.kingdom_code + ")" : ""); return <option key={value} value={value}>{p.province_name}{p.kingdom_code ? " — " + p.kingdom_code : ""}</option> })}</select></div>
         <div><span style={label}>BUILD</span><select style={input} value={buildId} onChange={(e) => pickBuild(e.target.value)}><option value="">{buildList.length ? "No build (type books by hand)" : "No builds found"}</option>{buildList.map((b) => <option key={b.id} value={b.id}>{b.name}{b.race || b.personality ? ` · ${[b.race, b.personality].filter(Boolean).join(" / ")}` : ""}</option>)}</select></div>
         {inBuild && (["economy", "military", "arcane"] as const).map((key) => <div key={key}><span style={label}>{key.toUpperCase()} BOOKS</span><input style={input} inputMode="numeric" value={catBooks[key]} placeholder="0" onChange={(e) => setCatBooks((c) => ({ ...c, [key]: e.target.value }))} /></div>)}
       </div>
