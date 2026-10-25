@@ -8,16 +8,19 @@ type P = {
   def: number | null; defHome: number | null; ages: { SOT: number | null }
 }
 
-// Mirrors the bot's traditional-march estimate without offensive modifiers.
-// GF = clamp(3 * magic, 0.01, 1.35); gain = min(12% target acres * GF * MAP factor, 20% own acres).
+// Utopia reference wiki: Traditional March starts at 12% land, has a cap of
+// 20% of the smaller province, and War adds +10% combat gains. The existing
+// bot-style NW/MAP estimate is retained; race, personality, doctrine, ritual,
+// dragon and science modifiers are not guessed when the page model lacks them.
 function estimate(yNW: number, yAcres: number, tNW: number, tAcres: number, map: number, war: boolean) {
   let a = tNW / yNW - 0.05
   if (a >= 1) a = 1 / a
   const magic = Math.max(0.67, a < 0.9 ? a + 0.1 : a)
   const gf = Math.min(1.35, Math.max(0.01, 3 * magic))
   const mapf = war ? (1 - map / 100 + 3) / 4 : 1 - map / 100
-  const raw = 0.12 * tAcres * gf * mapf
-  const cap = 0.2 * yAcres
+  const warf = war ? 1.10 : 1
+  const raw = 0.12 * tAcres * gf * mapf * warf
+  const cap = 0.2 * Math.min(yAcres, tAcres)
   return { gain: Math.min(raw, cap), capped: raw >= cap }
 }
 
