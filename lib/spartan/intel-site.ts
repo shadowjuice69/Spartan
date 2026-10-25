@@ -90,13 +90,19 @@ export function mergeGrids(captures: GridCapture[]): Record<string, Prov[]> {
   }
   const out: Record<string, Prov[]> = {}
   for (const [kd, map] of Object.entries(byKd)) {
-    out[kd] = [...map.entries()].map(([slot, { cells: c, at }]) => ({
-      key: kd + ':' + slot, kd, slot, name: text(c.name), ruler: text(c.ruler), race: text(c.race), personality: text(c.personality),
-      combo: text(c.combo), honor: text(c.honor), group: text(c.group),
-      acres: val(c.acres ?? c.land), nw: val(c.nw), nwpa: val(c.nwpa), off: val(c.modOff ?? c.off), def: val(c.modDef ?? c.def), defHome: val(c.defHome),
-      peons: val(c.peons), tpa: val(c.tpa), wpa: val(c.wpa), be: val(c.be), overpop: val(c.ovP),
-      ages: parseAges(c.intelAge), capturedAt: at, cells: c,
-    })).sort((a, b) => Number(a.slot) - Number(b.slot))
+    out[kd] = [...map.entries()].map(([slot, { cells: c, at }]) => {
+      const [kdMajor, kdMinor] = kd.split(':').map(part => Number(part))
+      const provinceId = Number.isInteger(kdMajor) && Number.isInteger(kdMinor)
+        ? String(kdMajor).padStart(2, '0') + String(kdMinor).padStart(2, '0') + String(Number(slot)).padStart(2, '0')
+        : kd + ':' + slot
+      return {
+        key: provinceId, provinceId, kd, slot, name: text(c.name), ruler: text(c.ruler), race: text(c.race), personality: text(c.personality),
+        combo: text(c.combo), honor: text(c.honor), group: text(c.group),
+        acres: val(c.acres ?? c.land), nw: val(c.nw), nwpa: val(c.nwpa), off: val(c.modOff ?? c.off), def: val(c.modDef ?? c.def), defHome: val(c.defHome),
+        peons: val(c.peons), tpa: val(c.tpa), wpa: val(c.wpa), be: val(c.be), overpop: val(c.ovP),
+        ages: parseAges(c.intelAge), capturedAt: at, cells: c,
+      }
+    }).sort((a, b) => Number(a.slot) - Number(b.slot))
   }
   return out
 }
