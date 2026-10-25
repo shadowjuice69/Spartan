@@ -72,13 +72,15 @@ function PersonalityRuleCard({ p }: { p: PersonalityRule }) {
 
 function extractPercentEffects(text?: string | null): Map<string, number> {
   const effects = new Map<string, number>()
-  if (!text) return effects
+  if (!text?.trim()) return effects
 
-  // Normalize common Age-rule wording to stable stat keys so every race/personality
-  // uses the same aggregation path, rather than hard-coding one named combination.
+  // Match one percentage at a time. The effect name is limited to the text
+  // between this percentage and the next one, so "+1% Extra Mana Per Tick
+  // +50% Rune Production" cannot accidentally count the mana bonus as runes.
   const aliases: Array<[string, RegExp]> = [
-    ["WPA", /\b(?:WPA|wizard(?:s|ry)?\s+(?:power|strength|effectiveness)|wizard power)\b/i],
-    ["TPA", /\b(?:TPA|thievery\s+(?:power|strength)|thief power)\b/i],
+    ["WPA", /\b(?:WPA|wizards?\s+per\s+acre|wizard(?:s|ry)?\s+(?:power|strength|effectiveness)|wizard power)\b/i],
+    ["TPA", /\b(?:TPA|offensive\s+thievery\s+per\s+acre|thievery\s+(?:power|strength)|thieves?\s+per\s+acre|thief power)\b/i],
+    ["ME", /\bmilitary efficiency\b/i],
     ["OME", /\b(?:OME|offensive military efficiency|offensive efficiency)\b/i],
     ["DME", /\b(?:DME|defensive military efficiency|defensive efficiency)\b/i],
     ["ATTACK TIME", /\b(?:attack|march|military) travel time\b|\battack time\b/i],
@@ -91,10 +93,13 @@ function extractPercentEffects(text?: string | null): Map<string, number> {
     ["INCOME", /\bincome\b|\bgold production\b/i],
     ["BUILDING EFFECTIVENESS", /\b(?:building effectiveness|BE)\b/i],
     ["MANA RECOVERY", /\bmana recovery\b|\bmana regeneration\b/i],
+    ["EXTRA MANA PER TICK", /\bextra mana per tick\b|\bmana per tick\b/i],
     ["STEALTH RECOVERY", /\bstealth recovery\b|\bstealth regeneration\b/i],
     ["POPULATION", /\bpopulation\b/i],
     ["FOOD PRODUCTION", /\bfood production\b|\bfood income\b/i],
     ["RUNE PRODUCTION", /\brune production\b|\brune generation\b/i],
+    ["RUNE COST", /\brune costs?\b/i],
+    ["CHANNELING SCIENCE", /\bchanneling science\b/i],
     ["SCIENCE COST", /\bscience costs?\b/i],
     ["BUILDING COST", /\bbuilding costs?\b/i],
     ["TRAINING COST", /\btraining costs?\b/i],
@@ -106,26 +111,58 @@ function extractPercentEffects(text?: string | null): Map<string, number> {
   const add = (key: string, amount: number) => {
     if (Number.isFinite(amount)) effects.set(key, (effects.get(key) || 0) + amount)
   }
+  const percentages = [...text.matchAll(/([+\-−–]?\s*\d+(?:\.\d+)?)\s*%/g)]
 
-  // Format A: "+25% WPA", "25% more wizard power", "-10% attack time".
-  const percentFirst = /([+-]?\s*\d+(?:\.\d+)?)\s*%\s*(?:more\s+|less\s+|bonus\s+to\s+|bonus\s+)?([^,;.!\n]+)/gi
-  for (const match of text.matchAll(percentFirst)) {
-    const amount = Number(match[1].replace(/\s/g, ""))
-    const tail = match[2].trim()
+  percentages.forEach((match, index) => {
+    const rawAmount = match[1].replace(/\s/g, "").replace(/[−–]/g, "-")
+    let amount = Number(rawAmount)
+    const explicitSign = /^[+\-]/.test(rawAmount)
+    const endOfNumber = (match.index ?? 0) + match[0].length
+    const nextStart = percentages[index + 1]?.index ?? text.length
+    const tail = text.slice(endOfNumber, nextStart).split(/[;,.\n!·•]/, 1)[0].trim()
+    const previousEnd = index > 0
+      ? (percentages[index - 1].index ?? 0) + percentages[index - 1][0].length
+      : 0
+    const prefix = text.slice(previousEnd, match.index ?? 0).split(/[;,.\n!·•]/).pop()?.trim() || ""
+
+    // Support both "+25% WPA" and "WPA increased by 25%" formats.
+    let effectText = tail
+    let matchedKey: string | undefined
     for (const [key, pattern] of aliases) {
-      if (pattern.test(tail)) {
-        add(key, amount)
-        break
+      if (pattern.test(effectText)) { matchedKey = key; break }
+    }
+    if (!matchedKey) {
+      effectText = prefix
+      for (const [key, pattern] of aliases) {
+        if (pattern.test(effectText)) { matchedKey = key; break }
       }
     }
-  }
 
-  // Format B: "WPA: +25%", "increases WPA by 25%", or "WPA increased by 25%".
-  for (const [key, pattern] of aliases) {
-    const escaped = pattern.source
-    const before = new RegExp(`(?:${escaped})\\s*(?::|is|of)?\\s*(?:increased|reduced|raised|lowered|bonus)?\\s*(?:by|to|of|is)?\\s*([+-]?\\d+(?:\\.\\d+)?)\\s*%`, "gi")
-    for (const match of text.matchAll(before)) add(key, Number(match[1]))
-  }
+    // ME is an established uppercase abbreviation; keep it case-sensitive so
+    // ordinary prose containing the word "me" isn't classified as efficiency.
+    if (!matchedKey && /\bME\b/.test(tail)) matchedKey = "ME"
+    if (!matchedKey && /\bME\b/.test(prefix)) matchedKey = "ME"
+
+    if (!matchedKey) {
+      // Preserve explicit but currently unstandardized effects under their
+      // own label instead of silently dropping them or merging them by guess.
+      effectText = tail
+      const cleaned = effectText
+        .replace(/^(?:more|less|bonus\s+to)\s+/i, "")
+        .replace(/\s+/g, " ")
+        .replace(/^[\s:—–-]+|[\s:—–-]+$/g, "")
+      if (!cleaned) return
+      matchedKey = cleaned.toUpperCase()
+    }
+
+    if (!explicitSign && /^(?:less|reduced|lowered|decreased)\b/i.test(tail)) {
+      amount = -Math.abs(amount)
+    }
+    if (!explicitSign && /\b(?:less|reduced|lowered|decreased)\s+(?:by\s+)?\d/i.test(prefix)) {
+      amount = -Math.abs(amount)
+    }
+    add(matchedKey, amount)
+  })
 
   return effects
 }
