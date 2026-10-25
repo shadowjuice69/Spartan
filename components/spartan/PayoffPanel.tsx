@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { C, DataTable, Empty, Panel, Tag, fmt } from '@/components/spartan/ui'
 
 type P = {
-  key: string; name: string; slot?: string; acres: number | null; nw: number | null
+  key: string; name: string; kd?: string; slot?: string; acres: number | null; nw: number | null
   def: number | null; defHome: number | null; ages: { SOT: number | null }
 }
 
@@ -42,6 +42,7 @@ export default function PayoffPanel({ provs, mine, ownName, ownKd }: { provs: P[
   const [map, setMap] = useState('0')
   const [war, setWar] = useState(false)
   const [rangeOnly, setRangeOnly] = useState(true)
+  const [targetKd, setTargetKd] = useState('all')
   const [loaded, setLoaded] = useState(false)
   const [liveOwnStats, setLiveOwnStats] = useState<{ nw: number | null; acres: number | null } | null>(null)
 
@@ -114,8 +115,10 @@ export default function PayoffPanel({ provs, mine, ownName, ownKd }: { provs: P[
   const yAcres = num(shownAcres)
   const ready = yNW > 0 && yAcres > 0
 
+  const targetKingdoms = [...new Set(provs.map(p => p.kd).filter((kd): kd is string => Boolean(kd)))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
   const rows = ready
     ? provs
+        .filter(p => targetKd === 'all' || p.kd === targetKd)
         .filter(p => p.nw && p.acres)
         .filter(p => !rangeOnly || inRange(yNW, yAcres, p.nw as number, p.acres as number))
         .map(p => {
@@ -138,7 +141,7 @@ export default function PayoffPanel({ provs, mine, ownName, ownKd }: { provs: P[
   }
 
   return (
-    <Panel span={12} title="BIGGEST PAYOFFS" sub="Estimated acres from a traditional march, ranked by gain. Defense is shown as the cost to break them." delay={3}>
+    <Panel span={12} title="BEST GAINS" sub="Compare captured enemy provinces by estimated traditional-march land gains, with war mode and target-defense context." delay={3}>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, marginBottom: 12 }}>
         <div>
           <div style={lab}>ATTACKING AS</div>
@@ -148,6 +151,7 @@ export default function PayoffPanel({ provs, mine, ownName, ownKd }: { provs: P[
             {availableMine.map(m => <option key={m.key} value={m.key}>{m.name}{m.key === own?.key ? ' — your province' : ''}</option>)}
           </select>
         </div>
+        <div><div style={lab}>TARGET KINGDOM</div><select value={targetKd} onChange={(e: any) => setTargetKd(e.target.value)} style={box}><option value="all">All captured enemy kingdoms</option>{targetKingdoms.map(kd => <option key={kd} value={kd}>{kd}</option>)}</select></div>
         <div><div style={lab}>YOUR NETWORTH</div><input style={box} inputMode="numeric" value={shownNW} onChange={(e: any) => edit('nw', e.target.value)} placeholder="e.g. 865387" /></div>
         <div><div style={lab}>YOUR ACRES</div><input style={box} inputMode="numeric" value={shownAcres} onChange={(e: any) => edit('acres', e.target.value)} placeholder="e.g. 4173" /></div>
         <div><div style={lab}>YOUR MAP %</div><input style={box} inputMode="numeric" value={map} onChange={(e: any) => setMap(e.target.value)} /></div>
@@ -161,6 +165,7 @@ export default function PayoffPanel({ provs, mine, ownName, ownKd }: { provs: P[
         <Empty title="Add your networth and acres" hint="Pick your province above or type both numbers and the best hits appear here." />
       ) : (
         <DataTable<any> initialSort="gain" maxHeight={380} empty="No targets in range. Untick 'In range only' to see everyone." columns={[
+          { key: 'kd', label: 'KD', value: r => r.p.kd || '', render: r => r.p.kd || '—' },
           { key: 'name', label: 'PROVINCE', value: r => r.p.name, render: r => <b>{r.p.name}</b> },
           { key: 'gain', label: 'EST. ACRES', value: r => r.gain, render: r => <span style={{ color: C.lime }}>{fmt(Math.floor(r.gain))}{r.capped ? ' ' : ''}{r.capped && <Tag color={C.amber}>CAP</Tag>}</span>, align: 'right' },
           { key: 'def', label: 'THEIR DEF', value: r => r.def ?? 0, render: r => (r.def ? fmt(r.def) : '—'), align: 'right' },
@@ -169,7 +174,7 @@ export default function PayoffPanel({ provs, mine, ownName, ownKd }: { provs: P[
         ]} rows={rows} />
       )}
       <p style={{ fontSize: 10, color: '#687686', margin: '8px 0 0' }}>
-        Gain depends on their size and networth against yours, not on their defense. High defense only means you need more offense to break them, so check ACRES / 10K DEF to compare value for effort. Estimate uses the bot's attack formula with no offensive mods; old intel may not match what they have now.
+        Gain estimates use the existing bot-style traditional-march formula and captured land/networth. War mode adjusts the estimate for war MAP; it does not confirm a break. Compare defense and acres per 10K defense, and refresh stale intel before committing armies. Targets are limited to captured enemy kingdom grids; missing values are excluded rather than guessed.
       </p>
     </Panel>
   )
