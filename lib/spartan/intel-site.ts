@@ -30,7 +30,7 @@ function parseAges(cell: any): Ages {
 }
 
 export type Prov = {
-  key: string; kd: string; slot: string; name: string; ruler: string; race: string; personality: string; combo: string
+  key: string; provinceId: string; kd: string; slot: string; name: string; ruler: string; race: string; personality: string; combo: string
   honor: string; group: string
   acres: number | null; nw: number | null; nwpa: number | null; off: number | null; def: number | null; defHome: number | null
   peons: number | null; tpa: number | null; wpa: number | null; be: number | null; overpop: number | null
