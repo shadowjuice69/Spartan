@@ -70,6 +70,58 @@ function PersonalityRuleCard({ p }: { p: PersonalityRule }) {
   )
 }
 
+function CombinedEffectsCard({ raceRule, personalityRule, raceName, personalityName, age }: { raceRule: RaceRule | null; personalityRule: PersonalityRule | null; raceName: string | null; personalityName: string | null; age: number | null }) {
+  const source = (label: string, value?: string | null) => value?.trim()
+    ? <p style={{ fontSize:11, lineHeight:1.55, margin:"7px 0 0" }}><b style={{ color:"#dce7ee" }}>{label}:</b> {value}</p>
+    : null
+  const hasBonuses = Boolean(raceRule?.bonuses?.trim() || personalityRule?.bonuses?.trim() || raceRule?.start_bonus?.trim())
+  const hasPenalties = Boolean(raceRule?.penalties?.trim())
+  return (
+    <div style={{ ...card, marginBottom:12, borderColor:"rgba(216,255,84,.22)", background:"linear-gradient(135deg, rgba(216,255,84,.045), rgba(103,240,176,.035))" }}>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:10, flexWrap:"wrap" }}>
+        <div>
+          <div style={{ fontSize:9, color:"#d8ff54", letterSpacing:".14em", fontWeight:800 }}>COMBINED PROVINCE EFFECTS</div>
+          <div style={{ fontSize:10, color:"#8993a1", marginTop:4 }}>Race + personality, shown together{age != null ? ` · Age ${age}` : ""}</div>
+        </div>
+        <span style={{ fontSize:9, color:"#67f0b0", border:"1px solid rgba(103,240,176,.25)", borderRadius:20, padding:"5px 8px" }}>BUILD SNAPSHOT</span>
+      </div>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(150px, 1fr))", gap:8, alignItems:"stretch", marginTop:12 }}>
+        <div style={{ ...card, padding:12, background:"rgba(255,255,255,.025)" }}>
+          <div style={{ fontSize:9, color:"#8da7ff", letterSpacing:".12em" }}>RACE</div>
+          <div style={{ fontSize:14, fontWeight:800, marginTop:5 }}>{raceRule?.emoji || "◈"} {raceName || raceRule?.race || "Not selected"}</div>
+          {source("Bonuses", raceRule?.bonuses)}
+          {source("Penalties", raceRule?.penalties)}
+          {source("Unique", raceRule?.unique_name ? `${raceRule.unique_name}: ${raceRule.unique_desc || ""}` : null)}
+        </div>
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"center", color:"#d8ff54", fontSize:24, fontWeight:900 }}>+</div>
+        <div style={{ ...card, padding:12, background:"rgba(255,255,255,.025)" }}>
+          <div style={{ fontSize:9, color:"#8da7ff", letterSpacing:".12em" }}>PERSONALITY</div>
+          <div style={{ fontSize:14, fontWeight:800, marginTop:5 }}>{personalityRule?.emoji || "◈"} {personalityName || personalityRule?.personality || "Not selected"}</div>
+          {source("Bonuses", personalityRule?.bonuses)}
+          {source("Start bonus", personalityRule?.start_bonus)}
+          {source("Unique", personalityRule?.unique_name ? `${personalityRule.unique_name}: ${personalityRule.unique_desc || ""}` : null)}
+        </div>
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"center", color:"#d8ff54", fontSize:24, fontWeight:900 }}>=</div>
+        <div style={{ ...card, padding:12, borderColor:"rgba(103,240,176,.24)", background:"rgba(103,240,176,.045)" }}>
+          <div style={{ fontSize:9, color:"#67f0b0", letterSpacing:".12em" }}>COMBINED OVERVIEW</div>
+          <div style={{ fontSize:13, fontWeight:800, marginTop:5 }}>Your build's effects</div>
+          {hasBonuses ? <>
+            <div style={{ fontSize:10, color:"#a7e8b0", fontWeight:800, marginTop:9 }}>BONUSES / ADVANTAGES</div>
+            {source("Race", raceRule?.bonuses)}
+            {source("Personality", personalityRule?.bonuses)}
+            {source("Starting effect", personalityRule?.start_bonus)}
+          </> : <p style={{ fontSize:11, color:"#8993a1" }}>No bonus text available in the saved rule snapshots.</p>}
+          {hasPenalties && <>
+            <div style={{ fontSize:10, color:"#ff9b9b", fontWeight:800, marginTop:10 }}>PENALTIES / TRADE-OFFS</div>
+            {source("Race", raceRule?.penalties)}
+          </>}
+          <p style={{ fontSize:9, color:"#8993a1", lineHeight:1.5, margin:"10px 0 0" }}>Effects are merged here for quick reading. Numeric stacking or interactions are only calculated where the age's rules explicitly define them; unique abilities remain distinct.</p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function NewBuildForm({ races, personalities, onSaved }: { races: RaceRule[]; personalities: PersonalityRule[]; onSaved: () => void }) {
   type BuildingEntry = { id: string; name: string; percent: string }
   type ScienceEntryInput = { id: string; category: "economy" | "military" | "arcane"; name: string; kind: "weight" | "actual_pct"; value: string }
@@ -313,16 +365,20 @@ function BuildDetail({ id, races, personalities, onBack, onDeleted }: { id: stri
   const raceRule = build?.race_rule_snapshot || null
   const personalityRule = build?.personality_rule_snapshot || null
   const [resyncing, setResyncing] = useState(false)
+  const [syncMessage, setSyncMessage] = useState("")
 
   async function handleResync() {
     setResyncing(true)
+    setSyncMessage("")
     try {
       const res = await fetch(`/api/builds/${id}/resync`, { method: "POST" })
-      if (!res.ok) throw new Error((await res.json()).error || "Resync failed.")
-      const { build: updated } = await res.json()
-      setBuild(updated)
+      const payload = await res.json()
+      if (!res.ok) throw new Error(payload?.error || "Sync failed.")
+      if (!payload?.build) throw new Error("Sync returned no updated build.")
+      setBuild(payload.build)
+      setSyncMessage("Latest available race/personality rules synced. The combined effects tile has been refreshed; buildings, military requirements, and science targets were preserved.")
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Resync failed.")
+      setError(e instanceof Error ? e.message : "Sync failed.")
     } finally {
       setResyncing(false)
     }
@@ -351,7 +407,7 @@ function BuildDetail({ id, races, personalities, onBack, onDeleted }: { id: stri
         <button style={btnGhost} onClick={onBack}>← Back to Library</button>
         <div style={{ display:"flex", gap:8 }}>
           {(build.race || build.personality) && (
-            <button style={btnGhost} disabled={resyncing} onClick={handleResync}>{resyncing ? "Resyncing…" : "Resync to Latest Rules"}</button>
+            <button style={btnGhost} disabled={resyncing} onClick={handleResync}>{resyncing ? "Syncing Effects…" : "Sync Combined Effects"}</button>
           )}
           <button style={btnDanger} disabled={deleting} onClick={handleDelete}>{deleting ? "Deleting…" : "Delete Build"}</button>
         </div>
@@ -363,13 +419,26 @@ function BuildDetail({ id, races, personalities, onBack, onDeleted }: { id: stri
         {build.rules_age_number != null && ` · rules pinned to Age ${build.rules_age_number}`}
       </p>
 
-      {(raceRule || personalityRule) && (
+      {(raceRule || personalityRule || build.race || build.personality) && (
         <>
-          <h3 style={{ fontSize:12, color:"#67f0b0", letterSpacing:".1em", marginTop:20 }}>RACE &amp; PERSONALITY</h3>
-          {raceRule && <RaceRuleCard r={raceRule} />}
-          {personalityRule && <PersonalityRuleCard p={personalityRule} />}
+          <h3 style={{ fontSize:12, color:"#67f0b0", letterSpacing:".1em", marginTop:20 }}>RACE + PERSONALITY = COMBINED EFFECTS</h3>
+          <CombinedEffectsCard
+            raceRule={raceRule}
+            personalityRule={personalityRule}
+            raceName={build.race || null}
+            personalityName={build.personality || null}
+            age={build.rules_age_number == null ? null : Number(build.rules_age_number)}
+          />
+          {(raceRule || personalityRule) && <details style={{ marginBottom:12 }}>
+            <summary style={{ cursor:"pointer", color:"#8993a1", fontSize:11 }}>Show full individual rule details</summary>
+            <div style={{ marginTop:10 }}>
+              {raceRule && <RaceRuleCard r={raceRule} />}
+              {personalityRule && <PersonalityRuleCard p={personalityRule} />}
+            </div>
+          </details>}
         </>
       )}
+      {syncMessage && <p role="status" style={{ color:"#67f0b0", fontSize:11, margin:"0 0 12px" }}>{syncMessage}</p>}
 
       <h3 style={{ fontSize:12, color:"#67f0b0", letterSpacing:".1em", marginTop:20 }}>BUILDINGS</h3>
       <div style={{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:2, fontSize:11 }}>
