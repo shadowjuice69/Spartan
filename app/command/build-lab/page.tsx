@@ -74,7 +74,7 @@ function CombinedEffectsCard({ raceRule, personalityRule, raceName, personalityN
   const source = (label: string, value?: string | null) => value?.trim()
     ? <p style={{ fontSize:11, lineHeight:1.55, margin:"7px 0 0" }}><b style={{ color:"#dce7ee" }}>{label}:</b> {value}</p>
     : null
-  const hasBonuses = Boolean(raceRule?.bonuses?.trim() || personalityRule?.bonuses?.trim() || raceRule?.start_bonus?.trim())
+  const hasBonuses = Boolean(raceRule?.bonuses?.trim() || personalityRule?.bonuses?.trim() || personalityRule?.start_bonus?.trim())
   const hasPenalties = Boolean(raceRule?.penalties?.trim())
   return (
     <div style={{ ...card, marginBottom:12, borderColor:"rgba(216,255,84,.22)", background:"linear-gradient(135deg, rgba(216,255,84,.045), rgba(103,240,176,.035))" }}>
