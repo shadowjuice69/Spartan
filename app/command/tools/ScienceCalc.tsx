@@ -77,18 +77,23 @@ export default function ScienceCalc() {
 
   useEffect(() => {
     let active = true
-    fetch("/api/tools/science-summary/provinces", { cache: "no-store" })
-      .then(async (r) => {
+    Promise.all([
+      fetch("/api/tools/science-summary/provinces", { cache: "no-store" }).then(async (r) => {
         const j = await r.json()
         if (!r.ok) throw new Error(j?.error || "Could not load Spartan provinces.")
         return j
-      })
-      .then((j) => {
+      }),
+      fetch("/api/page-models?page=science", { cache: "no-store" }).then((r) => r.ok ? r.json() : null).catch(() => null),
+    ])
+      .then(([registry, current]) => {
         if (!active) return
-        const list: ProvinceChoice[] = Array.isArray(j?.provinces) ? j.provinces : []
+        const list: ProvinceChoice[] = Array.isArray(registry?.provinces) ? registry.provinces : []
         setProvinces(list)
         if (list.length) {
-          const own = list.find((p) => p.province_name.trim().toLowerCase() === "finkster" && p.kingdom_code === "6:8")
+          const own = list.find((p) =>
+            p.province_name.trim().toLowerCase() === String(current?.province || "").trim().toLowerCase() &&
+            String(p.kingdom_code || "") === String(current?.kingdom || "")
+          )
           const first = own || list[0]
           setSelectedProvince(first.province_name + (first.kingdom_code ? " (" + first.kingdom_code + ")" : ""))
         } else {
