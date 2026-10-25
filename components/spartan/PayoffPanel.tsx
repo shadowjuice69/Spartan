@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { C, DataTable, Empty, Panel, Tag, fmt } from '@/components/spartan/ui'
 
 type P = {
-  key: string; name: string; acres: number | null; nw: number | null
+  key: string; name: string; slot?: string; acres: number | null; nw: number | null
   def: number | null; defHome: number | null; ages: { SOT: number | null }
 }
 
@@ -35,7 +35,7 @@ const lab = { fontSize: 10, letterSpacing: '.14em', color: '#7d8fa0', marginBott
 const num = (s: string) => { const v = Number(String(s).replace(/,/g, '')); return Number.isFinite(v) ? v : 0 }
 const ageText = (h: number | null) => (h === null ? '—' : h < 1 ? Math.round(h * 60) + 'm' : h < 48 ? Math.round(h) + 'h' : Math.round(h / 24) + 'd')
 
-export default function PayoffPanel({ provs, mine, ownName }: { provs: P[]; mine: P[]; ownName?: string | null }) {
+export default function PayoffPanel({ provs, mine, ownName, ownKd }: { provs: P[]; mine: P[]; ownName?: string | null; ownKd?: string | null }) {
   const [pick, setPick] = useState('')
   const [nw, setNw] = useState('')
   const [acres, setAcres] = useState('')
@@ -43,6 +43,33 @@ export default function PayoffPanel({ provs, mine, ownName }: { provs: P[]; mine
   const [war, setWar] = useState(false)
   const [rangeOnly, setRangeOnly] = useState(true)
   const [loaded, setLoaded] = useState(false)
+  const [liveOwnStats, setLiveOwnStats] = useState<{ nw: number | null; acres: number | null } | null>(null)
+
+  // The kingdom grid often contains names only. Pull the signed-in province's
+  // latest Throne values so Biggest Payoffs can fill NW and land automatically.
+  useEffect(() => {
+    let active = true
+    fetch("/api/page-models?page=throne", { cache: "no-store" })
+      .then(r => r.ok ? r.json() : null)
+      .then(j => {
+        if (!active) return
+        const list = Array.isArray(j?.model?.provinces) ? j.model.provinces : []
+        const match = list.find((p: any) => p.own) || list.find((p: any) =>
+          String(p?.name || "").trim().toLowerCase() === String(ownName || "").trim().toLowerCase() &&
+          (!ownKd || String(p?.kd || "") === ownKd)
+        )
+        const nw = Number(match?.latest?.nums?.networth)
+        const acres = Number(match?.latest?.nums?.acres)
+        if (match && (Number.isFinite(nw) || Number.isFinite(acres))) {
+          setLiveOwnStats({
+            nw: Number.isFinite(nw) && nw > 0 ? nw : null,
+            acres: Number.isFinite(acres) && acres > 0 ? acres : null,
+          })
+        }
+      })
+      .catch(() => {})
+    return () => { active = false }
+  }, [ownName, ownKd])
 
   // Restore optional browser preferences; the calculator remains usable if storage is unavailable.
   useEffect(() => {
@@ -65,11 +92,23 @@ export default function PayoffPanel({ provs, mine, ownName }: { provs: P[]; mine
     try { window.localStorage.setItem(KEY, JSON.stringify({ map, war, rangeOnly, pick, nw, acres })) } catch {}
   }, [loaded, map, war, rangeOnly, pick, nw, acres])
 
-  const own = ownName ? mine.find(x => x.name.trim().toLowerCase() === ownName.trim().toLowerCase()) || null : null
-  const sel = pick === 'manual' ? null : mine.find(x => x.key === pick) || own
-  const shownNW = sel ? (sel.nw ? String(sel.nw) : '') : nw
-  const shownAcres = sel ? (sel.acres ? String(sel.acres) : '') : acres
-  const selectValue = pick === 'manual' ? 'manual' : mine.some(x => x.key === pick) ? pick : ''
+  const ownInGrid = ownName ? mine.find(x => x.name.trim().toLowerCase() === ownName.trim().toLowerCase()) || null : null
+  const ownSlot = ownInGrid?.slot
+  const [kdMajor, kdMinor] = String(ownKd || '').split(':')
+  const generatedOwnKey = ownKd && ownSlot
+    ? String(Number(kdMajor)).padStart(2, '0') + String(Number(kdMinor)).padStart(2, '0') + String(Number(ownSlot)).padStart(2, '0')
+    : ownKd ? ownKd + ':own' : 'own-province'
+  const own: P | null = ownInGrid || (ownName ? {
+    key: generatedOwnKey, name: ownName, slot: ownSlot || undefined,
+    nw: liveOwnStats?.nw ?? null, acres: liveOwnStats?.acres ?? null,
+    def: null, defHome: null, ages: { SOT: null },
+  } : null)
+  const availableMine = own && !mine.some(x => x.key === own.key) ? [own, ...mine] : mine
+  const sel = pick === 'manual' ? null : availableMine.find(x => x.key === pick) || own
+  const selectedIsOwn = !!sel && !!ownName && sel.name.trim().toLowerCase() === ownName.trim().toLowerCase()
+  const shownNW = sel ? (sel.nw ? String(sel.nw) : selectedIsOwn && liveOwnStats?.nw ? String(liveOwnStats.nw) : '') : nw
+  const shownAcres = sel ? (sel.acres ? String(sel.acres) : selectedIsOwn && liveOwnStats?.acres ? String(liveOwnStats.acres) : '') : acres
+  const selectValue = pick === 'manual' ? 'manual' : availableMine.some(x => x.key === pick) ? pick : own?.key || ''
 
   const yNW = num(shownNW)
   const yAcres = num(shownAcres)
@@ -106,7 +145,7 @@ export default function PayoffPanel({ provs, mine, ownName }: { provs: P[]; mine
           <select value={selectValue} onChange={(e: any) => choose(e.target.value)} style={box}>
             <option value="">{own ? `You: ${own.name}` : 'Select a province'}</option>
             <option value="manual">Enter manually</option>
-            {mine.filter(m => !own || m.key !== own.key).map(m => <option key={m.key} value={m.key}>{m.name}</option>)}
+            {availableMine.map(m => <option key={m.key} value={m.key}>{m.name}{m.key === own?.key ? ' — your province' : ''}</option>)}
           </select>
         </div>
         <div><div style={lab}>YOUR NETWORTH</div><input style={box} inputMode="numeric" value={shownNW} onChange={(e: any) => edit('nw', e.target.value)} placeholder="e.g. 865387" /></div>
