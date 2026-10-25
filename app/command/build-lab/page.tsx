@@ -20,7 +20,7 @@ const input: any = { background:"#05080d", border:"1px solid rgba(255,255,255,.0
 const select: any = { ...input }
 
 type RaceRule = { race: string; emoji: string; archetype: string; war_doctrine: string; unique_name: string; unique_desc: string; bonuses: string; penalties: string; units: string; spells: string }
-type PersonalityRule = { personality: string; emoji: string; unique_name: string; unique_desc: string; bonuses: string; start_bonus: string; spells: string }
+type PersonalityRule = { personality: string; emoji: string; unique_name: string; unique_desc: string; bonuses: string; penalties?: string; start_bonus: string; spells: string }
 
 function Sidebar({ active }: { active: string }) {
   const router = useRouter()
@@ -73,15 +73,62 @@ function PersonalityRuleCard({ p }: { p: PersonalityRule }) {
 function extractPercentEffects(text?: string | null): Map<string, number> {
   const effects = new Map<string, number>()
   if (!text) return effects
-  // Recognize explicit percentage modifiers tied to a named stat, e.g. "+25% WPA".
-  // Keep offensive/defensive qualifiers separate where the source includes them.
-  const pattern = /([+-]?\s*\d+(?:\.\d+)?)\s*%\s*((?:(?:offensive|defensive|off|def)\s+)?(?:WPA|TPA|OME|DME|attack time|combat gains|spell success|spell damage|military casualties|thief losses|wizard production|income|building effectiveness|BE|mana recovery|stealth recovery))/gi
-  for (const match of text.matchAll(pattern)) {
-    const amount = Number(match[1].replace(/\s/g, ""))
-    const stat = match[2].replace(/\s+/g, " ").trim().toUpperCase()
-    if (!Number.isFinite(amount)) continue
-    effects.set(stat, (effects.get(stat) || 0) + amount)
+
+  // Normalize common Age-rule wording to stable stat keys so every race/personality
+  // uses the same aggregation path, rather than hard-coding one named combination.
+  const aliases: Array<[string, RegExp]> = [
+    ["WPA", /\b(?:WPA|wizard(?:s|ry)?\s+(?:power|strength|effectiveness)|wizard power)\b/i],
+    ["TPA", /\b(?:TPA|thievery\s+(?:power|strength)|thief power)\b/i],
+    ["OME", /\b(?:OME|offensive military efficiency|offensive efficiency)\b/i],
+    ["DME", /\b(?:DME|defensive military efficiency|defensive efficiency)\b/i],
+    ["ATTACK TIME", /\b(?:attack|march|military) travel time\b|\battack time\b/i],
+    ["COMBAT GAINS", /\b(?:combat|land|attack) gains\b/i],
+    ["SPELL SUCCESS", /\bspell success\b|\bsuccessful spellcasting\b/i],
+    ["SPELL DAMAGE", /\bspell damage\b|\bspell strength\b/i],
+    ["MILITARY CASUALTIES", /\b(?:military|army|troop) casualties\b/i],
+    ["THIEF LOSSES", /\b(?:thief|thievery) losses\b/i],
+    ["WIZARD PRODUCTION", /\bwizard production\b|\bwizard training\b/i],
+    ["INCOME", /\bincome\b|\bgold production\b/i],
+    ["BUILDING EFFECTIVENESS", /\b(?:building effectiveness|BE)\b/i],
+    ["MANA RECOVERY", /\bmana recovery\b|\bmana regeneration\b/i],
+    ["STEALTH RECOVERY", /\bstealth recovery\b|\bstealth regeneration\b/i],
+    ["POPULATION", /\bpopulation\b/i],
+    ["FOOD PRODUCTION", /\bfood production\b|\bfood income\b/i],
+    ["RUNE PRODUCTION", /\brune production\b|\brune generation\b/i],
+    ["SCIENCE COST", /\bscience costs?\b/i],
+    ["BUILDING COST", /\bbuilding costs?\b/i],
+    ["TRAINING COST", /\btraining costs?\b/i],
+    ["MILITARY TRAINING TIME", /\b(?:military|troop) training time\b/i],
+    ["SPELL DURATION", /\bspell duration\b/i],
+    ["THIEVERY SUCCESS", /\bthievery success\b|\bthief success\b/i],
+  ]
+
+  const add = (key: string, amount: number) => {
+    if (Number.isFinite(amount)) effects.set(key, (effects.get(key) || 0) + amount)
   }
+
+  // Format A: "+25% WPA", "25% more wizard power", "-10% attack time".
+  const percentFirst = /([+-]?\s*\d+(?:\.\d+)?)\s*%\s*(?:more\s+|less\s+|bonus\s+to\s+|bonus\s+)?([^,;.!\n]+)/gi
+  for (const match of text.matchAll(percentFirst)) {
+    const amount = Number(match[1].replace(/\s/g, ""))
+    const tail = match[2].trim()
+    for (const [key, pattern] of aliases) {
+      if (pattern.test(tail)) {
+        add(key, amount)
+        break
+      }
+    }
+  }
+
+  // Format B: "WPA: +25%", "increases WPA by 25%", or "WPA increased by 25%".
+  for (const [key, pattern] of aliases) {
+    const escaped = pattern.source
+    const before = new RegExp(`(?:${escaped})\\s*(?::|is|of)?\\s*(?:increased|reduced|raised|lowered|bonus)?\\s*(?:by|to|of|is)?\\s*([+-]?\\d+(?:\\.\\d+)?)\\s*%`, "gi")
+    const after = new RegExp(`([+-]?\\d+(?:\\.\\d+)?)\\s*%\\s*(?:increase|reduction|bonus|penalty)?\\s*(?:to|in)?\\s*(?:${escaped})`, "gi")
+    for (const match of text.matchAll(before)) add(key, Number(match[1]))
+    for (const match of text.matchAll(after)) add(key, Number(match[1]))
+  }
+
   return effects
 }
 
@@ -92,7 +139,10 @@ function CombinedEffectsCard({ raceRule, personalityRule, raceName, personalityN
   const hasBonuses = Boolean(raceRule?.bonuses?.trim() || personalityRule?.bonuses?.trim() || personalityRule?.start_bonus?.trim())
   const hasPenalties = Boolean(raceRule?.penalties?.trim() || personalityRule?.penalties?.trim())
   const combinedModifiers = new Map<string, number>()
-  for (const text of [raceRule?.bonuses, raceRule?.penalties, personalityRule?.bonuses, personalityRule?.penalties, personalityRule?.start_bonus]) {
+  for (const text of [
+    raceRule?.bonuses, raceRule?.penalties, raceRule?.war_doctrine, raceRule?.unique_desc,
+    personalityRule?.bonuses, personalityRule?.penalties, personalityRule?.start_bonus, personalityRule?.unique_desc,
+  ]) {
     for (const [stat, amount] of extractPercentEffects(text)) {
       combinedModifiers.set(stat, (combinedModifiers.get(stat) || 0) + amount)
     }
