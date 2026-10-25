@@ -523,8 +523,16 @@ export async function GET(request: Request) {
       if (g.error) fail(g.error)
       const rows: any[] = g.data || []
       const captures: GridCapture[] = rows
-        .filter(r => Array.isArray(r.grid?.rows) && r.parsed_payload?.kingdom_code)
-        .map(r => ({ kd: String(r.parsed_payload.kingdom_code), at: r.captured_at || r.created_at, url: String(r.url || '').replace(/^https?:\/\/[^/]+/, '').replace(/[?#].*$/, '') || '/', rows: r.grid.rows }))
+        .filter(r => Array.isArray(r.grid?.rows))
+        .map(r => {
+          const url = String(r.url || '').replace(/^https?:\/\/[^/]+/, '').replace(/[?#].*$/, '') || '/'
+          // The captured page URL is the authoritative kingdom identity. Some older
+          // records were assigned the logged-in kingdom even while viewing an enemy KD.
+          const fromUrl = url.match(/\/kingdom_intel\/(\d+)\/(\d+)(?:\/|$)/i)
+          const kd = fromUrl ? fromUrl[1] + ':' + fromUrl[2] : String(r.parsed_payload?.kingdom_code || '')
+          return { kd, at: r.captured_at || r.created_at, url, rows: r.grid.rows }
+        })
+        .filter(c => /^\d{1,3}:\d{1,3}$/.test(c.kd))
       const byKd: Record<string, GridCapture[]> = {}
       for (const c of captures) (byKd[c.kd] ||= []).push(c)
       const ownKd = String(account.province_location || '')
