@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import { NAV_COMMAND as nav, NAV_INTEL as intel } from '@/lib/spartan/nav'
+import ScienceCalc from "../tools/ScienceCalc"
 
 
 
@@ -163,4 +164,4 @@ function Science(){
   </Card>
 }
 
-export default function Calcs(){const [tab,setTab]=useState("Attack"),items=["Thievery","Attack","Declare","Science / Summary"];return <main style={shell}><Sidebar/><section style={{flex:1,padding:"30px 34px",maxWidth:1300,minWidth:0}}><div style={{fontSize:9,color:"#67f0b0",letterSpacing:".2em"}}>SPARTAN // CALCULATORS</div><h1 style={{fontSize:34,margin:"7px 0 5px"}}>Calculators</h1><p style={{fontSize:11,color:"#7e8a99"}}>Thievery, attack, declare, and science tools live here. Build Library remains the home for science investment.</p><div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:18}}>{items.map(x=><button key={x} style={tab===x?primary:ghost} onClick={()=>setTab(x)}>{x}</button>)}</div>{tab==="Thievery"&&<Thievery/>}{tab==="Attack"&&<Attack/>}{tab==="Declare"&&<Declare/>}{tab==="Science / Summary"&&<Science/>}</section></main>}
+export default function Calcs(){const [tab,setTab]=useState("Attack"),items=["Thievery","Attack","Declare","Science / Summary"];return <main style={shell}><Sidebar/><section style={{flex:1,padding:"30px 34px",maxWidth:1300,minWidth:0}}><div style={{fontSize:9,color:"#67f0b0",letterSpacing:".2em"}}>SPARTAN // CALCULATORS</div><h1 style={{fontSize:34,margin:"7px 0 5px"}}>Calculators</h1><p style={{fontSize:11,color:"#7e8a99"}}>Thievery, attack, declare, and science tools live here. Build Library remains the home for science investment.</p><div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:18}}>{items.map(x=><button key={x} style={tab===x?primary:ghost} onClick={()=>setTab(x)}>{x}</button>)}</div>{tab==="Thievery"&&<Thievery/>}{tab==="Attack"&&<Attack/>}{tab==="Declare"&&<Declare/>}{tab==="Science / Summary"&&<><ScienceCalc/><div style={{marginTop:16}}><Science/></div></>}</section></main>}
