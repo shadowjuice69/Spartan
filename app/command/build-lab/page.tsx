@@ -124,9 +124,7 @@ function extractPercentEffects(text?: string | null): Map<string, number> {
   for (const [key, pattern] of aliases) {
     const escaped = pattern.source
     const before = new RegExp(`(?:${escaped})\\s*(?::|is|of)?\\s*(?:increased|reduced|raised|lowered|bonus)?\\s*(?:by|to|of|is)?\\s*([+-]?\\d+(?:\\.\\d+)?)\\s*%`, "gi")
-    const after = new RegExp(`([+-]?\\d+(?:\\.\\d+)?)\\s*%\\s*(?:increase|reduction|bonus|penalty)?\\s*(?:to|in)?\\s*(?:${escaped})`, "gi")
     for (const match of text.matchAll(before)) add(key, Number(match[1]))
-    for (const match of text.matchAll(after)) add(key, Number(match[1]))
   }
 
   return effects
