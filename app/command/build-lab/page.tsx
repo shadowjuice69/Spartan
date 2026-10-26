@@ -169,10 +169,8 @@ function extractPercentEffects(text?: string | null): Map<string, number> {
 
 function CombinedEffectsCard({ raceRule, personalityRule, raceName, personalityName, age }: { raceRule: RaceRule | null; personalityRule: PersonalityRule | null; raceName: string | null; personalityName: string | null; age: number | null }) {
   const source = (label: string, value?: string | null) => value?.trim()
-    ? <p style={{ fontSize:11, lineHeight:1.55, margin:"7px 0 0" }}><b style={{ color:"#dce7ee" }}>{label}:</b> {value}</p>
+    ? <p style={{ fontSize:11, lineHeight:1.5, margin:"5px 0 0" }}><b style={{ color:"#dce7ee" }}>{label}:</b> {value}</p>
     : null
-  const hasBonuses = Boolean(raceRule?.bonuses?.trim() || personalityRule?.bonuses?.trim() || personalityRule?.start_bonus?.trim())
-  const hasPenalties = Boolean(raceRule?.penalties?.trim() || personalityRule?.penalties?.trim())
   const combinedModifiers = new Map<string, number>()
   for (const text of [
     raceRule?.bonuses, raceRule?.penalties, raceRule?.war_doctrine, raceRule?.unique_desc,
@@ -184,62 +182,50 @@ function CombinedEffectsCard({ raceRule, personalityRule, raceName, personalityN
   }
   const hasCombinedModifiers = combinedModifiers.size > 0
   return (
-    <div style={{ ...card, marginBottom:12, borderColor:"rgba(216,255,84,.22)", background:"linear-gradient(135deg, rgba(216,255,84,.045), rgba(103,240,176,.035))" }}>
-      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:10, flexWrap:"wrap" }}>
-        <div>
-          <div style={{ fontSize:9, color:"#d8ff54", letterSpacing:".14em", fontWeight:800 }}>COMBINED PROVINCE EFFECTS</div>
-          <div style={{ fontSize:10, color:"#8993a1", marginTop:4 }}>Race + personality, shown together{age != null ? ` · Age ${age}` : ""}</div>
+    <div style={{ ...card, padding:12, marginBottom:10, borderColor:"rgba(216,255,84,.2)", background:"rgba(216,255,84,.025)" }}>
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:8, flexWrap:"wrap" }}>
+        <div style={{ display:"flex", alignItems:"center", gap:7, flexWrap:"wrap", minWidth:0 }}>
+          <span style={{ fontSize:9, color:"#8993a1", letterSpacing:".08em" }}>RACE + PERSONALITY</span>
+          <b style={{ fontSize:12 }}>{raceRule?.emoji || "◈"} {raceName || raceRule?.race || "Not selected"}</b>
+          <span style={{ color:"#d8ff54", fontWeight:800 }}>+</span>
+          <b style={{ fontSize:12 }}>{personalityRule?.emoji || "◈"} {personalityName || personalityRule?.personality || "Not selected"}</b>
+          {age != null && <span style={{ fontSize:9, color:"#8993a1" }}>Age {age}</span>}
         </div>
-        <span style={{ fontSize:9, color:"#67f0b0", border:"1px solid rgba(103,240,176,.25)", borderRadius:20, padding:"5px 8px" }}>BUILD SNAPSHOT</span>
+        <span style={{ fontSize:9, color:"#67f0b0", whiteSpace:"nowrap" }}>COMBINED EFFECTS</span>
       </div>
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(150px, 1fr))", gap:8, alignItems:"stretch", marginTop:12 }}>
-        <div style={{ ...card, padding:12, background:"rgba(255,255,255,.025)" }}>
-          <div style={{ fontSize:9, color:"#8da7ff", letterSpacing:".12em" }}>RACE</div>
-          <div style={{ fontSize:14, fontWeight:800, marginTop:5 }}>{raceRule?.emoji || "◈"} {raceName || raceRule?.race || "Not selected"}</div>
-          {source("Bonuses", raceRule?.bonuses)}
-          {source("Penalties", raceRule?.penalties)}
-          {source("Unique", raceRule?.unique_name ? `${raceRule.unique_name}: ${raceRule.unique_desc || ""}` : null)}
+      {hasCombinedModifiers ? (
+        <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginTop:9 }}>
+          {[...combinedModifiers.entries()].map(([stat, amount]) => (
+            <span key={stat} style={{ display:"inline-flex", alignItems:"center", gap:5, padding:"5px 8px", borderRadius:6, border:"1px solid rgba(216,255,84,.16)", background:"rgba(216,255,84,.035)" }}>
+              <span style={{ fontSize:9, color:"#8993a1" }}>{stat}</span>
+              <b style={{ fontSize:11, color:amount >= 0 ? "#a7e8b0" : "#ff9b9b" }}>{amount > 0 ? "+" : ""}{Number(amount.toFixed(2))}%</b>
+            </span>
+          ))}
         </div>
-        <div style={{ display:"flex", alignItems:"center", justifyContent:"center", color:"#d8ff54", fontSize:24, fontWeight:900 }}>+</div>
-        <div style={{ ...card, padding:12, background:"rgba(255,255,255,.025)" }}>
-          <div style={{ fontSize:9, color:"#8da7ff", letterSpacing:".12em" }}>PERSONALITY</div>
-          <div style={{ fontSize:14, fontWeight:800, marginTop:5 }}>{personalityRule?.emoji || "◈"} {personalityName || personalityRule?.personality || "Not selected"}</div>
-          {source("Bonuses", personalityRule?.bonuses)}
-          {source("Start bonus", personalityRule?.start_bonus)}
-          {source("Unique", personalityRule?.unique_name ? `${personalityRule.unique_name}: ${personalityRule.unique_desc || ""}` : null)}
-        </div>
-        <div style={{ display:"flex", alignItems:"center", justifyContent:"center", color:"#d8ff54", fontSize:24, fontWeight:900 }}>=</div>
-        <div style={{ ...card, padding:12, borderColor:"rgba(103,240,176,.24)", background:"rgba(103,240,176,.045)" }}>
-          <div style={{ fontSize:9, color:"#67f0b0", letterSpacing:".12em" }}>COMBINED OVERVIEW</div>
-          <div style={{ fontSize:13, fontWeight:800, marginTop:5 }}>Your build's effects</div>
-          {hasCombinedModifiers && <>
-            <div style={{ fontSize:10, color:"#d8ff54", fontWeight:800, marginTop:9 }}>COMBINED PERCENT MODIFIERS</div>
-            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(95px, 1fr))", gap:6, marginTop:7 }}>
-              {[...combinedModifiers.entries()].map(([stat, amount]) => (
-                <div key={stat} style={{ padding:"8px 9px", borderRadius:7, border:"1px solid rgba(216,255,84,.18)", background:"rgba(216,255,84,.045)" }}>
-                  <div style={{ fontSize:9, color:"#8993a1", letterSpacing:".08em" }}>{stat}</div>
-                  <div style={{ fontSize:16, fontWeight:900, color:amount >= 0 ? "#a7e8b0" : "#ff9b9b", marginTop:3 }}>{amount > 0 ? "+" : ""}{Number(amount.toFixed(2))}%</div>
-                </div>
-              ))}
-            </div>
-          </>}
-          {hasBonuses ? <>
-            <div style={{ fontSize:10, color:"#a7e8b0", fontWeight:800, marginTop:9 }}>BONUSES / ADVANTAGES</div>
-            {source("Race", raceRule?.bonuses)}
-            {source("Personality", personalityRule?.bonuses)}
+      ) : <p style={{ fontSize:10, color:"#8993a1", margin:"7px 0 0" }}>No matching percentage modifiers found in the saved rules.</p>}
+      <details style={{ marginTop:8 }}>
+        <summary style={{ cursor:"pointer", color:"#8da7ff", fontSize:10, fontWeight:700 }}>View full race and personality details</summary>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(210px, 1fr))", gap:10, marginTop:8 }}>
+          <div style={{ padding:10, borderRadius:7, background:"rgba(255,255,255,.025)", border:"1px solid rgba(255,255,255,.07)" }}>
+            <b style={{ fontSize:11 }}>{raceRule?.emoji || "◈"} {raceName || raceRule?.race || "Race"}</b>
+            {source("Bonuses", raceRule?.bonuses)}
+            {source("Penalties", raceRule?.penalties)}
+            {source("War doctrine", raceRule?.war_doctrine)}
+            {source("Unique", raceRule?.unique_name ? `${raceRule.unique_name}: ${raceRule.unique_desc || ""}` : raceRule?.unique_desc)}
+          </div>
+          <div style={{ padding:10, borderRadius:7, background:"rgba(255,255,255,.025)", border:"1px solid rgba(255,255,255,.07)" }}>
+            <b style={{ fontSize:11 }}>{personalityRule?.emoji || "◈"} {personalityName || personalityRule?.personality || "Personality"}</b>
+            {source("Bonuses", personalityRule?.bonuses)}
+            {source("Penalties", personalityRule?.penalties)}
             {source("Starting effect", personalityRule?.start_bonus)}
-          </> : <p style={{ fontSize:11, color:"#8993a1" }}>No bonus text available in the saved rule snapshots.</p>}
-          {hasPenalties && <>
-            <div style={{ fontSize:10, color:"#ff9b9b", fontWeight:800, marginTop:10 }}>PENALTIES / TRADE-OFFS</div>
-            {source("Race", raceRule?.penalties)}
-          </>}
-          <p style={{ fontSize:9, color:"#8993a1", lineHeight:1.5, margin:"10px 0 0" }}>Matching percentage modifiers are added together when the same stat is explicitly named (for example, +25% WPA from race and +25% WPA from personality = +50% WPA). These are combined modifiers, not a final troop/wizard count; unique abilities and effects with different labels remain separate.</p>
+            {source("Unique", personalityRule?.unique_name ? `${personalityRule.unique_name}: ${personalityRule.unique_desc || ""}` : personalityRule?.unique_desc)}
+          </div>
         </div>
-      </div>
+        <p style={{ fontSize:9, color:"#8993a1", lineHeight:1.45, margin:"8px 0 0" }}>Matching percentage modifiers are added together when the same stat is explicitly named. These are combined modifiers, not final troop or wizard counts; unique abilities and effects with different labels remain separate.</p>
+      </details>
     </div>
   )
 }
-
 function NewBuildForm({ races, personalities, onSaved }: { races: RaceRule[]; personalities: PersonalityRule[]; onSaved: () => void }) {
   type BuildingEntry = { id: string; name: string; percent: string }
   type ScienceEntryInput = { id: string; category: "economy" | "military" | "arcane"; name: string; kind: "weight" | "actual_pct"; value: string }
@@ -539,7 +525,7 @@ function BuildDetail({ id, races, personalities, onBack, onDeleted }: { id: stri
 
       {(raceRule || personalityRule || build.race || build.personality) && (
         <>
-          <h3 style={{ fontSize:12, color:"#67f0b0", letterSpacing:".1em", marginTop:20 }}>RACE + PERSONALITY = COMBINED EFFECTS</h3>
+          <h3 style={{ fontSize:10, color:"#67f0b0", letterSpacing:".08em", marginTop:12, marginBottom:6 }}>RACE + PERSONALITY</h3>
           <CombinedEffectsCard
             raceRule={raceRule}
             personalityRule={personalityRule}
