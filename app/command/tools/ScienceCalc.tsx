@@ -100,24 +100,6 @@ export default function ScienceCalc() {
       .catch((e) => { if (active) setBuildMsg(e instanceof Error ? e.message : "Could not load Spartan provinces.") })
       .finally(() => { if (active) setProvinceLoading(false) })
 
-    // Resolve the current province separately, without blocking the registry.
-    fetch("/api/page-models?page=science", { cache: "no-store" })
-      .then((r) => r.ok ? r.json() : null)
-      .then((current) => {
-        if (!active || !current?.province) return
-        // Keep the province dropdown usable even if this optional request is slow.
-        setProvinces((existing) => {
-          const own = existing.find((p) =>
-            p.province_name.trim().toLowerCase() === String(current.province).trim().toLowerCase() &&
-            String(p.kingdom_code || "") === String(current.kingdom || "")
-          )
-          if (own) {
-            setSelectedProvince(own.province_name + (own.kingdom_code ? " (" + own.kingdom_code + ")" : ""))
-          }
-          return existing
-        })
-      })
-      .catch(() => {})
     return () => { active = false }
   }, [])
 
