@@ -65,8 +65,14 @@ function PersonalityRuleCard({ p }: { p: PersonalityRule }) {
       <p style={{ margin:0, fontWeight:700 }}>{p.emoji} {p.personality}</p>
       {p.unique_name && <p style={{ fontSize:11, color:"#67f0b0", marginTop:8 }}><b>Unique — {p.unique_name}:</b> {p.unique_desc}</p>}
       {p.bonuses && <p style={{ fontSize:11, color:"#a7e8b0", marginTop:6 }}><b>Bonuses:</b> {p.bonuses}</p>}
+      {p.penalties && <p style={{ fontSize:11, color:"#ff9b9b", marginTop:6 }}><b>Penalties:</b> {p.penalties}</p>}
       {p.start_bonus && <p style={{ fontSize:11, color:"#b7c2cc", marginTop:6 }}><b>Start:</b> {p.start_bonus}</p>}
-      {p.spells && <p style={{ fontSize:11,function CombinedEffectsCard({ raceRule, personalityRule, raceName, personalityName, age }: { raceRule: RaceRule | null; personalityRule: PersonalityRule | null; raceName: string | null; personalityName: string | null; age: number | null }) {
+      {p.spells && <p style={{ fontSize:11, color:"#b7c2cc", marginTop:6 }}><b>Spells:</b> {p.spells}</p>}
+    </div>
+  )
+}
+
+function CombinedEffectsCard({ raceRule, personalityRule, raceName, personalityName, age }: { raceRule: RaceRule | null; personalityRule: PersonalityRule | null; raceName: string | null; personalityName: string | null; age: number | null }) {
   const { bonuses, penalties } = combineEffects(raceRule, personalityRule)
   const fmt = (n: number) => `${n > 0 ? "+" : ""}${Number(n.toFixed(2))}%`
   const tile = (r: CombinedRow) => {
@@ -115,11 +121,7 @@ function PersonalityRuleCard({ p }: { p: PersonalityRule }) {
     </div>
   )
 }
-ects with different labels remain separate.</p>
-      </details>
-    </div>
-  )
-}
+
 function NewBuildForm({ races, personalities, onSaved }: { races: RaceRule[]; personalities: PersonalityRule[]; onSaved: () => void }) {
   type BuildingEntry = { id: string; name: string; percent: string }
   type ScienceEntryInput = { id: string; category: "economy" | "military" | "arcane"; name: string; kind: "weight" | "actual_pct"; value: string }
