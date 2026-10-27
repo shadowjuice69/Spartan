@@ -120,7 +120,8 @@ function allByPath(records: Rec[], path: string) {
 const when = (r: Rec) => r.captured_at || r.created_at
 
 function captureLog(records: Rec[]) {
-  return records.slice(0, 30).map(r => ({ id: r.id, kind: r.page_kind, path: pathOf(r.url), source: r.source, at: when(r) }))
+  // The full capture history remains stored in Supabase; the page only needs a compact recent activity list.
+  return records.slice(0, 12).map(r => ({ id: r.id, kind: r.page_kind, path: pathOf(r.url), source: r.source, at: when(r) }))
 }
 
 // The newest Throne capture that shows the current game date. News events only carry game dates, so this is
