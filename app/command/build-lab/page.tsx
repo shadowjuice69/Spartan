@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation"
 import type { ParsedScience } from "@/lib/spartan/build-parser"
 import { buildPlan, normalizeScience, type LiveCategory } from "@/lib/spartan/science-plan"
 import { NAV_COMMAND as navCommand, NAV_INTEL as navIntel } from '@/lib/spartan/nav'
+import { combineEffects, type CombinedRow } from "@/lib/spartan/combined-effects"
 
 
 
@@ -65,124 +66,27 @@ function PersonalityRuleCard({ p }: { p: PersonalityRule }) {
       {p.unique_name && <p style={{ fontSize:11, color:"#67f0b0", marginTop:8 }}><b>Unique — {p.unique_name}:</b> {p.unique_desc}</p>}
       {p.bonuses && <p style={{ fontSize:11, color:"#a7e8b0", marginTop:6 }}><b>Bonuses:</b> {p.bonuses}</p>}
       {p.start_bonus && <p style={{ fontSize:11, color:"#b7c2cc", marginTop:6 }}><b>Start:</b> {p.start_bonus}</p>}
-      {p.spells && <p style={{ fontSize:11, color:"#b7c2cc", marginTop:6 }}><b>Spells:</b> {p.spells}</p>}
-    </div>
-  )
-}
-
-function extractPercentEffects(text?: string | null): Map<string, number> {
-  const effects = new Map<string, number>()
-  if (!text?.trim()) return effects
-
-  // Match one percentage at a time. The effect name is limited to the text
-  // between this percentage and the next one, so "+1% Extra Mana Per Tick
-  // +50% Rune Production" cannot accidentally count the mana bonus as runes.
-  const aliases: Array<[string, RegExp]> = [
-    ["WPA", /\b(?:WPA|wizards?\s+per\s+acre|wizard(?:s|ry)?\s+(?:power|strength|effectiveness)|wizard power)\b/i],
-    ["TPA", /\b(?:TPA|offensive\s+thievery\s+per\s+acre|thievery\s+(?:power|strength)|thieves?\s+per\s+acre|thief power)\b/i],
-    ["ME", /\bmilitary efficiency\b/i],
-    ["OME", /\b(?:OME|offensive military efficiency|offensive efficiency)\b/i],
-    ["DME", /\b(?:DME|defensive military efficiency|defensive efficiency)\b/i],
-    ["ATTACK TIME", /\b(?:attack|march|military) travel time\b|\battack time\b/i],
-    ["COMBAT GAINS", /\b(?:combat|land|attack) gains\b/i],
-    ["SPELL SUCCESS", /\bspell success\b|\bsuccessful spellcasting\b/i],
-    ["SPELL DAMAGE", /\bspell damage\b|\bspell strength\b/i],
-    ["MILITARY CASUALTIES", /\b(?:military|army|troop) casualties\b/i],
-    ["THIEF LOSSES", /\b(?:thief|thievery) losses\b/i],
-    ["WIZARD PRODUCTION", /\bwizard production\b|\bwizard training\b/i],
-    ["INCOME", /\bincome\b|\bgold production\b/i],
-    ["BUILDING EFFECTIVENESS", /\b(?:building effectiveness|BE)\b/i],
-    ["MANA RECOVERY", /\bmana recovery\b|\bmana regeneration\b/i],
-    ["EXTRA MANA PER TICK", /\bextra mana per tick\b|\bmana per tick\b/i],
-    ["STEALTH RECOVERY", /\bstealth recovery\b|\bstealth regeneration\b/i],
-    ["POPULATION", /\bpopulation\b/i],
-    ["FOOD PRODUCTION", /\bfood production\b|\bfood income\b/i],
-    ["RUNE PRODUCTION", /\brune production\b|\brune generation\b/i],
-    ["RUNE COST", /\brune costs?\b/i],
-    ["CHANNELING SCIENCE", /\bchanneling science\b/i],
-    ["SCIENCE COST", /\bscience costs?\b/i],
-    ["BUILDING COST", /\bbuilding costs?\b/i],
-    ["TRAINING COST", /\btraining costs?\b/i],
-    ["MILITARY TRAINING TIME", /\b(?:military|troop) training time\b/i],
-    ["SPELL DURATION", /\bspell duration\b/i],
-    ["THIEVERY SUCCESS", /\bthievery success\b|\bthief success\b/i],
-  ]
-
-  const add = (key: string, amount: number) => {
-    if (Number.isFinite(amount)) effects.set(key, (effects.get(key) || 0) + amount)
+      {p.spells && <p style={{ fontSize:11,function CombinedEffectsCard({ raceRule, personalityRule, raceName, personalityName, age }: { raceRule: RaceRule | null; personalityRule: PersonalityRule | null; raceName: string | null; personalityName: string | null; age: number | null }) {
+  const { bonuses, penalties } = combineEffects(raceRule, personalityRule)
+  const fmt = (n: number) => `${n > 0 ? "+" : ""}${Number(n.toFixed(2))}%`
+  const tile = (r: CombinedRow) => {
+    const color = r.favorable ? "#a7e8b0" : "#ff9b9b"
+    return (
+      <div key={r.stat} style={{ padding:"7px 9px", borderRadius:7, border:`1px solid ${r.favorable ? "rgba(167,232,176,.22)" : "rgba(255,155,155,.25)"}`, background: r.favorable ? "rgba(167,232,176,.04)" : "rgba(255,155,155,.04)" }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", gap:10 }}>
+          <span style={{ fontSize:10, color:"#b7c2cc", letterSpacing:".04em" }}>{r.stat}</span>
+          <b style={{ fontSize:13, color }}>{fmt(r.total)}</b>
+        </div>
+        <div style={{ fontSize:9, color:"#7e8a99", marginTop:3 }}>
+          {r.race !== 0 && <>Race {fmt(r.race)}</>}
+          {r.race !== 0 && r.personality !== 0 && " · "}
+          {r.personality !== 0 && <>Personality {fmt(r.personality)}</>}
+        </div>
+      </div>
+    )
   }
-  const percentages = [...text.matchAll(/([+\-−–]?\s*\d+(?:\.\d+)?)\s*%/g)]
-
-  percentages.forEach((match, index) => {
-    const rawAmount = match[1].replace(/\s/g, "").replace(/[−–]/g, "-")
-    let amount = Number(rawAmount)
-    const explicitSign = /^[+\-]/.test(rawAmount)
-    const endOfNumber = (match.index ?? 0) + match[0].length
-    const nextStart = percentages[index + 1]?.index ?? text.length
-    const tail = text.slice(endOfNumber, nextStart).split(/[;,.\n!·•]/, 1)[0].trim()
-    const previousEnd = index > 0
-      ? (percentages[index - 1].index ?? 0) + percentages[index - 1][0].length
-      : 0
-    const prefix = text.slice(previousEnd, match.index ?? 0).split(/[;,.\n!·•]/).pop()?.trim() || ""
-
-    // Support both "+25% WPA" and "WPA increased by 25%" formats.
-    let effectText = tail
-    let matchedKey: string | undefined
-    for (const [key, pattern] of aliases) {
-      if (pattern.test(effectText)) { matchedKey = key; break }
-    }
-    if (!matchedKey) {
-      effectText = prefix
-      for (const [key, pattern] of aliases) {
-        if (pattern.test(effectText)) { matchedKey = key; break }
-      }
-    }
-
-    // ME is an established uppercase abbreviation; keep it case-sensitive so
-    // ordinary prose containing the word "me" isn't classified as efficiency.
-    if (!matchedKey && /\bME\b/.test(tail)) matchedKey = "ME"
-    if (!matchedKey && /\bME\b/.test(prefix)) matchedKey = "ME"
-
-    if (!matchedKey) {
-      // Preserve explicit but currently unstandardized effects under their
-      // own label instead of silently dropping them or merging them by guess.
-      effectText = tail
-      const cleaned = effectText
-        .replace(/^(?:more|less|bonus\s+to)\s+/i, "")
-        .replace(/\s+/g, " ")
-        .replace(/^[\s:—–-]+|[\s:—–-]+$/g, "")
-      if (!cleaned) return
-      matchedKey = cleaned.toUpperCase()
-    }
-
-    if (!explicitSign && /^(?:less|reduced|lowered|decreased)\b/i.test(tail)) {
-      amount = -Math.abs(amount)
-    }
-    if (!explicitSign && /\b(?:less|reduced|lowered|decreased)\s+(?:by\s+)?\d/i.test(prefix)) {
-      amount = -Math.abs(amount)
-    }
-    add(matchedKey, amount)
-  })
-
-  return effects
-}
-
-function CombinedEffectsCard({ raceRule, personalityRule, raceName, personalityName, age }: { raceRule: RaceRule | null; personalityRule: PersonalityRule | null; raceName: string | null; personalityName: string | null; age: number | null }) {
-  const source = (label: string, value?: string | null) => value?.trim()
-    ? <p style={{ fontSize:11, lineHeight:1.5, margin:"5px 0 0" }}><b style={{ color:"#dce7ee" }}>{label}:</b> {value}</p>
-    : null
-  const combinedModifiers = new Map<string, number>()
-  for (const text of [
-    raceRule?.bonuses, raceRule?.penalties, raceRule?.war_doctrine, raceRule?.unique_desc,
-    personalityRule?.bonuses, personalityRule?.penalties, personalityRule?.start_bonus, personalityRule?.unique_desc,
-  ]) {
-    for (const [stat, amount] of extractPercentEffects(text)) {
-      combinedModifiers.set(stat, (combinedModifiers.get(stat) || 0) + amount)
-    }
-  }
-  const hasCombinedModifiers = combinedModifiers.size > 0
   return (
-    <div style={{ ...card, padding:12, marginBottom:10, borderColor:"rgba(216,255,84,.2)", background:"rgba(216,255,84,.025)" }}>
+    <div style={{ ...card, padding:12, marginBottom:12, borderColor:"rgba(216,255,84,.2)", background:"rgba(216,255,84,.025)" }}>
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:8, flexWrap:"wrap" }}>
         <div style={{ display:"flex", alignItems:"center", gap:7, flexWrap:"wrap", minWidth:0 }}>
           <span style={{ fontSize:9, color:"#8993a1", letterSpacing:".08em" }}>RACE + PERSONALITY</span>
@@ -191,37 +95,27 @@ function CombinedEffectsCard({ raceRule, personalityRule, raceName, personalityN
           <b style={{ fontSize:12 }}>{personalityRule?.emoji || "◈"} {personalityName || personalityRule?.personality || "Not selected"}</b>
           {age != null && <span style={{ fontSize:9, color:"#8993a1" }}>Age {age}</span>}
         </div>
-        <span style={{ fontSize:9, color:"#67f0b0", whiteSpace:"nowrap" }}>COMBINED EFFECTS</span>
+        <span style={{ fontSize:9, color:"#67f0b0", whiteSpace:"nowrap" }}>COMBINED BONUSES & PENALTIES</span>
       </div>
-      {hasCombinedModifiers ? (
-        <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginTop:9 }}>
-          {[...combinedModifiers.entries()].map(([stat, amount]) => (
-            <span key={stat} style={{ display:"inline-flex", alignItems:"center", gap:5, padding:"5px 8px", borderRadius:6, border:"1px solid rgba(216,255,84,.16)", background:"rgba(216,255,84,.035)" }}>
-              <span style={{ fontSize:9, color:"#8993a1" }}>{stat}</span>
-              <b style={{ fontSize:11, color:amount >= 0 ? "#a7e8b0" : "#ff9b9b" }}>{amount > 0 ? "+" : ""}{Number(amount.toFixed(2))}%</b>
-            </span>
-          ))}
-        </div>
-      ) : <p style={{ fontSize:10, color:"#8993a1", margin:"7px 0 0" }}>No matching percentage modifiers found in the saved rules.</p>}
-      <details style={{ marginTop:8 }}>
-        <summary style={{ cursor:"pointer", color:"#8da7ff", fontSize:10, fontWeight:700 }}>View full race and personality details</summary>
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(210px, 1fr))", gap:10, marginTop:8 }}>
-          <div style={{ padding:10, borderRadius:7, background:"rgba(255,255,255,.025)", border:"1px solid rgba(255,255,255,.07)" }}>
-            <b style={{ fontSize:11 }}>{raceRule?.emoji || "◈"} {raceName || raceRule?.race || "Race"}</b>
-            {source("Bonuses", raceRule?.bonuses)}
-            {source("Penalties", raceRule?.penalties)}
-            {source("War doctrine", raceRule?.war_doctrine)}
-            {source("Unique", raceRule?.unique_name ? `${raceRule.unique_name}: ${raceRule.unique_desc || ""}` : raceRule?.unique_desc)}
-          </div>
-          <div style={{ padding:10, borderRadius:7, background:"rgba(255,255,255,.025)", border:"1px solid rgba(255,255,255,.07)" }}>
-            <b style={{ fontSize:11 }}>{personalityRule?.emoji || "◈"} {personalityName || personalityRule?.personality || "Personality"}</b>
-            {source("Bonuses", personalityRule?.bonuses)}
-            {source("Penalties", personalityRule?.penalties)}
-            {source("Starting effect", personalityRule?.start_bonus)}
-            {source("Unique", personalityRule?.unique_name ? `${personalityRule.unique_name}: ${personalityRule.unique_desc || ""}` : personalityRule?.unique_desc)}
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(240px, 1fr))", gap:12, marginTop:10 }}>
+        <div>
+          <div style={{ fontSize:9, color:"#a7e8b0", letterSpacing:".1em", marginBottom:6 }}>COMBINED BONUSES</div>
+          <div style={{ display:"grid", gap:6 }}>
+            {bonuses.length ? bonuses.map(tile) : <span style={{ fontSize:10, color:"#8993a1" }}>No percentage bonuses found.</span>}
           </div>
         </div>
-        <p style={{ fontSize:9, color:"#8993a1", lineHeight:1.45, margin:"8px 0 0" }}>Matching percentage modifiers are added together when the same stat is explicitly named. These are combined modifiers, not final troop or wizard counts; unique abilities and effects with different labels remain separate.</p>
+        <div>
+          <div style={{ fontSize:9, color:"#ff9b9b", letterSpacing:".1em", marginBottom:6 }}>COMBINED PENALTIES</div>
+          <div style={{ display:"grid", gap:6 }}>
+            {penalties.length ? penalties.map(tile) : <span style={{ fontSize:10, color:"#8993a1" }}>No percentage penalties found.</span>}
+          </div>
+        </div>
+      </div>
+      <p style={{ fontSize:9, color:"#8993a1", lineHeight:1.45, margin:"10px 0 0" }}>Race and personality percentages for the same stat are added together. Only the Bonuses and Penalties lines are summed; unique abilities, start bonuses and war doctrine stay on the individual cards above.</p>
+    </div>
+  )
+}
+ects with different labels remain separate.</p>
       </details>
     </div>
   )
@@ -526,6 +420,12 @@ function BuildDetail({ id, races, personalities, onBack, onDeleted }: { id: stri
       {(raceRule || personalityRule || build.race || build.personality) && (
         <>
           <h3 style={{ fontSize:10, color:"#67f0b0", letterSpacing:".08em", marginTop:12, marginBottom:6 }}>RACE + PERSONALITY</h3>
+          {(raceRule || personalityRule) && (
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(260px, 1fr))", gap:12, alignItems:"start" }}>
+              {raceRule && <RaceRuleCard r={raceRule} />}
+              {personalityRule && <PersonalityRuleCard p={personalityRule} />}
+            </div>
+          )}
           <CombinedEffectsCard
             raceRule={raceRule}
             personalityRule={personalityRule}
@@ -533,13 +433,6 @@ function BuildDetail({ id, races, personalities, onBack, onDeleted }: { id: stri
             personalityName={build.personality || null}
             age={build.rules_age_number == null ? null : Number(build.rules_age_number)}
           />
-          {(raceRule || personalityRule) && <details style={{ marginBottom:12 }}>
-            <summary style={{ cursor:"pointer", color:"#8993a1", fontSize:11 }}>Show full individual rule details</summary>
-            <div style={{ marginTop:10 }}>
-              {raceRule && <RaceRuleCard r={raceRule} />}
-              {personalityRule && <PersonalityRuleCard p={personalityRule} />}
-            </div>
-          </details>}
         </>
       )}
       {syncMessage && <p role="status" style={{ color:"#67f0b0", fontSize:11, margin:"0 0 12px" }}>{syncMessage}</p>}
