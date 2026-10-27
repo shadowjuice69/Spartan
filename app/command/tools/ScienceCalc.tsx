@@ -77,31 +77,47 @@ export default function ScienceCalc() {
 
   useEffect(() => {
     let active = true
-    Promise.all([
-      fetch("/api/tools/science-summary/provinces", { cache: "no-store" }).then(async (r) => {
+    // Load the selectable registry independently. A slow page-model request
+    // must never leave the province selector disabled.
+    fetch("/api/tools/science-summary/provinces", { cache: "no-store" })
+      .then(async (r) => {
         const j = await r.json()
         if (!r.ok) throw new Error(j?.error || "Could not load Spartan provinces.")
         return j
-      }),
-      fetch("/api/page-models?page=science", { cache: "no-store" }).then((r) => r.ok ? r.json() : null).catch(() => null),
-    ])
-      .then(([registry, current]) => {
+      })
+      .then((registry) => {
         if (!active) return
         const list: ProvinceChoice[] = Array.isArray(registry?.provinces) ? registry.provinces : []
         setProvinces(list)
         if (list.length) {
-          const own = list.find((p) =>
-            p.province_name.trim().toLowerCase() === String(current?.province || "").trim().toLowerCase() &&
-            String(p.kingdom_code || "") === String(current?.kingdom || "")
-          )
-          const first = own || list[0]
+          const first = list[0]
           setSelectedProvince(first.province_name + (first.kingdom_code ? " (" + first.kingdom_code + ")" : ""))
+          setBuildMsg("")
         } else {
           setBuildMsg("No provinces were found in Spartan's province registry.")
         }
       })
       .catch((e) => { if (active) setBuildMsg(e instanceof Error ? e.message : "Could not load Spartan provinces.") })
       .finally(() => { if (active) setProvinceLoading(false) })
+
+    // Resolve the current province separately, without blocking the registry.
+    fetch("/api/page-models?page=science", { cache: "no-store" })
+      .then((r) => r.ok ? r.json() : null)
+      .then((current) => {
+        if (!active || !current?.province) return
+        // Keep the province dropdown usable even if this optional request is slow.
+        setProvinces((existing) => {
+          const own = existing.find((p) =>
+            p.province_name.trim().toLowerCase() === String(current.province).trim().toLowerCase() &&
+            String(p.kingdom_code || "") === String(current.kingdom || "")
+          )
+          if (own) {
+            setSelectedProvince(own.province_name + (own.kingdom_code ? " (" + own.kingdom_code + ")" : ""))
+          }
+          return existing
+        })
+      })
+      .catch(() => {})
     return () => { active = false }
   }, [])
 
