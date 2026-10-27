@@ -516,9 +516,23 @@ export function usePageModel(page: string, query = '') {
   }, [page, query])
   useEffect(() => {
     load()
-    const timer = setInterval(() => { if (document.visibilityState === 'visible') load() }, 60000)
-    return () => clearInterval(timer)
-  }, [load])
+    // Keep time-sensitive pages fresh without polling every dashboard every minute.
+    // Return Tracker uses the war-room model but maintains its countdown locally each second.
+    const fastPages = new Set(['command', 'war-room', 'news', 'intel'])
+    const standardPages = new Set(['military', 'science', 'buildings', 'province', 'kingdom', 'throne', 'magic', 'thievery', 'exploration'])
+    const intervalMs = fastPages.has(page) ? 120_000 : standardPages.has(page) ? 300_000 : 600_000
+    const timer = setInterval(() => {
+      if (document.visibilityState === 'visible') load()
+    }, intervalMs)
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') load()
+    }
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    return () => {
+      clearInterval(timer)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+    }
+  }, [load, page])
   return { data, error, loading, reload: load }
 }
 
