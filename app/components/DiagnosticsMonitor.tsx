@@ -72,13 +72,20 @@ export default function DiagnosticsMonitor() {
     window.addEventListener("error", onError)
     window.addEventListener("unhandledrejection", onRejection)
     void check()
+    // Diagnostics are a safety net, not a live dashboard. Check less often and
+    // avoid background traffic while the tab is hidden.
     timer = setInterval(() => {
-      if (!stopped) void check()
-    }, 60000)
+      if (!stopped && document.visibilityState === "visible") void check()
+    }, 300000)
+    const onVisibilityChange = () => {
+      if (!stopped && document.visibilityState === "visible") void check()
+    }
+    document.addEventListener("visibilitychange", onVisibilityChange)
 
     return () => {
       stopped = true
       if (timer) clearInterval(timer)
+      document.removeEventListener("visibilitychange", onVisibilityChange)
       window.removeEventListener("error", onError)
       window.removeEventListener("unhandledrejection", onRejection)
     }
