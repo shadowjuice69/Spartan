@@ -1,14 +1,14 @@
 "use strict"
 
 import { NextResponse } from "next/server"
-import { createClient } from "@supabase/supabase-js"
+import { createServiceClient } from "@/lib/supabase/server"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
 export async function GET() {
   try {
-    const sb = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
+    const sb = createServiceClient()
     const rows: Array<{ province_name: string; kingdom_code: string | null }> = []
     const pageSize = 1000
 
