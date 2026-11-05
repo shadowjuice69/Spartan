@@ -102,6 +102,6 @@ module.exports = async function targetHandler(interaction) {
     lines.push(`${g.emoji} **${g.letter} ${r.p.name}** (${r.p.race || "?"}, ${r.p.kd}) — score ${r.value}`);
     lines.push(`  📍 ${Math.round(r.acres)} acres | ${Math.round(r.nw).toLocaleString()} NW${ratio} | ${pct(r.vsKd)} vs kd${r.gain != null ? ` | ~${Math.floor(r.gain)} acres gain` : ""}${r.def != null ? ` | Def: ${Math.round(r.def).toLocaleString()}` : ""}`);
   }
-  lines.push(`\nScore = estimated gain ÷ how heavy the province is for its kingdom (defense/acre when known, else NW/acre). NW/acre is a proxy: confirm with a SOT/SOM before sending. `/spartan-war target province:<name>` shows one target.`);
+  lines.push(`\nScore = estimated gain ÷ how heavy the province is for its kingdom (defense/acre when known, else NW/acre). NW/acre is a proxy: confirm with a SOT/SOM before sending. /spartan-war target province:<name> shows one target.`);
   return interaction.editReply(lines.join("\n").slice(0, 1900));
 };
