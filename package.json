@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "node --test bot/tests/wiki-age-generator.test.js bot/tests/github-wiki-sync.test.js bot/tests/discord-intel-filter.test.js bot/tests/return-tracker.test.cjs bot/tests/target-ranker.test.js bot/tests/target-handler.test.js && node scripts/ensure-python-parser.js && next build",
+    "build": "node --test bot/tests/wiki-age-generator.test.js bot/tests/github-wiki-sync.test.js bot/tests/discord-intel-filter.test.js bot/tests/canonical-intel-parser.test.js bot/tests/return-tracker.test.cjs bot/tests/target-ranker.test.js bot/tests/target-handler.test.js && node scripts/ensure-python-parser.js && next build",
     "start": "node scripts/start-all.js",
     "lint": "next lint"
   },
