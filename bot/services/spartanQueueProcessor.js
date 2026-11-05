@@ -414,10 +414,16 @@ async function backfillMissingBotIntel(sb) {
   });
   if (!candidates.length) return { checked: 0, recovered: 0, skipped: 0 };
   const captureIds = candidates.map(capture => capture.capture_id).filter(Boolean);
-  const { data: flows, error: flowError } = await sb.from('spartan_data_flow')
-    .select('*').eq('source', 'discord-bot').eq('page_kind', 'bot_event').in('capture_id', captureIds);
-  if (flowError) throw new Error(`bot Intel backfill flow scan: ${flowError.message}`);
-  const flowByCapture = new Map((flows || []).map(flow => [flow.capture_id, flow]));
+  // Look flows up in small chunks. One .in() with ~1000 ids makes a ~40 KB URL, which the
+  // gateway rejects, so every run died with "TypeError: fetch failed".
+  const flows = [];
+  for (let i = 0; i < captureIds.length; i += 100) {
+    const { data: part, error: flowError } = await sb.from('spartan_data_flow')
+      .select('*').eq('source', 'discord-bot').eq('page_kind', 'bot_event').in('capture_id', captureIds.slice(i, i + 100));
+    if (flowError) throw new Error(`bot Intel backfill flow scan: ${flowError.message}`);
+    flows.push(...(part || []));
+  }
+  const flowByCapture = new Map(flows.map(flow => [flow.capture_id, flow]));
   const { data: existingRows, error: existingError } = await sb.from('spartan_intel_records')
     .select('capture_id,source_vault_id').eq('source', 'discord-bot').limit(10000);
   if (existingError) throw new Error(`bot Intel backfill existing-record scan: ${existingError.message}`);
