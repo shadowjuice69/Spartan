@@ -1,7 +1,7 @@
 const supabaseService = require("../../services/supabase");
 const spartanAccess = require("../../services/spartanAccessService");
 const canonicalIntel = require("../../services/canonicalIntelService");
-const { parseThrone, parseBuildings, payloadText } = require("../../services/canonicalIntelParser");
+const { parseThrone, parseBuildings, parseBuildingOutputs } = require("../../services/canonicalIntelParser");
 
 const PAGE_KEYS = [
   { key: "throne", kind: "throne", label: "Thr" },
@@ -71,11 +71,11 @@ async function check(sb, kd) {
   const lines = results.map(x => `• ${x.name.slice(0, 22).padEnd(22)} ${PAGE_KEYS.map(p => x.captures[p.kind] ? "✓" : "·").join("")} ${x.missing.join(",") || "OK"}`);
   return `🧭 **Intel check — ${kd}**\nThr Sur Sci Mag Mil Uni\n**${provinces.length} registered provinces · ${covered}/${provinces.length} complete**\n${lines.join("\n") || "No registered provinces."}\n\n✓ captured · · missing · based on canonical website captures`;
 }
-async function status(kd, province) {
+async function status(kd, province, identity = {}) {
   const result = await ownThrone(kd, province);
   if (!result) return `❌ **${province}** is registered, but no own Throne capture exists in website Intel for ${kd}.`;
   const t = result.parsed;
-  return `📊 **${province} — Status** · ${age(result.row.captured_at)}\n**Race:** ${t.race || "?"} · **Land:** ${fmt(t.land)} · **BE:** ${t.buildingEffectiveness == null ? "?" : `${t.buildingEffectiveness}%`}\n**Offense:** ${fmt(t.offense)} · **Defense:** ${fmt(t.defense)} · **Networth:** ${fmt(t.networth)}\n**Peasants:** ${fmt(t.peasants)} · **Soldiers:** ${fmt(t.soldiers)} · **Thieves:** ${fmt(t.thieves)} · **Wizards:** ${fmt(t.wizards)} · **Prisoners:** ${fmt(t.prisoners)}\n**Gold:** ${fmt(t.gold)} · **Food:** ${fmt(t.food)} · **Runes:** ${fmt(t.runes)} · **Trade balance:** ${signed(t.tradeBalance)}\n_oTPA/oWPA and home/march splits are not present in this Throne capture._`;
+  return `📊 **${province} — Status** · ${age(result.row.captured_at)}\n**Race:** ${identity.race || t.race || "?"} · **Personality:** ${identity.personality || "?"} · **Land:** ${fmt(t.land)} · **BE:** ${t.buildingEffectiveness == null ? "?" : `${t.buildingEffectiveness}%`}\n**Offense:** ${fmt(t.offense)} · **Defense:** ${fmt(t.defense)} · **Networth:** ${fmt(t.networth)}\n**Peasants:** ${fmt(t.peasants)} · **Soldiers:** ${fmt(t.soldiers)} · **Thieves:** ${fmt(t.thieves)} · **Wizards:** ${fmt(t.wizards)} · **Prisoners:** ${fmt(t.prisoners)}\n**Gold:** ${fmt(t.gold)} · **Food:** ${fmt(t.food)} · **Runes:** ${fmt(t.runes)} · **Trade balance:** ${signed(t.tradeBalance)}\n_oTPA/oWPA and home/march splits are not present in this Throne capture._`;
 }
 async function econ(kd, province) {
   const result = await ownThrone(kd, province);
@@ -92,7 +92,7 @@ async function provinceRows(kd) {
 }
 async function kdecon(kd) {
   const rows = await provinceRows(kd);
-  const sum = key => rows.reduce((total, r) => total + (r[key] || 0), 0);
+  const sum = key => rows.reduce((total, r) => total + (r[key] || 0), 0);\n  const outputSum = key => rows.reduce((total, r) => total + (r.outputs?.[key] || 0), 0);
   return `💰 **KD Captured Economy — ${kd}**\n${rows.slice(0, 25).map(r => `${r.name} · ${fmt(r.gold)} gc · ${fmt(r.food)} food · ${fmt(r.runes)} runes · TB ${signed(r.tradeBalance)}`).join("\n") || "No own Throne captures found."}\n\n**Captured subset (${rows.length} provinces):** ${fmt(sum("gold"))} gc · ${fmt(sum("food"))} food · ${fmt(sum("runes"))} runes · trade balance ${signed(sum("tradeBalance"))}\n_Not a full kingdom total unless every province has a current own Throne capture._`;
 }
 async function survey(kd, provinceQuery) {
@@ -183,7 +183,7 @@ module.exports = async function intelOpsHandler(interaction) {
     switch (sub) {
       case "check": out = await check(sb, kd); break;
       case "capturehealth": out = await captureHealth(kd, me.name); break;
-      case "status": out = await status(kd, me.name); break;
+      case "status": out = await status(kd, me.name, me); break;
       case "econ": out = await econ(kd, me.name); break;
       case "kdecon": out = await kdecon(kd); break;
       case "survey": out = await survey(kd, interaction.options.getString("province")); break;
