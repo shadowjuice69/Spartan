@@ -82,4 +82,21 @@ function parseScience(payload) {
   return rows;
 }
 
-module.exports = { payloadText, fieldValue, numberField, parseThrone, parseBuildings, parseScience };
+
+function parseBuildingOutputs(payload) {
+  const text = payloadText(payload);
+  const read = (name, pattern) => {
+    const match = text.match(pattern);
+    if (!match) return null;
+    const value = Number(match[1].replace(/,/g, ""));
+    return Number.isFinite(value) ? value : null;
+  };
+  return {
+    goldPerDay: read("Banks", /Banks\t+[\d,]+\t+[\d.]+%\t+Produce\s+([\d,]+)\s+gold coins per day/i),
+    foodPerDay: read("Farms", /Farms\t+[\d,]+\t+[\d.]+%\t+Produce\s+([\d,]+)\s+bushels per day/i),
+    runesPerDay: read("Towers", /Towers\t+[\d,]+\t+[\d.]+%\t+Produce\s+([\d,]+)\s+runes per day/i),
+    wizardsPerDay: read("Guilds", /Guilds\t+[\d,]+\t+[\d.]+%\t+([\d,.]+)\s+wizards trained per day/i)
+  };
+}
+
+module.exports = { payloadText, fieldValue, numberField, parseThrone, parseBuildings, parseScience, parseBuildingOutputs };
