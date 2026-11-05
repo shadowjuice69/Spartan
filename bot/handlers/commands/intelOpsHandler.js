@@ -160,7 +160,7 @@ async function canonical(interaction, section) {
     const province = payload.prov || payload.province || payload.data?.owner?.province_name || r.province_id || "Province";
     const when = r.captured_at ? new Date(r.captured_at).toLocaleString() : "—";
     const target = r.target_kingdom_id ? ` → ${r.target_kingdom_id}` : "";
-    const excerpt = r.raw_text || payload.data_simple || payload.data?.content || JSON.stringify(payload);
+    const excerpt = payload.data_simple || payload.data?.data_simple || payload.data?.content || r.raw_text || JSON.stringify(payload);
     return `• **${String(province).slice(0, 30)}** — ${String(r.page_kind || "intel").toUpperCase()} ${r.visibility === "enemy" ? "ENEMY" : "OWN"}${target} · ${when}\n  ${String(excerpt).slice(0, 150)}`;
   });
   const body = `🧠 **CANONICAL SPARTAN INTEL — ${section.toUpperCase()}**\n**${summary.count} records** · ${Object.entries(summary.byKind).map(([k,v]) => `${k}:${v}`).join(" · ")}\n\n${lines.join("\n") || "No canonical Intel is available for this section."}`;
