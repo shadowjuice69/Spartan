@@ -59,7 +59,7 @@ test('parses canonical science books and effects by game category', () => {
     'Strategy\t49,949\t 6.0% Defensive Military Efficiency',
     'Arcane Arts - 1 scientists - 120 books available',
     'Crime\t31,468\t 20.6% Thief Effectiveness (TPA)'
-  ].join('\\n') });
+  ].join('\n') });
   assert.deepEqual(rows.map(r => [r.name, r.books, r.effect, r.category]), [
     ['alchemy', 37608, 10.3, 'economy'],
     ['tools', 24148, 6.1, 'economy'],
