@@ -188,7 +188,9 @@ module.exports = async function intelOpsHandler(interaction) {
       id: interaction.user.id,
       name: meta.province || access.username || null,
       kd_code: coordinates || null,
-      nw: meta.nw ?? null
+      nw: meta.nw ?? null,
+      race: meta.race || null,
+      personality: meta.personality || null
     } : null;
   } catch (e) { console.error("[SPARTAN IDENTITY RESOLVE]", e.message); }
   const kingdomOnly = new Set(["check", "kdecon", "left"]);
