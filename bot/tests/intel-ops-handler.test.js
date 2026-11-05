@@ -117,7 +117,7 @@ test('kingdom economy aggregates captured subset and Survey outputs', async () =
 test('TPPA uses population and land from canonical Throne', async () => {
   const out = await run('tppa');
   assert.match(out, /Finkster/);
-  assert.match(out, /8\.\d+ tppa|9\.\d+ tppa/);
+  assert.match(out, /11\.\d+ tppa/);
 });
 
 test('kingdom offense uses captured Off. Points', async () => {
