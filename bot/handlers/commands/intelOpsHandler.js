@@ -122,7 +122,14 @@ module.exports = async function intelOpsHandler(interaction) {
     const kd = access?.metadata?.coordinates || access?.kingdom_code || "";
     const rows = await canonicalIntel.getIntel({ kd, section, limit: 40 });
     const summary = canonicalIntel.summarize(rows);
-    const lines = rows.slice(0, 18).map((r) => { const when = r.captured_at ? new Date(r.captured_at).toLocaleString() : "—"; const target = r.target_province_id ? ` → ${r.target_province_id}` : ""; return `• ${String(r.page_kind || "intel").toUpperCase()} ${r.visibility === "enemy" ? "ENEMY" : "OWN"}${target} · ${when}\n  ${String(r.raw_text || JSON.stringify(r.parsed_payload || {})).slice(0, 260)}`; });
+    const lines = rows.slice(0, 18).map((r) => {
+      const payload = r.parsed_payload || {};
+      const province = payload.prov || payload.province || payload.data?.owner?.province_name || r.province_id || "Province";
+      const when = r.captured_at ? new Date(r.captured_at).toLocaleString() : "—";
+      const target = r.target_kingdom_id ? ` → ${r.target_kingdom_id}` : "";
+      const excerpt = r.raw_text || payload.data_simple || payload.data?.content || JSON.stringify(payload);
+      return `• **${String(province).slice(0, 32)}** — ${String(r.page_kind || "intel").toUpperCase()} ${r.visibility === "enemy" ? "ENEMY" : "OWN"}${target} · ${when}\n  ${String(excerpt).slice(0, 220)}`;
+    });
     const body = `🧠 **CANONICAL SPARTAN INTEL — ${section.toUpperCase()}**\n**${summary.count} records** · ${Object.entries(summary.byKind).map(([k,v]) => `${k}:${v}`).join(" · ")}\n\n${lines.join("\n") || "No canonical Intel is available for this section."}`;
     return interaction.reply({ content: body.slice(0, 1900), ephemeral: false });
   }
