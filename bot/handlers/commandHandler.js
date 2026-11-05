@@ -69,9 +69,9 @@ module.exports=async function commandHandler(interaction){
  if(!['spartan','spartan-music','spartan-intel','spartan-calc','spartan-war','spartan-admin'].includes(command))return interaction.reply({content:'❌ This command surface has been retired. Use the new `/spartan` commands.',ephemeral:true});
  interaction=forceEphemeralInteraction(interaction);
  try{
-  // Acknowledge Intel before permission lookups as well as canonical database reads.
-  // Both can exceed Discord's 3-second initial-response deadline.
-  if(command==='spartan-intel'&&!interaction.deferred&&!interaction.replied)await interaction.deferReply({ephemeral:true});
+  // Acknowledge database-backed Intel and calculator commands before permission lookups.
+  // Permission checks and canonical Supabase reads can exceed Discord's 3-second deadline.
+  if(['spartan-intel','spartan-calc'].includes(command)&&!interaction.deferred&&!interaction.replied)await interaction.deferReply({ephemeral:true});
   if(!commandAccess.canAccess(entry,interaction.user,permissionService))return interaction.reply({content:commandAccess.denialMessage(entry),ephemeral:true});
   if(entry.access==='registered'&&!permissionService.isOwner(interaction.user.id)&&!(await hasSpartanAccess(interaction.user.id)))return interaction.reply({content:'❌ Spartan access is required. Use `/spartan register`.',ephemeral:true});
   return await entry.handler(interaction);
