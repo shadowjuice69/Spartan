@@ -57,4 +57,4 @@ function summarize(rows) {
   return { count: rows.length, byKind, byVisibility };
 }
 
-module.exports = { getIntel, summarize, SECTION_KINDS, isBotEventRecord };
+module.exports = { getIntel, getProvinceIntel, getLatestProvinceIntel, summarize, SECTION_KINDS, isBotEventRecord };
