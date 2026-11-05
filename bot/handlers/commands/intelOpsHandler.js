@@ -8,7 +8,14 @@ const PAGE_KEYS = [
   { key: "survey", kind: "buildings", label: "Sur" },
   { key: "science", kind: "science", label: "Sci" },
   { key: "magic", kind: "magic", label: "Mag" },
+  { key: "ritual", kind: "ritual", label: "Rit" },
   { key: "som", kind: "military", label: "Mil" },
+  { key: "thievery", kind: "thievery", label: "Thv" },
+  { key: "news", kind: "news", label: "News" },
+  { key: "aid", kind: "aid", label: "Aid" },
+  { key: "attack", kind: "attack", label: "Att" },
+  { key: "exploration", kind: "exploration", label: "Exp" },
+  { key: "kingdom", kind: "kingdom", label: "KD" },
   { key: "universal", kind: "utopiaintel", label: "Uni" }
 ];
 
@@ -69,7 +76,7 @@ async function check(sb, kd) {
   }));
   const covered = results.filter(x => !x.missing.length).length;
   const lines = results.map(x => `• ${x.name.slice(0, 22).padEnd(22)} ${PAGE_KEYS.map(p => x.captures[p.kind] ? "✓" : "·").join("")} ${x.missing.join(",") || "OK"}`);
-  return `🧭 **Intel check — ${kd}**\nThr Sur Sci Mag Mil Uni\n**${provinces.length} registered provinces · ${covered}/${provinces.length} complete**\n${lines.join("\n") || "No registered provinces."}\n\n✓ captured · · missing · based on canonical website captures`;
+  return `🧭 **Intel check — ${kd}**\nThr Sur Sci Mag Rit Mil Thv News Aid Att Exp KD Uni\n**${provinces.length} registered provinces · ${covered}/${provinces.length} complete**\n${lines.join("\n") || "No registered provinces."}\n\n✓ captured · · missing · based on canonical website captures`;
 }
 async function status(kd, province, identity = {}) {
   const result = await ownThrone(kd, province);
