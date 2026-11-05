@@ -29,7 +29,7 @@ async function latestThrone(kd, province) {
 }
 async function registeredProvinces(sb) {
   const { data, error } = await sb.from("spartan_province_registry")
-    .select("province_name,kingdom_code").order("kingdom_code", { ascending: true });
+    .select("province_name,kingdom_code");
   if (error) throw error;
   return data || [];
 }
@@ -52,28 +52,29 @@ module.exports = async function targetHandler(interaction) {
 
   if (provinceQuery) {
     const { data, error } = await sb.from("spartan_province_registry")
-      .select("province_name,kingdom_code").ilike("province_name", "%" + provinceQuery + "%").limit(1).maybeSingle();
+      .select("province_name,kingdom_code").ilike("province_name", "%" + provinceQuery + "%").limit(1);
     if (error) return interaction.editReply("❌ Lookup failed: " + error.message);
-    if (!data) return interaction.editReply("❌ No registered province matching **" + provinceQuery + "**.");
-    const result = await latestThrone(data.kingdom_code, data.province_name);
+    const selected = data?.[0];
+    if (!selected) return interaction.editReply("❌ No registered province matching **" + provinceQuery + "**.");
+    const result = await latestThrone(selected.kingdom_code, selected.province_name);
     if (!result) return interaction.editReply("❌ **" + data.province_name + "** is registered, but no structured own Throne capture exists in canonical website Intel for " + data.kingdom_code + ". Enemy-page captures currently do not identify this province reliably.");
     const t = result.parsed;
-    const target = targetFrom(data, t);
+    const target = targetFrom(selected, t);
     let ranked = null;
     try {
       const rows = await registeredProvinces(sb);
-      const sameKd = rows.filter(r => r.kingdom_code === data.kingdom_code);
+      const sameKd = rows.filter(r => r.kingdom_code === selected.kingdom_code);
       const captured = await Promise.all(sameKd.map(async r => {
         const found = await latestThrone(r.kingdom_code, r.province_name);
         return found ? targetFrom(r, found.parsed) : null;
       }));
       const list = rankTargets({ targets: captured.filter(Boolean), you, mode: "value", limit: 200 });
-      ranked = list.find(x => x.p.name === data.province_name) || null;
+      ranked = list.find(x => x.p.name === selected.province_name) || null;
     } catch (e) { console.error("[SPARTAN TARGET RANK]", e.message); }
 
     const grade = ranked ? gradeValue(ranked.value) : null;
     const lines = [
-      "🎯 **" + data.province_name + "** (" + data.kingdom_code + ") — " + (t.race || "Unknown race"),
+      "🎯 **" + selected.province_name + "** (" + selected.kingdom_code + ") — " + (t.race || "Unknown race"),
       ranked ? grade.emoji + " " + grade.letter + " Target Score: " + ranked.value + "/100 (" + pct(ranked.vsKd) + " " + basisNote(ranked) + ")" : "",
       ranked && ranked.gain != null ? "• Est. gain: ~" + Math.floor(ranked.gain) + " acres" + (ranked.capped ? " (capped)" : "") : "",
       "", "📊 **Captured Stats:**",
