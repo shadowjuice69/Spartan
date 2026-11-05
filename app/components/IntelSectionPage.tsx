@@ -105,7 +105,25 @@ function MetricBars({rows,section}:{rows:Row[];section:string}){
 
 export default function IntelSectionPage({section,title,description}:{section:string,title:string,kinds?:string[],description:string}){
   const router=useRouter();const [data,setData]=useState<any>(null);const [error,setError]=useState("");const [query,setQuery]=useState("");const [kind,setKind]=useState("all");const [loading,setLoading]=useState(true)
-  useEffect(()=>{let live=true;const load=async()=>{try{const r=await fetch("/api/intel-data?section="+encodeURIComponent(section),{cache:"no-store"});const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||title+" unavailable");if(live){setData(j);setError("")}}catch(e){if(live)setError(e instanceof Error?e.message:title+" unavailable")}finally{if(live)setLoading(false)}};load();const t=setInterval(load,15000);return()=>{live=false;clearInterval(t)}},[section,title])
+  useEffect(()=>{
+    let live=true, inFlight=false;
+    const load=async(force=false)=>{
+      if(!live||inFlight||(!force&&document.visibilityState==="hidden"))return;
+      inFlight=true;
+      try{
+        const r=await fetch("/api/intel-data?section="+encodeURIComponent(section),{cache:"no-store"});
+        const j=await r.json().catch(()=>({}));
+        if(!r.ok)throw new Error(j.error||title+" unavailable");
+        if(live){setData(j);setError("")}
+      }catch(e){if(live)setError(e instanceof Error?e.message:title+" unavailable")}
+      finally{inFlight=false;if(live)setLoading(false)}
+    };
+    void load(true);
+    const timer=setInterval(()=>void load(),60000);
+    const onVisibility=()=>{if(document.visibilityState==="visible")void load(true)};
+    document.addEventListener("visibilitychange",onVisibility);
+    return()=>{live=false;clearInterval(timer);document.removeEventListener("visibilitychange",onVisibility)};
+  },[section,title])
   const all:Row[]=data?.records||[]
   const filtered=useMemo(()=>{const q=query.trim().toLowerCase();return all.filter(r=>(kind==="all"||r.page_kind===kind)&&(!q||summaryFor(r,section).toLowerCase().includes(q)||textOf(r).toLowerCase().includes(q)))},[all,kind,query,section])
   const counts=useMemo(()=>{const m=new Map<string,number>();for(const r of all)m.set(r.page_kind||"intel",(m.get(r.page_kind||"intel")||0)+1);return [...m.entries()].sort((a,b)=>b[1]-a[1])},[all])
@@ -120,7 +138,7 @@ export default function IntelSectionPage({section,title,description}:{section:st
       {NAV.map(([n,p])=><button key={n} onClick={()=>router.push(p)} style={{display:"block",width:"100%",textAlign:"left",padding:"9px 11px",marginBottom:2,border:0,borderRadius:8,background:"transparent",color:"#aeb9c5",fontWeight:700,fontSize:10,cursor:"pointer"}}>{n}</button>)}
       <div style={{margin:"20px 0 9px",fontSize:8,color:"#5f6c7a",letterSpacing:".2em"}}>INTEL DATA</div>
       {INTEL.map(([n,p])=><button key={n} onClick={()=>router.push(p)} style={{display:"block",width:"100%",textAlign:"left",padding:"9px 11px",marginBottom:2,border:n===title?"1px solid rgba(216,255,84,.18)":"1px solid transparent",borderRadius:8,background:n===title?"rgba(216,255,84,.07)":"transparent",color:n===title?"#d8ff54":"#aeb9c5",fontWeight:n===title?900:700,fontSize:10,cursor:"pointer"}}>{n}</button>)}
-      <div style={{marginTop:20,padding:11,border:"1px solid rgba(103,240,176,.18)",borderRadius:9,color:"#67f0b0",fontSize:8}}>● LIVE INTEL CORE<br/><span style={{color:"#718091"}}>15s refresh · canonical records</span></div>
+      <div style={{marginTop:20,padding:11,border:"1px solid rgba(103,240,176,.18)",borderRadius:9,color:"#67f0b0",fontSize:8}}>● LIVE INTEL CORE<br/><span style={{color:"#718091"}}>60s refresh · pauses in background</span></div>
     </aside>
     <section style={{flex:1,padding:"30px 34px 60px",maxWidth:1650,overflowX:"hidden"}}>
       <header style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:20,marginBottom:22}}>

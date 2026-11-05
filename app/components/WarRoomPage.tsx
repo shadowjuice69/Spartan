@@ -152,9 +152,28 @@ export default function WarRoomPage() {
   }
 
   useEffect(() => {
-    load()
-    const timer = setInterval(load, 15000)
-    return () => clearInterval(timer)
+    let active = true
+    let inFlight = false
+    const refresh = async (force = false) => {
+      if (!active || inFlight || (!force && document.visibilityState === "hidden")) return
+      inFlight = true
+      try {
+        const response = await fetch("/api/intel-data?section=war-room", { cache: "no-store" })
+        const json = await response.json()
+        if (!response.ok) throw new Error(json.error || "War Room unavailable")
+        if (active) { setRecords(json.records || []); setError("") }
+      } catch (e) {
+        if (active) setError(e instanceof Error ? e.message : "War Room unavailable")
+      } finally {
+        inFlight = false
+        if (active) setLoading(false)
+      }
+    }
+    void refresh(true)
+    const timer = setInterval(() => void refresh(), 60000)
+    const onVisibility = () => { if (document.visibilityState === "visible") void refresh(true) }
+    document.addEventListener("visibilitychange", onVisibility)
+    return () => { active = false; clearInterval(timer); document.removeEventListener("visibilitychange", onVisibility) }
   }, [])
 
   const attacks = useMemo(() => records.filter(r => r.page_kind === "attack"), [records])
