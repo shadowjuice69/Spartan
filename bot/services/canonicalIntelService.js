@@ -31,10 +31,8 @@ async function getIntel({ kd = "", section = "all", limit = 200, enemyOnly = fal
   let q = sb.from("spartan_intel_records")
     .select("id,capture_id,province_id,kingdom_id,target_province_id,target_kingdom_id,captured_at,page_kind,intel_type,visibility,parsed_payload,raw_text,metrics")
     .or(`kingdom_id.eq.${code},target_kingdom_id.eq.${code}`)
-    .or("parsed_payload->>kind.is.null,parsed_payload->>kind.neq.bot_event")
-    .or("parsed_payload->>type.is.null,parsed_payload->>type.neq.bot_event")
     .order("captured_at", { ascending: false })
-    .limit(safeLimit);
+    .limit(Math.min(1000, safeLimit * 4));
 
   const kinds = SECTION_KINDS[section];
   if (kinds?.length) q = q.in("page_kind", kinds);
@@ -45,7 +43,7 @@ async function getIntel({ kd = "", section = "all", limit = 200, enemyOnly = fal
     console.error("[CANONICAL INTEL] query failed:", error.message);
     return [];
   }
-  return (data || []).filter(row => !isBotEventRecord(row));
+  return (data || []).filter(row => !isBotEventRecord(row)).slice(0, safeLimit);
 }
 
 function summarize(rows) {
