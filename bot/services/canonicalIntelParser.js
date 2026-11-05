@@ -19,7 +19,7 @@ function fieldValue(text, labels) {
 function numberField(text, labels) {
   const value = fieldValue(text, labels);
   if (value == null) return null;
-  const match = value.match(/-?[\\d,]+(?:\\.\\d+)?/);
+  const match = value.match(/-?[\d,]+(?:\\.\d+)?/);
   if (!match) return null;
   const parsed = Number(match[0].replace(/,/g, ""));
   return Number.isFinite(parsed) ? parsed : null;
