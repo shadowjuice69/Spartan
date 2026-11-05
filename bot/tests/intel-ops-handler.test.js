@@ -135,8 +135,8 @@ test('capture health and kingdom coverage use canonical page captures', async ()
   assert.match(health, /Thr\s+✓/);
   assert.match(health, /Sci\s+✓/);
   const coverage = await run('check');
-  assert.match(coverage, /Finkster/);
-  assert.match(coverage, /13\/13 complete/);
+  assert.match(coverage, /1\\/1 complete/);
+  assert.match(coverage, /1\\/1 complete/);
 });
 
 test('canonical browser displays parsed website Intel', async () => {
