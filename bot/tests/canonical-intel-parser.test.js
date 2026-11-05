@@ -48,3 +48,22 @@ test('parses canonical Survey building rows without inventing values', () => {
     { name: 'Mills', quantity: 0, percent: 0 }
   ]);
 });
+
+test('parses canonical science books and effects by game category', () => {
+  const { parseScience } = require('../services/canonicalIntelParser');
+  const rows = parseScience({ data_simple: [
+    'Economy - 8 scientists - 940 books available',
+    'Alchemy\t37,608\t 10.3% Income',
+    'Tools\t24,148\t 6.1% Building Effectiveness',
+    'Military - 4 scientists - 380 books available',
+    'Strategy\t49,949\t 6.0% Defensive Military Efficiency',
+    'Arcane Arts - 1 scientists - 120 books available',
+    'Crime\t31,468\t 20.6% Thief Effectiveness (TPA)'
+  ].join('\\n') });
+  assert.deepEqual(rows.map(r => [r.name, r.books, r.effect, r.category]), [
+    ['alchemy', 37608, 10.3, 'economy'],
+    ['tools', 24148, 6.1, 'economy'],
+    ['strategy', 49949, 6, 'military'],
+    ['crime', 31468, 20.6, 'arcane_arts']
+  ]);
+});
