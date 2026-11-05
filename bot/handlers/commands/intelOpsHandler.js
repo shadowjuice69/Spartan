@@ -69,7 +69,7 @@ async function check(sb, kd) {
   }));
   const covered = results.filter(x => !x.missing.length).length;
   const lines = results.map(x => `• ${x.name.slice(0, 22).padEnd(22)} ${PAGE_KEYS.map(p => x.captures[p.kind] ? "✓" : "·").join("")} ${x.missing.join(",") || "OK"}`);
-  return `🧭 **Intel check — ${kd}**\n`Thr Sur Sci Mag Mil Uni`\n**${provinces.length} registered provinces · ${covered}/${provinces.length} complete**\n${lines.join("\n") || "No registered provinces."}\n\n✓ captured · · missing · based on canonical website captures`;
+  return `🧭 **Intel check — ${kd}**\nThr Sur Sci Mag Mil Uni\n**${provinces.length} registered provinces · ${covered}/${provinces.length} complete**\n${lines.join("\n") || "No registered provinces."}\n\n✓ captured · · missing · based on canonical website captures`;
 }
 async function status(kd, province) {
   const result = await ownThrone(kd, province);
