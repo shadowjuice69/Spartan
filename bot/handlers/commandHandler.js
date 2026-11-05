@@ -67,13 +67,14 @@ module.exports=async function commandHandler(interaction){
  const entry=commandRegistry.get(command,sub);console.log(`[SPARTAN COMMAND] /${command}${sub?` ${sub}`:''} entry=${entry?'found':'missing'}`);
  if(!entry)return interaction.reply({content:`❌ Unknown Spartan command: /${command}${sub?` ${sub}`:''}`,ephemeral:true});
  if(!['spartan','spartan-music','spartan-intel','spartan-calc','spartan-war','spartan-admin'].includes(command))return interaction.reply({content:'❌ This command surface has been retired. Use the new `/spartan` commands.',ephemeral:true});
- if(!commandAccess.canAccess(entry,interaction.user,permissionService))return interaction.reply({content:commandAccess.denialMessage(entry),ephemeral:true});
- if(entry.access==='registered'&&!permissionService.isOwner(interaction.user.id)&&!(await hasSpartanAccess(interaction.user.id)))return interaction.reply({content:'❌ Spartan access is required. Use `/spartan register`.',ephemeral:true});
+ interaction=forceEphemeralInteraction(interaction);
  try{
-  // Intel lookups can require multiple canonical Supabase reads. Acknowledge them
-  // before the Discord 3-second deadline, then route handler replies to editReply.
+  // Acknowledge Intel before permission lookups as well as canonical database reads.
+  // Both can exceed Discord's 3-second initial-response deadline.
   if(command==='spartan-intel'&&!interaction.deferred&&!interaction.replied)await interaction.deferReply({ephemeral:true});
-  return await entry.handler(forceEphemeralInteraction(interaction));
+  if(!commandAccess.canAccess(entry,interaction.user,permissionService))return interaction.reply({content:commandAccess.denialMessage(entry),ephemeral:true});
+  if(entry.access==='registered'&&!permissionService.isOwner(interaction.user.id)&&!(await hasSpartanAccess(interaction.user.id)))return interaction.reply({content:'❌ Spartan access is required. Use `/spartan register`.',ephemeral:true});
+  return await entry.handler(interaction);
  }catch(e){
   console.error(`[SPARTAN COMMAND] /${command} ${sub}`,e);
   if(!interaction.replied&&!interaction.deferred)return interaction.reply({content:`❌ ${e.message||'Spartan command failed.'}`,ephemeral:true});
