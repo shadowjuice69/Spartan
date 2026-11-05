@@ -71,7 +71,7 @@ function parseScience(payload) {
   for (const line of text.split("\n")) {
     const heading = line.match(/^(Economy|Military|Arcane Arts)\s*-/i);
     if (heading) { category = heading[1].toLowerCase().replace(/ /g, "_"); continue; }
-    const match = line.trim().match(/^([A-Za-z][A-Za-z ]*)\t+([\d,]+)\t+(-?[\d.]+)%\s*(.*)$/);
+    const match = line.trim().match(/^([A-Za-z][A-Za-z ]*)\t+([\d,]+)\t+\s*(-?[\d.]+)%\s*(.*)$/);
     if (!match) continue;
     const books = Number(match[2].replace(/,/g, ""));
     const effect = Number(match[3]);
