@@ -57,7 +57,7 @@ module.exports = async function targetHandler(interaction) {
     const selected = data?.[0];
     if (!selected) return interaction.editReply("❌ No registered province matching **" + provinceQuery + "**.");
     const result = await latestThrone(selected.kingdom_code, selected.province_name);
-    if (!result) return interaction.editReply("❌ **" + data.province_name + "** is registered, but no structured own Throne capture exists in canonical website Intel for " + data.kingdom_code + ". Enemy-page captures currently do not identify this province reliably.");
+    if (!result) return interaction.editReply("❌ **" + selected.province_name + "** is registered, but no structured own Throne capture exists in canonical website Intel for " + selected.kingdom_code + ". Enemy-page captures currently do not identify this province reliably.");
     const t = result.parsed;
     const target = targetFrom(selected, t);
     let ranked = null;
