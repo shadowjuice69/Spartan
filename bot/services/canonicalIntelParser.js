@@ -63,4 +63,23 @@ function parseBuildings(payload) {
   return rows;
 }
 
-module.exports = { payloadText, fieldValue, numberField, parseThrone, parseBuildings };
+
+function parseScience(payload) {
+  const text = payloadText(payload);
+  const rows = [];
+  let category = "unknown";
+  for (const line of text.split("\n")) {
+    const heading = line.match(/^(Economy|Military|Arcane Arts)\s*-/i);
+    if (heading) { category = heading[1].toLowerCase().replace(/ /g, "_"); continue; }
+    const match = line.trim().match(/^([A-Za-z][A-Za-z ]*)\t+([\d,]+)\t+(-?[\d.]+)%\s*(.*)$/);
+    if (!match) continue;
+    const books = Number(match[2].replace(/,/g, ""));
+    const effect = Number(match[3]);
+    if (Number.isFinite(books) && Number.isFinite(effect)) {
+      rows.push({ name: match[1].trim().toLowerCase(), books, effect, description: match[4].trim(), category });
+    }
+  }
+  return rows;
+}
+
+module.exports = { payloadText, fieldValue, numberField, parseThrone, parseBuildings, parseScience };
