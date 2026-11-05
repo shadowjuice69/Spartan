@@ -22,3 +22,17 @@ test('rejects chat, tick announcements, and ordinary status chatter', () => {
   assert.equal(isStructuredGameIntelMessage('**5 minutes till new TICK! New date: Apr8YR0**'), false);
   assert.equal(isStructuredGameIntelMessage(':new: **UTOPIA HAS TICKED! New date: Apr8YR0**\nAnduin Lothar __incite riots__ expired'), false);
 });
+
+const { isBotEventRecord, SECTION_KINDS } = require('../services/canonicalIntelService');
+
+test('canonical website Intel excludes Discord bot-event wrappers, even when classified as a game page', () => {
+  assert.equal(isBotEventRecord({ page_kind: 'thievery', parsed_payload: { kind: 'bot_event', type: 'bot_event', data: { source: 'discord-bot' } } }), true);
+  assert.equal(isBotEventRecord({ page_kind: 'thievery', parsed_payload: { kind: 'thievery', data: { content: 'real game report' } } }), false);
+  assert.equal(isBotEventRecord({ page_kind: 'science', parsed_payload: { data_simple: 'Science report' } }), false);
+});
+
+test('canonical Intel sections expose only supported website page kinds', () => {
+  assert.deepEqual(SECTION_KINDS.science, ['science', 'council_science']);
+  assert.deepEqual(SECTION_KINDS.buildings, ['buildings', 'survey', 'council_internal']);
+  assert.deepEqual(SECTION_KINDS.operations, ['attack', 'thievery', 'magic', 'ritual', 'aid', 'exploration']);
+});
