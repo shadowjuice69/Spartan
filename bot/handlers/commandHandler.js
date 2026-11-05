@@ -50,7 +50,14 @@ function forceEphemeralInteraction(interaction){
  const originalReply = interaction.reply.bind(interaction);
  const originalFollowUp = interaction.followUp ? interaction.followUp.bind(interaction) : null;
  const originalDeferReply = interaction.deferReply ? interaction.deferReply.bind(interaction) : null;
- interaction.reply = payload => originalReply(wrapPayload(payload));
+ interaction.reply = payload => {
+  const normalized = wrapPayload(payload);
+  if (interaction.deferred || interaction.replied) {
+   delete normalized.ephemeral;
+   return interaction.editReply(normalized);
+  }
+  return originalReply(normalized);
+ };
  if (originalFollowUp) interaction.followUp = payload => originalFollowUp(wrapPayload(payload));
  if (originalDeferReply) interaction.deferReply = options => originalDeferReply({...options, ephemeral:true});
  return interaction;
@@ -62,6 +69,16 @@ module.exports=async function commandHandler(interaction){
  if(!['spartan','spartan-music','spartan-intel','spartan-calc','spartan-war','spartan-admin'].includes(command))return interaction.reply({content:'❌ This command surface has been retired. Use the new `/spartan` commands.',ephemeral:true});
  if(!commandAccess.canAccess(entry,interaction.user,permissionService))return interaction.reply({content:commandAccess.denialMessage(entry),ephemeral:true});
  if(entry.access==='registered'&&!permissionService.isOwner(interaction.user.id)&&!(await hasSpartanAccess(interaction.user.id)))return interaction.reply({content:'❌ Spartan access is required. Use `/spartan register`.',ephemeral:true});
- try{return await entry.handler(forceEphemeralInteraction(interaction));}catch(e){console.error(`[SPARTAN COMMAND] /${command} ${sub}`,e);if(!interaction.replied&&!interaction.deferred)return interaction.reply({content:`❌ ${e.message||'Spartan command failed.'}`,ephemeral:true});throw e;}
+ try{
+  // Intel lookups can require multiple canonical Supabase reads. Acknowledge them
+  // before the Discord 3-second deadline, then route handler replies to editReply.
+  if(command==='spartan-intel'&&!interaction.deferred&&!interaction.replied)await interaction.deferReply({ephemeral:true});
+  return await entry.handler(forceEphemeralInteraction(interaction));
+ }catch(e){
+  console.error(`[SPARTAN COMMAND] /${command} ${sub}`,e);
+  if(!interaction.replied&&!interaction.deferred)return interaction.reply({content:`❌ ${e.message||'Spartan command failed.'}`,ephemeral:true});
+  if(interaction.deferred&&!interaction.replied)return interaction.editReply({content:`❌ ${e.message||'Spartan command failed.'}`});
+  throw e;
+ }
 };
 module.exports.commandRegistry=commandRegistry;
