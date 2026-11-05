@@ -18,7 +18,7 @@ const SECTION_KINDS = {
 function isBotEventRecord(row) {
   const payload = row?.parsed_payload || {};
   const data = payload.data || {};
-  return payload.kind === "bot_event" || payload.type === "bot_event" ||
+  return row?.page_kind === "bot_event" || payload.kind === "bot_event" || payload.type === "bot_event" ||
     data.kind === "bot_event" || data.type === "bot_event";
 }
 
