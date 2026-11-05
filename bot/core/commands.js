@@ -126,6 +126,7 @@ const warCommand={name:'spartan-war',description:'Spartan war operations',option
   {name:'notes',description:'Notes about the war',type:3,required:false},
 ]},{name:'target',description:'Target operations',type:1,options:[
   {name:'province',description:'Province name',type:3,required:false},
+  {name:'mode',description:'Ranking: best value (default), most acres, or softest',type:3,required:false,choices:[{name:'best value',value:'value'},{name:'most acres',value:'gain'},{name:'softest',value:'soft'}]},
 ]},{name:'ambush',description:'Ambush raw-offense threshold (needs spied troop composition — Throne intel alone can\'t see this)',type:1,options:[
   {name:'their_race',description:"Target's race",type:3,required:true,choices:RACE_CHOICES},
   {name:'their_elites',description:"Target's Elites (from a successful Military spy op)",type:4,required:true},
