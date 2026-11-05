@@ -78,22 +78,41 @@ async function status(kd, province, identity = {}) {
   return `📊 **${province} — Status** · ${age(result.row.captured_at)}\n**Race:** ${identity.race || t.race || "?"} · **Personality:** ${identity.personality || "?"} · **Land:** ${fmt(t.land)} · **BE:** ${t.buildingEffectiveness == null ? "?" : `${t.buildingEffectiveness}%`}\n**Offense:** ${fmt(t.offense)} · **Defense:** ${fmt(t.defense)} · **Networth:** ${fmt(t.networth)}\n**Peasants:** ${fmt(t.peasants)} · **Soldiers:** ${fmt(t.soldiers)} · **Thieves:** ${fmt(t.thieves)} · **Wizards:** ${fmt(t.wizards)} · **Prisoners:** ${fmt(t.prisoners)}\n**Gold:** ${fmt(t.gold)} · **Food:** ${fmt(t.food)} · **Runes:** ${fmt(t.runes)} · **Trade balance:** ${signed(t.tradeBalance)}\n_oTPA/oWPA and home/march splits are not present in this Throne capture._`;
 }
 async function econ(kd, province) {
-  const result = await ownThrone(kd, province);
-  if (!result) return `❌ No own Throne capture for **${province}** in ${kd}.`;
+  const [result, buildings] = await Promise.all([ownThrone(kd, province), provinceBuildings(kd, province)]);
+  if (!result) return "❌ No own Throne capture for **" + province + "** in " + kd + ".";
   const t = result.parsed;
-  return `💰 **${province} — Captured Economy** · ${age(result.row.captured_at)}\nGold ${fmt(t.gold)} · Food ${fmt(t.food)} · Runes ${fmt(t.runes)}\nTrade balance ${signed(t.tradeBalance)}\nPeasants ${fmt(t.peasants)} · Land ${fmt(t.land)}a\n_Throne captures do not include daily income or wages; those figures are not estimated._`;
+  const output = buildings ? parseBuildingOutputs(buildings.parsed_payload || { raw_text: buildings.raw_text }) : {};
+  return "💰 **" + province + " — Captured Economy** · " + age(result.row.captured_at) +
+    "\nGold " + fmt(t.gold) + " · Food " + fmt(t.food) + " · Runes " + fmt(t.runes) +
+    "\nTrade balance " + signed(t.tradeBalance) +
+    "\nPeasants " + fmt(t.peasants) + " · Land " + fmt(t.land) + "a" +
+    "\n**Daily Survey output:** bank gold " + fmt(output.goldPerDay) + " · food " + fmt(output.foodPerDay) +
+    " · runes " + fmt(output.runesPerDay) + " · wizards " + fmt(output.wizardsPerDay) +
+    "\n_Wages and full net income are not present in these captures, so no net figure is fabricated._";
 }
 async function provinceRows(kd) {
   const registered = await registryRows(supabaseService.getClient(), kd);
   return Promise.all(registered.map(async p => {
     const result = await ownThrone(kd, p.province_name);
-    return result ? { name: p.province_name, row: result.row, ...result.parsed } : null;
+    if (!result) return null;
+    const buildings = await provinceBuildings(kd, p.province_name);
+    const outputs = buildings ? parseBuildingOutputs(buildings.parsed_payload || { raw_text: buildings.raw_text }) : {};
+    return { name: p.province_name, row: result.row, ...result.parsed, outputs };
   })).then(rows => rows.filter(Boolean));
 }
 async function kdecon(kd) {
   const rows = await provinceRows(kd);
-  const sum = key => rows.reduce((total, r) => total + (r[key] || 0), 0);\n  const outputSum = key => rows.reduce((total, r) => total + (r.outputs?.[key] || 0), 0);
-  return `💰 **KD Captured Economy — ${kd}**\n${rows.slice(0, 25).map(r => `${r.name} · ${fmt(r.gold)} gc · ${fmt(r.food)} food · ${fmt(r.runes)} runes · TB ${signed(r.tradeBalance)}`).join("\n") || "No own Throne captures found."}\n\n**Captured subset (${rows.length} provinces):** ${fmt(sum("gold"))} gc · ${fmt(sum("food"))} food · ${fmt(sum("runes"))} runes · trade balance ${signed(sum("tradeBalance"))}\n_Not a full kingdom total unless every province has a current own Throne capture._`;
+  const sum = key => rows.reduce((total, r) => total + (r[key] || 0), 0);
+  const outputSum = key => rows.reduce((total, r) => total + (r.outputs?.[key] || 0), 0);
+  const lines = rows.slice(0, 25).map(r =>
+    r.name + " · " + fmt(r.gold) + " gc · " + fmt(r.food) + " food · " + fmt(r.runes) + " runes · TB " + signed(r.tradeBalance)
+  );
+  return "💰 **KD Captured Economy — " + kd + "**\n" + (lines.join("\n") || "No own Throne captures found.") +
+    "\n\n**Captured stock (subset):** " + fmt(sum("gold")) + " gc · " + fmt(sum("food")) + " food · " +
+    fmt(sum("runes")) + " runes · trade balance " + signed(sum("tradeBalance")) +
+    "\n**Daily Survey outputs:** " + fmt(outputSum("goldPerDay")) + " bank gold · " + fmt(outputSum("foodPerDay")) +
+    " food · " + fmt(outputSum("runesPerDay")) + " runes · " + fmt(outputSum("wizardsPerDay")) + " wizards" +
+    "\n_Not a full kingdom total unless every province has current own Throne and Survey captures; daily outputs exclude wages._";
 }
 async function survey(kd, provinceQuery) {
   const rows = await registryRows(supabaseService.getClient(), kd);
