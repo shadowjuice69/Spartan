@@ -67,3 +67,19 @@ test('parses canonical science books and effects by game category', () => {
     ['crime', 31468, 20.6, 'arcane_arts']
   ]);
 });
+
+test('extracts daily production only when the Survey explicitly reports it', () => {
+  const { parseBuildingOutputs } = require('../services/canonicalIntelParser');
+  const outputs = parseBuildingOutputs({ data_simple: [
+    'Banks\t299\t14.4%\tProduce 7,430 gold coins per day',
+    'Farms\t181\t8.7%\tProduce 10,794 bushels per day',
+    'Towers\t181\t8.7%\tProduce 2,158 runes per day',
+    'Guilds\t272\t13.1%\t10.9 wizards trained per day'
+  ].join('\n') });
+  assert.deepEqual(outputs, {
+    goldPerDay: 7430,
+    foodPerDay: 10794,
+    runesPerDay: 2158,
+    wizardsPerDay: 10.9
+  });
+});
