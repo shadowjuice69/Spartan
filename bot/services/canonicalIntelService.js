@@ -2,7 +2,7 @@ const supabaseService = require("./supabase");
 
 const SECTION_KINDS = {
   all: null,
-  military: ["military", "attack", "news", "throne", "war", "council_military"],
+  military: ["military", "attack", "news", "throne", "war", "target_finder", "council_military"],
   magic: ["magic", "ritual", "dragon", "council_spells"],
   thievery: ["thievery"],
   science: ["science", "council_science"],
