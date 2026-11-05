@@ -1,7 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const Module = require('node:module');
-
 const capturedAt = '2026-11-05T20:40:36.274Z';
 const throne = {
   captured_at: capturedAt,
@@ -70,7 +69,6 @@ const originalLoad = Module._load;
 Module._load = function (request, parent, ...rest) { return stubs[request] || originalLoad.call(this, request, parent, ...rest); };
 const handler = require('../handlers/commands/intelOpsHandler');
 Module._load = originalLoad;
-
 async function run(subcommand, strings = {}) {
   let output = '';
   const interaction = {
@@ -84,7 +82,6 @@ async function run(subcommand, strings = {}) {
   await handler(interaction);
   return output;
 }
-
 test('status reads Finkster Throne capture and registered identity', async () => {
   const out = await run('status');
   assert.match(out, /Race:\*\* Avian/);
@@ -92,7 +89,6 @@ test('status reads Finkster Throne capture and registered identity', async () =>
   assert.match(out, /90,692/);
   assert.match(out, /97,642/);
 });
-
 test('economy uses Throne stock and explicit Survey production', async () => {
   const out = await run('econ');
   assert.match(out, /48,756/);
@@ -100,51 +96,42 @@ test('economy uses Throne stock and explicit Survey production', async () => {
   assert.match(out, /10,794/);
   assert.match(out, /Survey 3d/);
 });
-
 test('Survey displays canonical building quantities', async () => {
   const out = await run('survey', { province: 'Finkster' });
   assert.match(out, /Homes 182/);
   assert.match(out, /Banks 299/);
 });
-
 test('kingdom economy aggregates captured subset and Survey outputs', async () => {
   const out = await run('kdecon');
   assert.match(out, /KD Captured Economy/);
   assert.match(out, /7,430/);
   assert.match(out, /1 Survey captures/);
 });
-
 test('TPPA uses population and land from canonical Throne', async () => {
   const out = await run('tppa');
   assert.match(out, /Finkster/);
   assert.match(out, /11\.\d+ tppa/);
 });
-
 test('kingdom offense uses captured Off. Points', async () => {
   const out = await run('left');
   assert.match(out, /90,692 off/);
 });
-
 test('plunder shortlist refuses to invent uncaptured targets', async () => {
   const out = await run('plunders');
   assert.match(out, /No in-range targets among captured provinces/);
 });
-
 test('capture health and kingdom coverage use canonical page captures', async () => {
   const health = await run('capturehealth');
   assert.match(health, /Thr\s+✓/);
   assert.match(health, /Sci\s+✓/);
   const coverage = await run('check');
-  assert.match(coverage, /1\\/1 complete/);
-  assert.match(coverage, /1\\/1 complete/);
+  assert.match(coverage, /1\/1 complete/);
 });
-
 test('canonical browser displays parsed website Intel', async () => {
   const out = await run('canonical', { section: 'science' });
   assert.match(out, /CANONICAL SPARTAN INTEL — SCIENCE/);
   assert.match(out, /science:1/);
 });
-
 test('unavailable live movement and operation-rate commands explain missing sources', async () => {
   assert.match(await run('incoming'), /Live incoming army movements are not stored/);
   assert.match(await run('eta'), /Live army return ETAs are not stored/);
