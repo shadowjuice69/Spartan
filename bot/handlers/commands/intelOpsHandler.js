@@ -103,7 +103,8 @@ async function provinceRows(kd) {
 async function kdecon(kd) {
   const rows = await provinceRows(kd);
   const sum = key => rows.reduce((total, r) => total + (r[key] || 0), 0);
-  const outputSum = key => rows.reduce((total, r) => total + (r.outputs?.[key] || 0), 0);\n  const surveyCount = rows.filter(r => r.surveyCapturedAt).length;
+  const outputSum = key => rows.reduce((total, r) => total + (r.outputs?.[key] || 0), 0);
+  const surveyCount = rows.filter(r => r.surveyCapturedAt).length;
   const lines = rows.slice(0, 25).map(r =>
     r.name + " · " + fmt(r.gold) + " gc · " + fmt(r.food) + " food · " + fmt(r.runes) + " runes · TB " + signed(r.tradeBalance)
   );
