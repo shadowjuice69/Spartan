@@ -82,7 +82,7 @@ async function econ(kd, province) {
   if (!result) return "❌ No own Throne capture for **" + province + "** in " + kd + ".";
   const t = result.parsed;
   const output = buildings ? parseBuildingOutputs(buildings.parsed_payload || { raw_text: buildings.raw_text }) : {};
-  return "💰 **" + province + " — Captured Economy** · " + age(result.row.captured_at) +
+  return "💰 **" + province + " — Captured Economy** · Throne " + age(result.row.captured_at) + " · Survey " + age(buildings?.captured_at) +
     "\nGold " + fmt(t.gold) + " · Food " + fmt(t.food) + " · Runes " + fmt(t.runes) +
     "\nTrade balance " + signed(t.tradeBalance) +
     "\nPeasants " + fmt(t.peasants) + " · Land " + fmt(t.land) + "a" +
@@ -97,13 +97,13 @@ async function provinceRows(kd) {
     if (!result) return null;
     const buildings = await provinceBuildings(kd, p.province_name);
     const outputs = buildings ? parseBuildingOutputs(buildings.parsed_payload || { raw_text: buildings.raw_text }) : {};
-    return { name: p.province_name, row: result.row, ...result.parsed, outputs };
+    return { name: p.province_name, row: result.row, surveyCapturedAt: buildings?.captured_at || null, ...result.parsed, outputs };
   })).then(rows => rows.filter(Boolean));
 }
 async function kdecon(kd) {
   const rows = await provinceRows(kd);
   const sum = key => rows.reduce((total, r) => total + (r[key] || 0), 0);
-  const outputSum = key => rows.reduce((total, r) => total + (r.outputs?.[key] || 0), 0);
+  const outputSum = key => rows.reduce((total, r) => total + (r.outputs?.[key] || 0), 0);\n  const surveyCount = rows.filter(r => r.surveyCapturedAt).length;
   const lines = rows.slice(0, 25).map(r =>
     r.name + " · " + fmt(r.gold) + " gc · " + fmt(r.food) + " food · " + fmt(r.runes) + " runes · TB " + signed(r.tradeBalance)
   );
@@ -111,7 +111,7 @@ async function kdecon(kd) {
     "\n\n**Captured stock (subset):** " + fmt(sum("gold")) + " gc · " + fmt(sum("food")) + " food · " +
     fmt(sum("runes")) + " runes · trade balance " + signed(sum("tradeBalance")) +
     "\n**Daily Survey outputs:** " + fmt(outputSum("goldPerDay")) + " bank gold · " + fmt(outputSum("foodPerDay")) +
-    " food · " + fmt(outputSum("runesPerDay")) + " runes · " + fmt(outputSum("wizardsPerDay")) + " wizards" +
+    " food · " + fmt(outputSum("runesPerDay")) + " runes · " + fmt(outputSum("wizardsPerDay")) + " wizards from " + surveyCount + " Survey captures" +
     "\n_Not a full kingdom total unless every province has current own Throne and Survey captures; daily outputs exclude wages._";
 }
 async function survey(kd, provinceQuery) {
