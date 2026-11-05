@@ -46,6 +46,34 @@ async function getIntel({ kd = "", section = "all", limit = 200, enemyOnly = fal
   return (data || []).filter(row => !isBotEventRecord(row)).slice(0, safeLimit);
 }
 
+
+async function getProvinceIntel({ kd = "", province = "", pageKind = "", visibility = "own" } = {}) {
+  const sb = supabaseService.getClient();
+  const code = String(kd || "").trim();
+  const name = String(province || "").trim();
+  if (!sb || !code || !name) return null;
+  let q = sb.from("spartan_intel_records")
+    .select("id,capture_id,province_id,kingdom_id,target_province_id,target_kingdom_id,captured_at,page_kind,intel_type,visibility,parsed_payload,raw_text,metrics,age,game_year,game_tick")
+    .eq("kingdom_id", code)
+    .eq("visibility", visibility)
+    .eq("parsed_payload->>prov", name)
+    .order("captured_at", { ascending: false })
+    .limit(1);
+  if (pageKind) q = q.eq("page_kind", pageKind);
+  const { data, error } = await q.maybeSingle();
+  if (error) {
+    console.error("[CANONICAL INTEL] province query failed:", error.message);
+    return null;
+  }
+  return data && !isBotEventRecord(data) ? data : null;
+}
+
+async function getLatestProvinceIntel({ kd = "", province = "", pageKinds = [] } = {}) {
+  const kinds = Array.isArray(pageKinds) ? pageKinds : [pageKinds];
+  const rows = await Promise.all(kinds.map(pageKind => getProvinceIntel({ kd, province, pageKind })));
+  return Object.fromEntries(kinds.map((kind, index) => [kind, rows[index]]));
+}
+
 function summarize(rows) {
   const byKind = {};
   const byVisibility = {};
