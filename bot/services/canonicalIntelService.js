@@ -43,7 +43,7 @@ function latestPerProvinceAndKind(rows) {
 
 function extractProvinceReportExcerpt(value) {
   const text = String(value || "");
-  const match = text.match(/The Province of\s+.+?\(\\d+:\\d+\)/i);
+  const match = text.match(/The Province of\s+.+?\(\d+:\d+\)/i);
   return match ? text.slice(match.index).trim() : null;
 }
 
