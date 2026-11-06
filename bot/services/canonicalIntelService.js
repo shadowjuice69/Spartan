@@ -39,6 +39,12 @@ function latestPerProvinceAndKind(rows) {
   return [...latest.values()];
 }
 
+function extractProvinceReportExcerpt(value) {
+  const text = String(value || "");
+  const match = text.match(/The Province of\s+.+?\(\d+:\d+\)/i);
+  return match ? text.slice(match.index).trim() : null;
+}
+
 async function getIntel({ kd = "", section = "all", limit = 200, enemyOnly = false } = {}) {
   const sb = supabaseService.getClient();
   const code = String(kd || "").trim();
@@ -102,4 +108,4 @@ function summarize(rows) {
   return { count: rows.length, byKind, byVisibility };
 }
 
-module.exports = { getIntel, getProvinceIntel, getLatestProvinceIntel, summarize, SECTION_KINDS, isBotEventRecord, latestPerProvinceAndKind };
+module.exports = { getIntel, getProvinceIntel, getLatestProvinceIntel, summarize, SECTION_KINDS, isBotEventRecord, latestPerProvinceAndKind, extractProvinceReportExcerpt };
