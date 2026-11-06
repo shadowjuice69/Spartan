@@ -57,3 +57,14 @@ test('canonical list keeps only the newest record per province and page kind', (
   const result = service.latestPerProvinceAndKind(rows);
   assert.deepEqual(result.map(row => row.id), ['new', 'survey', 'enemy']);
 });
+
+test('Throne excerpt starts at the province report after an Age announcement', () => {
+  const { service } = loadService(null);
+  const input = 'Welcome to World of Legends Age 117: Devoted Pursuits Crowned Promise!\\nThe Province of Finkster (6:8)\\nRace: Elf\\nPersonality: Necromancer';
+  assert.equal(service.extractProvinceReportExcerpt(input), 'The Province of Finkster (6:8)\\nRace: Elf\\nPersonality: Necromancer');
+});
+
+test('Throne excerpt returns null when the capture has no province report', () => {
+  const { service } = loadService(null);
+  assert.equal(service.extractProvinceReportExcerpt('Welcome to World of Legends Age 117: Devoted Pursuits Crowned Promise!'), null);
+});
