@@ -22,6 +22,23 @@ function isBotEventRecord(row) {
     data.kind === "bot_event" || data.type === "bot_event";
 }
 
+function latestPerProvinceAndKind(rows) {
+  const latest = new Map();
+  for (const row of rows || []) {
+    if (isBotEventRecord(row)) continue;
+    const payload = row?.parsed_payload || {};
+    const provinceKey = row?.province_id || payload.prov || payload.province ||
+      payload.data?.owner?.province_name || row?.target_province_id || "unknown";
+    const key = [
+      provinceKey, row?.page_kind || "unknown", row?.visibility || "unknown",
+      row?.target_kingdom_id || "", row?.target_province_id || ""
+    ].join("|");
+    // The query is newest-first, so the first row for each key is canonical.
+    if (!latest.has(key)) latest.set(key, row);
+  }
+  return [...latest.values()];
+}
+
 async function getIntel({ kd = "", section = "all", limit = 200, enemyOnly = false } = {}) {
   const sb = supabaseService.getClient();
   const code = String(kd || "").trim();
@@ -43,7 +60,7 @@ async function getIntel({ kd = "", section = "all", limit = 200, enemyOnly = fal
     console.error("[CANONICAL INTEL] query failed:", error.message);
     return [];
   }
-  return (data || []).filter(row => !isBotEventRecord(row)).slice(0, safeLimit);
+  return latestPerProvinceAndKind(data || []).slice(0, safeLimit);
 }
 
 
@@ -85,4 +102,4 @@ function summarize(rows) {
   return { count: rows.length, byKind, byVisibility };
 }
 
-module.exports = { getIntel, getProvinceIntel, getLatestProvinceIntel, summarize, SECTION_KINDS, isBotEventRecord };
+module.exports = { getIntel, getProvinceIntel, getLatestProvinceIntel, summarize, SECTION_KINDS, isBotEventRecord, latestPerProvinceAndKind };
