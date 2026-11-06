@@ -7,9 +7,13 @@ function loadService(record) {
   const chain = {
     select: () => chain,
     eq: (key, value) => { state.filters[key] = value; return chain; },
+    ilike: (key, value) => { state.filters[key] = value; return chain; },
+    or: (value) => { state.or = value; return chain; },
+    in: (key, value) => { state.filters[key] = value; return chain; },
     order: () => chain,
     limit: () => chain,
-    maybeSingle: async () => ({ data: record, error: null })
+    maybeSingle: async () => ({ data: record, error: null }),
+    then: (resolve, reject) => Promise.resolve({ data: [], error: null }).then(resolve, reject)
   };
   const client = { from: (table) => { state.table = table; return chain; } };
   const original = Module._load;
@@ -34,6 +38,7 @@ test('province Intel lookup is scoped to kingdom, province, page kind and own vi
     kingdom_id: '6:8',
     visibility: 'own',
     'parsed_payload->>prov': 'Finkster',
+    url: '%/wol/%',
     page_kind: 'throne'
   });
 });
@@ -67,4 +72,12 @@ test('Throne excerpt starts at the province report after an Age announcement', (
 test('Throne excerpt returns null when the capture has no province report', () => {
   const { service } = loadService(null);
   assert.equal(service.extractProvinceReportExcerpt('Welcome to World of Legends Age 117: Devoted Pursuits Crowned Promise!'), null);
+});
+
+
+test('canonical Intel list is scoped to World of Legends captures', async () => {
+  const { service, state } = loadService(null);
+  await service.getIntel({ kd: '6:8', section: 'all' });
+  assert.equal(state.filters.url, '%/wol/%');
+  assert.equal(state.or, 'kingdom_id.eq.6:8,target_kingdom_id.eq.6:8');
 });
