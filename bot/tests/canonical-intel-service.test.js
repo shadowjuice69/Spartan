@@ -44,3 +44,16 @@ test('province Intel lookup rejects bot-event wrapper records', async () => {
   const result = await service.getProvinceIntel({ kd: '6:8', province: 'Finkster', pageKind: 'throne' });
   assert.equal(result, null);
 });
+
+test('canonical list keeps only the newest record per province and page kind', () => {
+  const { service } = loadService(null);
+  const rows = [
+    { id: 'new', province_id: 'province-a', page_kind: 'throne', visibility: 'own', captured_at: '2026-11-06T01:00:00Z' },
+    { id: 'old', province_id: 'province-a', page_kind: 'throne', visibility: 'own', captured_at: '2026-11-06T00:59:00Z' },
+    { id: 'survey', province_id: 'province-a', page_kind: 'buildings', visibility: 'own' },
+    { id: 'enemy', province_id: 'province-a', page_kind: 'throne', visibility: 'enemy', target_kingdom_id: '6:7' },
+    { id: 'bot', province_id: 'province-b', page_kind: 'bot_event', visibility: 'own' }
+  ];
+  const result = service.latestPerProvinceAndKind(rows);
+  assert.deepEqual(result.map(row => row.id), ['new', 'survey', 'enemy']);
+});
