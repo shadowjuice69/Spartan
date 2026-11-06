@@ -170,8 +170,9 @@ async function canonical(interaction, section) {
     const excerptRaw = payload.data_simple || payload.data?.data_simple || payload.data?.content || r.raw_text || JSON.stringify(payload);
     // Throne pages can include a global Age announcement/kingdom notice above the actual province report.
     // Keep the real report, but do not present that banner as province Intel.
-    const provinceReport = String(excerptRaw).match(/The Province of\\s+.+?\\(\\d+:\\d+\\)/i);
-    const excerpt = provinceReport ? String(excerptRaw).slice(provinceReport.index).trim() : excerptRaw;
+    const excerpt = r.page_kind === "throne"
+      ? canonicalIntel.extractProvinceReportExcerpt(excerptRaw) || "Province report unavailable in this capture."
+      : excerptRaw;
     return `• **${String(province).slice(0, 30)}** — ${String(r.page_kind || "intel").toUpperCase()} ${r.visibility === "enemy" ? "ENEMY" : "OWN"}${target} · ${when}\n  ${String(excerpt).slice(0, 150)}`;
   });
   const body = `🧠 **CANONICAL SPARTAN INTEL — ${section.toUpperCase()}**\n**${summary.count} records** · ${Object.entries(summary.byKind).map(([k,v]) => `${k}:${v}`).join(" · ")}\n\n${lines.join("\n") || "No canonical Intel is available for this section."}`;
