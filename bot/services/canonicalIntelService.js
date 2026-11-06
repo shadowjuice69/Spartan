@@ -1,5 +1,7 @@
 const supabaseService = require("./supabase");
 
+const ACTIVE_GAME_URL_PATTERN = "%/wol/%";
+
 const SECTION_KINDS = {
   all: null,
   military: ["military", "attack", "news", "throne", "war", "target_finder", "council_military"],
@@ -41,7 +43,7 @@ function latestPerProvinceAndKind(rows) {
 
 function extractProvinceReportExcerpt(value) {
   const text = String(value || "");
-  const match = text.match(/The Province of\s+.+?\(\d+:\d+\)/i);
+  const match = text.match(/The Province of\\s+.+?\\(\\d+:\\d+\\)/i);
   return match ? text.slice(match.index).trim() : null;
 }
 
@@ -54,6 +56,9 @@ async function getIntel({ kd = "", section = "all", limit = 200, enemyOnly = fal
   let q = sb.from("spartan_intel_records")
     .select("id,capture_id,province_id,kingdom_id,target_province_id,target_kingdom_id,captured_at,page_kind,intel_type,visibility,parsed_payload,raw_text,metrics")
     .or(`kingdom_id.eq.${code},target_kingdom_id.eq.${code}`)
+    // The active Spartan game is World of Legends (Age 117). Genesis captures can
+    // share the same stored kingdom context, so scope reads by the source URL.
+    .ilike("url", ACTIVE_GAME_URL_PATTERN)
     .order("captured_at", { ascending: false })
     .limit(Math.min(1000, safeLimit * 25));
 
@@ -69,7 +74,6 @@ async function getIntel({ kd = "", section = "all", limit = 200, enemyOnly = fal
   return latestPerProvinceAndKind(data || []).slice(0, safeLimit);
 }
 
-
 async function getProvinceIntel({ kd = "", province = "", pageKind = "", visibility = "own" } = {}) {
   const sb = supabaseService.getClient();
   const code = String(kd || "").trim();
@@ -80,6 +84,7 @@ async function getProvinceIntel({ kd = "", province = "", pageKind = "", visibil
     .eq("kingdom_id", code)
     .eq("visibility", visibility)
     .eq("parsed_payload->>prov", name)
+    .ilike("url", ACTIVE_GAME_URL_PATTERN)
     .order("captured_at", { ascending: false })
     .limit(1);
   if (pageKind) q = q.eq("page_kind", pageKind);
