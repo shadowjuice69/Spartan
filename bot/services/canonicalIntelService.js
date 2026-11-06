@@ -49,7 +49,7 @@ async function getIntel({ kd = "", section = "all", limit = 200, enemyOnly = fal
     .select("id,capture_id,province_id,kingdom_id,target_province_id,target_kingdom_id,captured_at,page_kind,intel_type,visibility,parsed_payload,raw_text,metrics")
     .or(`kingdom_id.eq.${code},target_kingdom_id.eq.${code}`)
     .order("captured_at", { ascending: false })
-    .limit(Math.min(1000, safeLimit * 4));
+    .limit(Math.min(1000, safeLimit * 25));
 
   const kinds = SECTION_KINDS[section];
   if (kinds?.length) q = q.in("page_kind", kinds);
