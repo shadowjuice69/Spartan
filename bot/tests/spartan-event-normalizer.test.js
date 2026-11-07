@@ -43,3 +43,15 @@ test('normalizes incoming province reports and preserves unknown losses', () => 
   assert.equal(event.thieves_lost, 12);
   assert.equal(event.wizards_lost, 9);
 });
+
+test('normalizes dated Utopia kingdom news and recapture lines', () => {
+  const events = parseStructuredNewsEvents(
+    'November 7 of YR1 6 - Finkster (6:8) recaptured 24 acres of land from 6 - Ayoko (3:11)\\nNovember 7 of YR1 6 - Finkster (6:8) invaded 9 - Target (3:11) and captured 18 acres of land',
+    { captureId: 'capture-4', capturedAt: '2026-11-07T16:00:00.000Z' },
+  );
+  assert.equal(events.length, 2);
+  assert.equal(events[0].event_type, 'recaptured');
+  assert.equal(events[0].acres_change, 24);
+  assert.equal(events[1].event_type, 'invaded');
+  assert.equal(events[1].acres_change, 18);
+});
