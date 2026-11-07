@@ -108,7 +108,7 @@ export async function GET() {
     const eventRows = eventRowsResult.data || []
     const eventFields = [
       ...countStoredFields(eventRows, ['event_type','attacker','defender','target_kingdom','acres_change','troops_lost','thieves_lost','wizards_lost','gold_change','food_change','runes_change']),
-      ...['attacker_kingdom','defender_kingdom','return_hours','unit_losses','capture_id','normalizer'].map(key => ({
+      ...['attacker_kingdom','defender_kingdom','return_hours','unit_losses','capture_id','normalizer','kills','prisoners','spec_creds','peasants_reported','offense_sent','generals','people_killed'].map(key => ({
         key: 'payload.' + key, records: eventRows.filter(row => row.payload?.[key] != null).length,
         present: eventRows.some(row => row.payload?.[key] != null),
       })),
