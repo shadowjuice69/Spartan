@@ -58,7 +58,7 @@ export async function GET() {
       db.from('spartan_province_history').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
       db.from('spartan_event_history').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
       db.from('spartan_province_history').select('acres,networth,population,peons,soldiers,off_specs,def_specs,elites,thieves,wizards,generals,prisoners,war_horses,offense,defense,defense_home,o_tpa,d_tpa,o_wpa,d_wpa,build_efficiency,wages').eq('user_id', user.id).order('observed_at', { ascending: false }).limit(250),
-      db.from('spartan_event_history').select('event_type,attacker,defender,target_kingdom,acres_change,troops_lost,thieves_lost,wizards_lost,peasants_change,gold_change,food_change,runes_change,mana_change').eq('user_id', user.id).order('occurred_at', { ascending: false }).limit(250),
+      db.from('spartan_event_history').select('event_type,attacker,defender,target_kingdom,acres_change,troops_lost,thieves_lost,wizards_lost,gold_change,food_change,runes_change,payload').eq('user_id', user.id).order('occurred_at', { ascending: false }).limit(250),
       db.from('spartan_province_registry').select('province_id,province_name,kingdom_code,last_seen_at,metadata').or(`user_id.eq.${user.id},user_id.eq.${account.id}`).eq('province_name', account.province_name).limit(100),
     ])
     if (vaultResult.error) throw vaultResult.error
@@ -105,7 +105,14 @@ export async function GET() {
       key, records: rows.filter(row => row[key] != null).length, present: rows.some(row => row[key] != null),
     }))
     const historyFields = countStoredFields(historyRowsResult.data || [], ['acres','networth','population','peons','soldiers','off_specs','def_specs','elites','thieves','wizards','generals','prisoners','war_horses','offense','defense','defense_home','o_tpa','d_tpa','o_wpa','d_wpa','build_efficiency','wages'])
-    const eventFields = countStoredFields(eventRowsResult.data || [], ['event_type','attacker','defender','target_kingdom','acres_change','troops_lost','thieves_lost','wizards_lost','peasants_change','gold_change','food_change','runes_change','mana_change'])
+    const eventRows = eventRowsResult.data || []
+    const eventFields = [
+      ...countStoredFields(eventRows, ['event_type','attacker','defender','target_kingdom','acres_change','troops_lost','thieves_lost','wizards_lost','gold_change','food_change','runes_change']),
+      ...['attacker_kingdom','defender_kingdom','return_hours','unit_losses','capture_id','normalizer'].map(key => ({
+        key: 'payload.' + key, records: eventRows.filter(row => row.payload?.[key] != null).length,
+        present: eventRows.some(row => row.payload?.[key] != null),
+      })),
+    ]
     const flows = flowResult.data || []
     const flowByKind = new Map<string, any>()
     for (const flow of flows) {
