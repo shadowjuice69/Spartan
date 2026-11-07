@@ -41,8 +41,7 @@ create index if not exists spartan_steward_runs_capture_created_idx
 -- Items already at the retry ceiling are marked failed instead of looping forever.
 create or replace function public.claim_spartan_queue(
   p_worker text,
-  p_limit integer default 10,
-  p_lease_minutes integer default 30
+  p_limit integer default 10
 )
 returns table (
   id bigint,
@@ -60,8 +59,6 @@ returns table (
 language plpgsql
 set search_path to 'public'
 as $function$
-declare
-  v_lease_minutes integer := greatest(5, least(coalesce(p_lease_minutes, 30), 180));
 begin
   -- Terminalize expired leases that have exhausted the processor's five-attempt policy.
   with exhausted as (
@@ -74,7 +71,7 @@ begin
              'attempts', q.attempts
            )
      where q.status = 'processing'
-       and q.locked_at < now() - make_interval(mins => v_lease_minutes)
+       and q.locked_at < now() - interval '30 minutes'
        and q.attempts >= 5
     returning q.flow_id
   )
@@ -131,5 +128,5 @@ begin
 end;
 $function$;
 
-revoke all on function public.claim_spartan_queue(text, integer, integer) from public, anon, authenticated;
+revoke all on function public.claim_spartan_queue(text, integer) from public, anon, authenticated;
 grant execute on function public.claim_spartan_queue(text, integer, integer) to service_role;
