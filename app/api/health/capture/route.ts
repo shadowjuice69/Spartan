@@ -20,7 +20,7 @@ export async function GET() {
     if (accountError) throw new Error(accountError.message);
     if (!account) return NextResponse.json({ error: 'Active Spartan account not found.' }, { status: 403 });
 
-    const [captureResult, flowResult] = await Promise.all([
+    const [captureResult, flowResult, openFlowResult] = await Promise.all([
       db.from('spartan_capture_vault')
         .select('capture_id,source,page_kind,captured_at')
         .eq('province_id', account.id)
@@ -31,13 +31,21 @@ export async function GET() {
         .eq('province_id', account.id)
         .order('created_at', { ascending: false })
         .limit(500),
+      db.from('spartan_data_flow')
+        .select('flow_id,status,created_at')
+        .eq('province_id', account.id)
+        .in('status', ['received', 'retry', 'failed'])
+        .order('created_at', { ascending: true })
+        .limit(1000),
     ]);
 
     if (captureResult.error) throw new Error(captureResult.error.message);
     if (flowResult.error) throw new Error(flowResult.error.message);
+    if (openFlowResult.error) throw new Error(openFlowResult.error.message);
 
     const captures = captureResult.data || [];
     const flows = flowResult.data || [];
+    const openFlows = openFlowResult.data || [];
     const pageKinds = new Map<string, { source: string; pageKind: string; count: number; latestAt: string | null }>();
 
     for (const row of captures) {
@@ -56,7 +64,7 @@ export async function GET() {
       flowStatuses[status] = (flowStatuses[status] || 0) + 1;
     }
 
-    const flowIds = flows.map(flow => flow.flow_id).filter(Boolean);
+    const flowIds = [...new Set([...flows, ...openFlows].map(flow => flow.flow_id).filter(Boolean))];
     let queueStatuses: Record<string, number> = {};
     let staleProcessing = 0;
     let failedQueue = 0;
