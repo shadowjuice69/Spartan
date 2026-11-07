@@ -42,7 +42,7 @@ function parseStructuredNewsEvents(rawText, options = {}) {
       const killsMatch = line.match(/\bkills:\s*\*{0,2}([\d,]+)(?:\s*\(\+([\d,]+)\s*prisoners\))?/i);
       const credsMatch = line.match(/\b([\d,]+)\s+spec creds\b/i);
       const peasantsMatch = line.match(/\b([\d,]+)\s+peasants\b/i);
-      const offenseMatch = line.match(/\b([\d,]+)\s*off\b/i);
+      const offenseMatch = line.match(/([\d,]+)\s*off\b/i);
       const generalsMatch = line.match(/\((\d+)\s+gens?\)/i);
       event = {
         event_type: action === 'attacked' ? 'attack' : action,
@@ -53,7 +53,7 @@ function parseStructuredNewsEvents(rawText, options = {}) {
         troops_lost: losses.troops || null,
         thieves_lost: losses.thieves || null,
         wizards_lost: losses.wizards || null,
-        payload: { format: 'discord_attack_report', action, attacker_kingdom: options.ownKingdom || null, defender_kingdom: botAttack[4], unit_losses: losses, return_hours: number(returnMatch?.[1]), kills: number(killsMatch?.[1]), prisoners: number(killsMatch?.[2]), spec_creds: number(credsMatch?.[1]), peasants_gained: number(peasantsMatch?.[1]), offense_sent: number(offenseMatch?.[1]), generals: number(generalsMatch?.[1]), normalizer: 'spartan-event-normalizer' },
+        payload: { format: 'discord_attack_report', action, attacker_kingdom: options.ownKingdom || null, defender_kingdom: botAttack[4], unit_losses: losses, return_hours: number(returnMatch?.[1]), kills: number(killsMatch?.[1]), prisoners: number(killsMatch?.[2]), spec_creds: number(credsMatch?.[1]), peasants_reported: number(peasantsMatch?.[1]), offense_sent: number(offenseMatch?.[1]), generals: number(generalsMatch?.[1]), normalizer: 'spartan-event-normalizer' },
       };
     }
 
