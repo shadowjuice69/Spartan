@@ -512,7 +512,14 @@ async function syncNewsEvents(sb, flow, state, capture, classifiedKind = null) {
     logger.warn(`[SPARTAN PROCESSOR] skipping news event without a mapped account owner capture=${flow.capture_id || 'unknown'}`);
     return 0;
   }
-  const province = await findProvince(sb, flow, state);
+  let province = await findProvince(sb, flow, state);
+  if (!province && account?.province_name && account?.province_location && userId) {
+    const { data: registered, error: registryError } = await sb.from('spartan_province_registry')
+      .select('province_id,province_name,kingdom_code')
+      .eq('user_id', userId).eq('province_name', account.province_name).eq('kingdom_code', account.province_location).maybeSingle();
+    if (registryError) throw new Error(`event province registry lookup: ${registryError.message}`);
+    if (registered) province = { id: registered.province_id, province_id: registered.province_id, name: registered.province_name, kingdom_id: registered.kingdom_code };
+  }
   const capturedAt = capture?.captured_at || state?.captured_at || state?.processed_at || new Date().toISOString();
   const existing = Array.isArray(state?.data?.events) ? state.data.events : [];
   const normalized = existing.length ? [] : parseStructuredNewsEvents(capture?.raw_text || state?.raw_text || '', {
@@ -520,7 +527,7 @@ async function syncNewsEvents(sb, flow, state, capture, classifiedKind = null) {
   });
   const rows = [
     ...existing.map((event, index) => ({
-      user_id: userId, province_id: province?.id || capture?.province_id || flow.province_id || null,
+      user_id: userId, province_id: province?.id || null,
       kingdom_id: province?.kingdom_id || flow.kingdom_id || null,
       occurred_at: event.created_at || capturedAt, age: Number(state?.data?.age) || null,
       game_year: Number(state?.data?.game_year) || null, game_tick: state?.data?.game_tick || null,
@@ -537,7 +544,7 @@ async function syncNewsEvents(sb, flow, state, capture, classifiedKind = null) {
       raw_text: event.raw || event.raw_text || null, created_at: new Date().toISOString(),
     })),
     ...normalized.map(event => ({
-      user_id: userId, province_id: capture?.province_id || flow.province_id || null,
+      user_id: userId, province_id: province?.id || null,
       kingdom_id: flow.kingdom_id || null, occurred_at: event.occurred_at,
       age: Number(state?.data?.age) || null, game_year: Number(state?.data?.game_year) || null,
       game_tick: state?.data?.game_tick || null, event_type: event.event_type,
