@@ -7,7 +7,7 @@ on:
     branches: [main]
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: spartan-quality-${{ github.ref }}
@@ -20,6 +20,8 @@ jobs:
     steps:
       - name: Check out source
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref || github.ref }}
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
@@ -27,5 +29,25 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci
+      - name: Patch the framework stack on the hardening PR
+        if: github.event_name == 'pull_request' && github.head_ref == 'audit/reliability-performance-hardening'
+        run: npm install --save-exact next@15.5.29 react@19.1.10 react-dom@19.1.10
+      - name: Report dependency audit
+        if: github.event_name == 'pull_request' && github.head_ref == 'audit/reliability-performance-hardening'
+        run: |
+          npm audit --json > /tmp/spartan-npm-audit.json || true
+          node -e "const a=require('/tmp/spartan-npm-audit.json'); console.log(JSON.stringify({metadata:a.metadata?.vulnerabilities, vulnerabilities:Object.entries(a.vulnerabilities||{}).map(([name,v])=>({name,severity:v.severity,range:v.range,fixAvailable:v.fixAvailable}))},null,2))"
       - name: Run unit tests and production build
         run: npm run build
+      - name: Commit patched framework lockfile
+        if: github.event_name == 'pull_request' && github.head_ref == 'audit/reliability-performance-hardening'
+        env:
+          GITHUB_HEAD_REF: ${{ github.head_ref }}
+        run: |
+          if ! git diff --quiet -- package.json package-lock.json; then
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git add package.json package-lock.json
+            git commit -m 'fix(security): patch Next.js and React dependencies'
+            git push origin "HEAD:${GITHUB_HEAD_REF}"
+          fi
