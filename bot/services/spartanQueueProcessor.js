@@ -553,10 +553,11 @@ function mergeProjectionState(existingState, incomingState, previousFlow) {
   const pageKind = String(incomingState?.page_kind || 'unknown');
   const incomingTime = Date.parse(incomingState?.captured_at || '');
   const timestamps = { ...(existingState?.page_capture_timestamps || {}) };
+  // Without a per-page timestamp, only compare against the top-level
+  // timestamp when the previous projection itself came from this same page.
   const previousPageTime = Date.parse(
     timestamps[pageKind] ||
-    (existingState?.page_kind === pageKind ? existingState?.captured_at : '') ||
-    (previousFlow?.page_kind === pageKind ? existingState?.captured_at : '')
+    (existingState?.page_kind === pageKind ? existingState?.captured_at : '')
   );
   const staleForPage = Number.isFinite(incomingTime) && Number.isFinite(previousPageTime) && incomingTime < previousPageTime;
   if (!staleForPage && Number.isFinite(incomingTime)) timestamps[pageKind] = new Date(incomingTime).toISOString();
