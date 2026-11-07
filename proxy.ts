@@ -39,6 +39,8 @@ export async function proxy(request: NextRequest) {
   // their own header-based secret. They do not have a Supabase browser session,
   // so the dashboard auth/session redirect must not intercept these requests.
   if (path.startsWith('/api/capture')) return NextResponse.next()
+  // Render's liveness probe must work without a dashboard session and returns no private data.
+  if (path === '/api/health') return NextResponse.next()
   // UtopiaIntel authenticates with UTOPIA_INTEL_KEY inside its route, not a browser session.
   if (path === '/api/intel') return NextResponse.next()
   if (path === '/api/internal-storage/process' && stewardKey && stewardKey === process.env.SPARTAN_STEWARD_KEY) {
