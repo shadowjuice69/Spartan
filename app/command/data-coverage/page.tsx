@@ -50,7 +50,7 @@ export default function DataCoveragePage() {
           <div style={{display:'grid',gap:9}}>
             {data.coverage.kinds.map(row=><div key={row.page_kind} style={{padding:12,border:'1px solid rgba(255,255,255,.07)',borderRadius:10,background:'rgba(255,255,255,.02)'}}>
               <div style={{display:'flex',justifyContent:'space-between',gap:10,flexWrap:'wrap'}}><b style={{fontSize:12}}>{row.page_kind}</b><Tag color={C.cyan}>{fmt(row.count)} captures</Tag></div>
-              <div style={{fontSize:10,color:'#8d9baa',marginTop:6}}>Latest {ago(row.latest)} · {row.structured} structured · {row.sources.join(', ')} || 'source unknown'}</div>
+              <div style={{fontSize:10,color:'#8d9baa',marginTop:6}}>Latest {ago(row.latest)} · {row.structured} structured · {row.sources.join(', ') || 'source unknown'}}</div>
               <div style={{display:'flex',gap:5,flexWrap:'wrap',marginTop:8}}>{row.destinations.map(dest=><Tag key={dest} color={C.green}>{dest}</Tag>)}</div>
             </div>)}
           </div>
@@ -73,7 +73,7 @@ export default function DataCoveragePage() {
         <Panel title="PROCESSING FLOWS" sub="Recent flows tied to this account’s latest captured records.">
           {data.coverage.flows.length ? data.coverage.flows.map(flow=><div key={flow.page_kind} style={{padding:'9px 0',borderBottom:'1px solid rgba(255,255,255,.06)'}}>
             <b style={{fontSize:11}}>{flow.page_kind}</b><div style={{fontSize:10,color:'#8d9baa',marginTop:4}}>{fmt(flow.count)} flows · {ago(flow.latest)} · {Object.entries(flow.statuses).map(([k,v])=>k+': '+v).join(' · ')}</div>
-          </div>) : <p style={{fontSize:11,color:'#8993a1'}}>No recent Discord bot flows found.</p>}
+          </div>) : <p style={{fontSize:11,color:'#8993a1'}}>No processing flows found for the latest captures.</p>}
         </Panel>
         <Panel title="PROVINCE REGISTRY" sub="Province identity and specialized data stored in registry metadata.">
           {data.coverage.registry.map(row=><div key={row.province} style={{padding:'9px 0',borderBottom:'1px solid rgba(255,255,255,.06)'}}>
