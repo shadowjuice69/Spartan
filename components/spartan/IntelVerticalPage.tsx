@@ -94,6 +94,12 @@ function pretty(key:string) {
   return key.replaceAll("_"," ").replace(/w/g, c => c.toUpperCase())
 }
 
+function unwrapPayload(payload:any) {
+  if (!payload || typeof payload !== "object") return {}
+  const nested = payload.data ?? payload.parsed_payload?.data
+  return nested && typeof nested === "object" && !Array.isArray(nested) ? nested : payload
+}
+
 function valueAt(payload:any, keys:string[]) {
   if (!payload || typeof payload !== "object") return null
   for (const key of keys) {
@@ -266,7 +272,7 @@ function graphicFor(section:string,records:any[],accent:string) {
 }
 
 function summary(row:any, vertical:Vertical) {
-  const p=row?.payload || {}
+  const p=unwrapPayload(row?.payload ?? row?.parsed_payload)
   const values = vertical.metrics.map(([label,keys]) => [label,valueAt(p,keys)] as const).filter(([,v])=>v!==null)
   if (values.length) return values.slice(0,4).map(([k,v])=>`${k}: ${scalar(v)}`).join(" · ")
   return row?.classification_reason || "Captured intelligence record"
@@ -302,7 +308,7 @@ export default function IntelVerticalPage() {
 
   const records=data?.records||[]
   const counts=data?.counts||{}
-  const latest=records[0]?.payload||{}
+  const latest=unwrapPayload(records[0]?.payload ?? records[0]?.parsed_payload)
   const current=useMemo(()=>vertical.metrics.map(([label,keys])=>({label,value:valueAt(latest,keys)})).filter(x=>x.value!==null),[latest,vertical])
   const sourceCounts=useMemo(()=>{
     const m=new Map<string,number>()
