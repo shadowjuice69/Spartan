@@ -50,19 +50,23 @@ export async function GET() {
     if (accountError) throw accountError
     if (!account) return NextResponse.json({ error: 'No linked Spartan account.' }, { status: 403 })
 
-    const [vaultResult, intelCount, historyCount, eventCount, registryResult] = await Promise.all([
+    const [vaultResult, intelCount, historyCount, eventCount, historyRowsResult, eventRowsResult, registryResult] = await Promise.all([
       db.from('spartan_capture_vault')
         .select('capture_id,source,page_kind,captured_at,parsed_payload,raw_payload')
         .eq('user_id', account.id).order('captured_at', { ascending: false }).limit(1500),
       db.from('spartan_intel_records').select('id', { count: 'exact', head: true }).eq('user_id', account.id),
       db.from('spartan_province_history').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
       db.from('spartan_event_history').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
+      db.from('spartan_province_history').select('acres,networth,population,peons,soldiers,off_specs,def_specs,elites,thieves,wizards,generals,prisoners,war_horses,offense,defense,defense_home,o_tpa,d_tpa,o_wpa,d_wpa,build_efficiency,wages').eq('user_id', user.id).order('observed_at', { ascending: false }).limit(250),
+      db.from('spartan_event_history').select('event_type,attacker,defender,target_kingdom,acres_change,troops_lost,thieves_lost,wizards_lost,peasants_change,gold_change,food_change,runes_change,mana_change').eq('user_id', user.id).order('occurred_at', { ascending: false }).limit(250),
       db.from('spartan_province_registry').select('province_id,province_name,kingdom_code,last_seen_at,metadata').or(`user_id.eq.${user.id},user_id.eq.${account.id}`).limit(100),
     ])
     if (vaultResult.error) throw vaultResult.error
     if (intelCount.error) throw intelCount.error
     if (historyCount.error) throw historyCount.error
     if (eventCount.error) throw eventCount.error
+    if (historyRowsResult.error) throw historyRowsResult.error
+    if (eventRowsResult.error) throw eventRowsResult.error
     if (registryResult.error) throw registryResult.error
 
     const captures = vaultResult.data || []
@@ -97,6 +101,11 @@ export async function GET() {
       name: group.name,
       fields: group.keys.map(key => ({ key, records: fieldCounts.get(key) || 0, present: allKeys.has(key) })),
     }))
+    const countStoredFields = (rows: any[], keys: string[]) => keys.map(key => ({
+      key, records: rows.filter(row => row[key] != null).length, present: rows.some(row => row[key] != null),
+    }))
+    const historyFields = countStoredFields(historyRowsResult.data || [], ['acres','networth','population','peons','soldiers','off_specs','def_specs','elites','thieves','wizards','generals','prisoners','war_horses','offense','defense','defense_home','o_tpa','d_tpa','o_wpa','d_wpa','build_efficiency','wages'])
+    const eventFields = countStoredFields(eventRowsResult.data || [], ['event_type','attacker','defender','target_kingdom','acres_change','troops_lost','thieves_lost','wizards_lost','peasants_change','gold_change','food_change','runes_change','mana_change'])
     const flows = flowResult.data || []
     const flowByKind = new Map<string, any>()
     for (const flow of flows) {
@@ -118,7 +127,7 @@ export async function GET() {
       },
       coverage: {
         kinds, sources: [...bySource.entries()].map(([source, count]) => ({ source, count })).sort((a, b) => b.count - a.count),
-        fields, flows: [...flowByKind.values()],
+        fields, historyFields, eventFields, flows: [...flowByKind.values()],
         registry: (registryResult.data || []).map(row => ({
           province: row.province_name, kingdom: row.kingdom_code, latest: row.last_seen_at,
           available: Object.keys(row.metadata || {}),
