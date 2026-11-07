@@ -50,22 +50,20 @@ export async function GET() {
     if (accountError) throw accountError
     if (!account) return NextResponse.json({ error: 'No linked Spartan account.' }, { status: 403 })
 
-    const [vaultResult, intelCount, historyCount, eventCount, registryResult, flowResult] = await Promise.all([
+    const [vaultResult, intelCount, historyCount, eventCount, registryResult] = await Promise.all([
       db.from('spartan_capture_vault')
         .select('capture_id,source,page_kind,captured_at,raw_text,parsed_payload,raw_payload')
         .eq('user_id', account.id).order('captured_at', { ascending: false }).limit(1500),
       db.from('spartan_intel_records').select('id', { count: 'exact', head: true }).eq('user_id', account.id),
       db.from('spartan_province_history').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
       db.from('spartan_event_history').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
-      db.from('spartan_province_registry').select('province_id,province_name,kingdom_code,last_seen_at,metadata').eq('user_id', user.id).limit(100),
-      db.from('spartan_data_flow').select('page_kind,source,status,stage,processed_at,created_at').eq('source', 'discord-bot').order('created_at', { ascending: false }).limit(500),
+      db.from('spartan_province_registry').select('province_id,province_name,kingdom_code,last_seen_at,metadata').or(`user_id.eq.${user.id},user_id.eq.${account.id}`).limit(100),
     ])
     if (vaultResult.error) throw vaultResult.error
     if (intelCount.error) throw intelCount.error
     if (historyCount.error) throw historyCount.error
     if (eventCount.error) throw eventCount.error
     if (registryResult.error) throw registryResult.error
-    if (flowResult.error) throw flowResult.error
 
     const captures = vaultResult.data || []
     const byKind = new Map<string, any>()
@@ -86,9 +84,15 @@ export async function GET() {
       byKind.set(kind, current)
     }
 
+    const captureIds = captures.map(row => row.capture_id).filter(Boolean)
+    const flowResult = captureIds.length
+      ? await db.from('spartan_data_flow').select('capture_id,page_kind,source,status,stage,processed_at,created_at').in('capture_id', captureIds).order('created_at', { ascending: false }).limit(500)
+      : { data: [], error: null }
+    if (flowResult.error) throw flowResult.error
+
     const kinds = [...byKind.values()].map(row => ({
       ...row, sources: [...row.sources],
-      destinations: DISPLAY_DESTINATIONS[row.page_kind] || ['Intel Vertical / Raw Capture Browser'],
+      destinations: DISPLAY_DESTINATIONS[row.page_kind] || ['Raw Capture / Intel Vertical (verify consumer)'],
     })).sort((a, b) => b.count - a.count)
     const fields = FIELD_GROUPS.map(group => ({
       name: group.name,
