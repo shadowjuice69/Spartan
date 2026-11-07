@@ -665,9 +665,13 @@ async function processOne(sb, job) {
   await addEdge(sb, flow.flow_id, 'spartan_processing_queue', 'spartan_state_projection', 'projection', {
     queue_id: job.id, processor: WORKER_ID, version, capture_id: flow.capture_id,
   });
-  const canonical = await syncCanonicalProvince(sb, flow, state);
-  const specialized = await syncSpecializedProvinceData(sb, flow, state);
-  await writeProvinceHistory(sb, flow, state, canonical || specialized, capture);
+  // Stale captures remain in the vault and event history, but must not
+  // overwrite current province metadata or create misleading current snapshots.
+  const canonical = state.stale_page_capture ? null : await syncCanonicalProvince(sb, flow, state);
+  const specialized = state.stale_page_capture ? null : await syncSpecializedProvinceData(sb, flow, state);
+  if (!state.stale_page_capture) {
+    await writeProvinceHistory(sb, flow, state, canonical || specialized, capture);
+  }
   await syncNewsEvents(sb, flow, state, capture);
   await syncBotIntelRecord(sb, flow, capture, state);
 
