@@ -31,3 +31,24 @@ test('Discord bot_event flows pass integrity without a province projection', asy
   assert.equal(result.details.projection_required, false);
   assert.equal(queried, false);
 });
+
+
+const { mergeProjectionState } = require('../services/spartanQueueProcessor');
+
+test('legacy bot-event projection fields are discarded when a real page arrives', () => {
+  const merged = mergeProjectionState(
+    { data: { event_type: 'attack', discord: { message_id: 'x' }, acres: 999 } },
+    { data: { acres: 120, population: 45000 } },
+    { source: 'discord-bot', page_kind: 'bot_event' },
+  );
+  assert.deepEqual(merged.data, { acres: 120, population: 45000 });
+});
+
+test('normal page projections still merge partial-page data', () => {
+  const merged = mergeProjectionState(
+    { data: { acres: 120, mana: 75 } },
+    { data: { acres: 125, population: 45000 } },
+    { source: 'universal_capture', page_kind: 'throne' },
+  );
+  assert.deepEqual(merged.data, { acres: 125, mana: 75, population: 45000 });
+});
