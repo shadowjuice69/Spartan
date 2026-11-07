@@ -94,7 +94,7 @@ begin
        or
        (q.status = 'processing'
         and q.locked_at is not null
-        and q.locked_at < now() - make_interval(mins => v_lease_minutes)
+        and q.locked_at < now() - interval '30 minutes'
         and q.attempts < 5)
      )
      order by q.priority desc, q.created_at asc
@@ -129,4 +129,4 @@ end;
 $function$;
 
 revoke all on function public.claim_spartan_queue(text, integer) from public, anon, authenticated;
-grant execute on function public.claim_spartan_queue(text, integer, integer) to service_role;
+grant execute on function public.claim_spartan_queue(text, integer) to service_role;
