@@ -67,6 +67,17 @@ begin
   with removed as (
     delete from public.spartan_data_edges e
      where e.created_at < now() - interval '90 days'
+       and not exists (
+         select 1
+           from public.spartan_data_flow f
+          where f.flow_id = e.flow_id
+            and (
+              f.status not in ('processed', 'failed')
+              or exists (
+                select 1 from public.spartan_processing_queue q where q.flow_id = f.flow_id
+              )
+            )
+       )
     returning e.id, to_jsonb(e) as record
   )
   insert into public.spartan_operational_archive (source_table, source_id, archived_at, record)
