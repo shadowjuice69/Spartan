@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const Module = require('node:module');
 
 function loadService(record) {
-  const state = { filters: {} };
+  const state = { filters: {}, ranges: [] };
   const chain = {
     select: () => chain,
     eq: (key, value) => { state.filters[key] = value; return chain; },
@@ -12,6 +12,7 @@ function loadService(record) {
     in: (key, value) => { state.filters[key] = value; return chain; },
     order: () => chain,
     limit: () => chain,
+    range: (start, end) => { state.ranges.push([start, end]); return chain; },
     maybeSingle: async () => ({ data: record, error: null }),
     then: (resolve, reject) => Promise.resolve({ data: [], error: null }).then(resolve, reject)
   };
@@ -80,4 +81,5 @@ test('canonical Intel list is scoped to World of Legends captures', async () => 
   await service.getIntel({ kd: '6:8', section: 'all' });
   assert.equal(state.filters.url, '%/wol/%');
   assert.equal(state.or, 'kingdom_id.eq.6:8,target_kingdom_id.eq.6:8');
+  assert.deepEqual(state.ranges, [[0, 999]]);
 });
