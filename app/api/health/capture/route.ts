@@ -64,18 +64,23 @@ export async function GET() {
       flowStatuses[status] = (flowStatuses[status] || 0) + 1;
     }
 
-    const flowIds = [...new Set([...flows, ...openFlows].map(flow => flow.flow_id).filter(Boolean))];
+    const accountFlowIds = new Set([...flows, ...openFlows].map(flow => flow.flow_id).filter(Boolean));
     let queueStatuses: Record<string, number> = {};
     let staleProcessing = 0;
     let failedQueue = 0;
-    if (flowIds.length) {
+    if (accountFlowIds.size) {
+      // Query the small outstanding queue slice once, then scope it to this account
+      // in memory. Avoid a very large PostgREST IN URL when a province has a backlog.
       const { data: queueRows, error: queueError } = await db
         .from('spartan_processing_queue')
-        .select('status,locked_at,attempts,created_at')
-        .in('flow_id', flowIds);
+        .select('flow_id,status,locked_at,attempts,created_at')
+        .in('status', ['pending', 'processing', 'retry', 'failed'])
+        .order('created_at', { ascending: false })
+        .limit(5000);
       if (queueError) throw new Error(queueError.message);
       const staleCutoff = Date.now() - 30 * 60 * 1000;
       for (const row of queueRows || []) {
+        if (!accountFlowIds.has(row.flow_id)) continue;
         const status = String(row.status || 'unknown');
         queueStatuses[status] = (queueStatuses[status] || 0) + 1;
         if (status === 'failed') failedQueue += 1;
