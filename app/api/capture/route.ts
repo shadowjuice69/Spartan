@@ -216,6 +216,30 @@ export async function POST(request: Request) {
     if (capture) {
       if (!captureOwner) return NextResponse.json({ error: 'Spartan account could not be resolved for this capture.' }, { status: 400 })
       capture = await canonicalCaptureIdentity(supabase, capture, captureOwner)
+
+      // Anduin Lothar is limited to one Intel page capture per hour across all
+      // page kinds. This is keyed to the authenticated Spartan account, not
+      // scraped identity, and does not affect event-only submissions.
+      if (captureOwner.accountId === 'aeff76bc-0762-47d4-a329-5483c6f79e21') {
+        const { data: rateLimitData, error: rateLimitError } = await supabase.rpc(
+          'spartan_claim_capture_slot',
+          { p_province_id: captureOwner.accountId },
+        )
+        if (rateLimitError) throw new Error(rateLimitError.message)
+        const rateLimit = Array.isArray(rateLimitData) ? rateLimitData[0] : rateLimitData
+        if (!rateLimit || rateLimit.allowed !== true) {
+          const retryAfterSeconds = Math.max(1, Number(rateLimit?.retry_after_seconds ?? 3600))
+          return NextResponse.json({
+            ok: true,
+            captured: false,
+            storedInVault: false,
+            rateLimited: true,
+            retryAfterSeconds,
+            message: 'This province may submit one Intel page per hour.',
+          }, { status: 200 })
+        }
+      }
+
       body.capture = capture
       canonicalKingdomId = capture.canonicalKingdomId ?? null
 
