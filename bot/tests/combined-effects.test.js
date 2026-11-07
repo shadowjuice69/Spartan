@@ -55,7 +55,7 @@ test('reduced damage taken/received is favorable', () => {
   const result = combineEffects({
     bonuses: '-20% Damage Taken from Raze Attacks\n-15% Spell Damage Received',
   }, null);
-  assert.equal(rowFor(result, 'DAMAGE TAKEN FROM RAZE ATTACKS').favorable, true);
+  assert.equal(rowFor(result, 'DAMAGE TAKEN').favorable, true);
   assert.equal(rowFor(result, 'SPELL DAMAGE RECEIVED').favorable, true);
 });
 
