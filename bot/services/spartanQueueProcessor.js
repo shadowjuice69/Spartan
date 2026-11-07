@@ -399,39 +399,55 @@ async function syncBotIntelRecord(sb, flow, capture, state, options = {}) {
 
 async function backfillMissingBotIntel(sb) {
   if (!sb) return { checked: 0, recovered: 0, skipped: 0 };
-  const { data: captures, error: captureError } = await sb.from('spartan_capture_vault')
-    .select('id,capture_id,source,province_id,kingdom_id,page_kind,url,raw_text,raw_payload,parsed_payload,content_hash,captured_at,user_id')
+  const chunk = (list, size) => { const out = []; for (let i = 0; i < list.length; i += size) out.push(list.slice(i, i + size)); return out; };
+  // Phase 1 (cheap): ids only. The bot-message filters run in the database, so this never downloads payloads.
+  const { data: heads, error: captureError } = await sb.from('spartan_capture_vault')
+    .select('id,capture_id')
     .eq('source', 'discord-bot')
     .like('raw_text', '%<<__%')
     .like('raw_text', '%__>>%')
+    .eq('parsed_payload->data->metadata->>author_bot', 'true')
     .order('captured_at', { ascending: false })
     .limit(1000);
   if (captureError) throw new Error(`bot Intel backfill capture scan: ${captureError.message}`);
-  const candidates = (captures || []).filter(capture => {
-    const metadata = capture?.parsed_payload?.data?.metadata || {};
-    return (metadata.author_bot === true || metadata.author_bot === 'true') &&
-      String(capture.raw_text || '').includes('<<__') && String(capture.raw_text || '').includes('__>>');
-  });
-  if (!candidates.length) return { checked: 0, recovered: 0, skipped: 0 };
-  const captureIds = candidates.map(capture => capture.capture_id).filter(Boolean);
+  const headRows = (heads || []).filter(h => h && h.capture_id);
+  if (!headRows.length) return { checked: 0, recovered: 0, skipped: 0 };
+  // Phase 2 (cheap): which of those already have an intel record. Small chunks keep request URLs short.
+  const existingCaptures = new Set();
+  for (const part of chunk(headRows, 100)) {
+    const { data: byCapture, error: e1 } = await sb.from('spartan_intel_records')
+      .select('capture_id,source_vault_id').eq('source', 'discord-bot').in('capture_id', part.map(h => h.capture_id));
+    if (e1) throw new Error(`bot Intel backfill existing-record scan: ${e1.message}`);
+    const { data: byVault, error: e2 } = await sb.from('spartan_intel_records')
+      .select('capture_id,source_vault_id').eq('source', 'discord-bot').in('source_vault_id', part.map(h => h.id));
+    if (e2) throw new Error(`bot Intel backfill existing-record scan: ${e2.message}`);
+    for (const row of [...(byCapture || []), ...(byVault || [])]) {
+      if (row.capture_id) existingCaptures.add(String(row.capture_id));
+      if (row.source_vault_id != null) existingCaptures.add(`vault:${row.source_vault_id}`);
+    }
+  }
+  const missing = headRows.filter(h => !existingCaptures.has(String(h.capture_id)) && !existingCaptures.has(`vault:${h.id}`));
+  if (!missing.length) return { checked: headRows.length, recovered: 0, skipped: headRows.length };
+  // Phase 3: download full rows and flows only for the captures that are actually missing.
+  const candidates = [];
+  for (const part of chunk(missing, 50)) {
+    const { data: full, error: fullError } = await sb.from('spartan_capture_vault')
+      .select('id,capture_id,source,province_id,kingdom_id,page_kind,url,raw_text,raw_payload,parsed_payload,content_hash,captured_at,user_id')
+      .in('id', part.map(h => h.id));
+    if (fullError) throw new Error(`bot Intel backfill capture scan: ${fullError.message}`);
+    candidates.push(...(full || []));
+  }
+  candidates.sort((a, b) => String(b.captured_at || '').localeCompare(String(a.captured_at || '')));
   // Look flows up in small chunks. One .in() with ~1000 ids makes a ~40 KB URL, which the
   // gateway rejects, so every run died with "TypeError: fetch failed".
   const flows = [];
-  for (let i = 0; i < captureIds.length; i += 100) {
-    const { data: part, error: flowError } = await sb.from('spartan_data_flow')
-      .select('*').eq('source', 'discord-bot').eq('page_kind', 'bot_event').in('capture_id', captureIds.slice(i, i + 100));
+  for (const part of chunk(candidates.map(c => c.capture_id).filter(Boolean), 100)) {
+    const { data: flowPart, error: flowError } = await sb.from('spartan_data_flow')
+      .select('*').eq('source', 'discord-bot').eq('page_kind', 'bot_event').in('capture_id', part);
     if (flowError) throw new Error(`bot Intel backfill flow scan: ${flowError.message}`);
-    flows.push(...(part || []));
+    flows.push(...(flowPart || []));
   }
   const flowByCapture = new Map(flows.map(flow => [flow.capture_id, flow]));
-  const { data: existingRows, error: existingError } = await sb.from('spartan_intel_records')
-    .select('capture_id,source_vault_id').eq('source', 'discord-bot').limit(10000);
-  if (existingError) throw new Error(`bot Intel backfill existing-record scan: ${existingError.message}`);
-  const existingCaptures = new Set();
-  for (const row of existingRows || []) {
-    if (row.capture_id) existingCaptures.add(String(row.capture_id));
-    if (row.source_vault_id != null) existingCaptures.add(`vault:${row.source_vault_id}`);
-  }
   let recovered = 0;
   let skipped = 0;
   // Newest-first plus key checks preserves the latest record for each operation identity.
