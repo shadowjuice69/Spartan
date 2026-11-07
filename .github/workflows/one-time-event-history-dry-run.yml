@@ -6,6 +6,11 @@ on:
       - ops/run-event-history-dry-run
     paths:
       - .github/workflows/one-time-event-history-dry-run.yml
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/one-time-event-history-dry-run.yml
 
 permissions:
   contents: read
