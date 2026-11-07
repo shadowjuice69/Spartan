@@ -508,6 +508,10 @@ async function syncNewsEvents(sb, flow, state, capture, classifiedKind = null) {
   if (!isNews) return null;
   const account = await resolveAccountContext(sb, capture, flow);
   const userId = account?.auth_user_id || await resolveAuthUserId(sb, capture, flow);
+  if (!userId) {
+    logger.warn(`[SPARTAN PROCESSOR] skipping news event without a mapped account owner capture=${flow.capture_id || 'unknown'}`);
+    return 0;
+  }
   const province = await findProvince(sb, flow, state);
   const capturedAt = capture?.captured_at || state?.captured_at || state?.processed_at || new Date().toISOString();
   const existing = Array.isArray(state?.data?.events) ? state.data.events : [];
