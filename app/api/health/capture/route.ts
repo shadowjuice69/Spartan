@@ -77,7 +77,8 @@ export async function GET() {
 
     return NextResponse.json({
       ok: true,
-      province: { name: account.province_name, kingdom: account.province_location },
+      province: account.province_name,
+      kingdom: account.province_location,
       generatedAt: new Date().toISOString(),
       sample: { captures: captures.length, flows: flows.length },
       lastCaptureAt: captures[0]?.captured_at || null,
