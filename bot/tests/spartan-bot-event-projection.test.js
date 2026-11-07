@@ -75,3 +75,13 @@ test('fresh captures of different page kinds still merge partial data', () => {
   assert.equal(merged.page_capture_timestamps.science, '2026-11-07T12:30:00.000Z');
   assert.equal(merged.stale_page_capture, false);
 });
+
+test('legacy projection timestamp does not block a different page kind', () => {
+  const merged = mergeProjectionState(
+    { page_kind: 'throne', captured_at: '2026-11-07T12:00:00.000Z', data: { acres: 900 } },
+    { page_kind: 'science', captured_at: '2026-11-07T08:00:00.000Z', data: { science: { economy: 10 } } },
+    { source: 'universal_capture', page_kind: 'throne' },
+  );
+  assert.deepEqual(merged.data, { acres: 900, science: { economy: 10 } });
+  assert.equal(merged.stale_page_capture, false);
+});
