@@ -18,7 +18,7 @@ test('normalizes structured Discord attack reports and extracts losses/return ti
   assert.equal(event.payload.kills, 45);
   assert.equal(event.payload.prisoners, 87);
   assert.equal(event.payload.spec_creds, 107);
-  assert.equal(event.payload.peasants_gained, 120);
+  assert.equal(event.payload.peasants_reported, 120);
   assert.equal(event.payload.offense_sent, 37907);
   assert.equal(event.payload.generals, 1);
   assert.equal(event.payload.attacker_kingdom, '6:8');
