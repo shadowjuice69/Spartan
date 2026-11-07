@@ -22,7 +22,7 @@ function unitLosses(value) {
 
 function parseStructuredNewsEvents(rawText, options = {}) {
   const text = String(rawText || '').replace(/\u00a0/g, ' ');
-  const expanded = text.replace(/(?=\\b(?:January|February|March|April|May|June|July|August|September|October|November|December)\\s+\\d{1,2}\\s+of\\s+YR\\d+\\s+)/gi, '\\n');
+  const expanded = text.replace(/(?=\b(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2}\s+of\s+YR\d+\s+)/gi, '\\n');
   const lines = expanded.split(/\r?\n|\\n/).map((line) => line.trim()).filter(Boolean);
   const capturedAt = options.capturedAt && Number.isFinite(Date.parse(options.capturedAt))
     ? new Date(options.capturedAt).toISOString()
