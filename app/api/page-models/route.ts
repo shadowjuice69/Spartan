@@ -664,8 +664,8 @@ export async function GET(request: Request) {
         const defender = row.defender ? parseNewsParty(defenderKd ? `${row.defender} (${defenderKd})` : row.defender) : null
         const rawType = String(row.event_type || '').toLowerCase()
         const type = ({ attack: 'invade', incoming_attack: 'invade', invaded: 'invade', ambushed: 'ambush', pillaged: 'pillage', looted: 'plunder', recaptured: 'recapture', captured: 'capture' } as Record<string, string>)[rawType] || rawType
-        const side = attackerOwn || (attackerKd === own.kd && defenderKd !== own.kd) ? 'out'
-          : defenderOwn || (defenderKd === own.kd && attackerKd !== own.kd) ? 'in' : 'other'
+        const side = attackerOwn || (Boolean(own.kd) && attackerKd === own.kd && defenderKd !== own.kd) ? 'out'
+          : defenderOwn || (Boolean(own.kd) && defenderKd === own.kd && attackerKd !== own.kd) ? 'in' : 'other'
         const stamp = Date.parse(row.occurred_at || '')
         return {
           at: row.occurred_at || null, approx: true,
