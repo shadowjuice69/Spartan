@@ -138,7 +138,7 @@ async function writeProvinceHistory(sb, flow, state, canonical, capture) {
     province_id: canonical.provinceId, kingdom_id: canonical.kingdomId || null,
     observed_at: state.captured_at || state.processed_at || new Date().toISOString(),
     source: flow.source || 'spartan_processor', source_id: flow.source_id || flow.capture_id,
-    acres: numeric(data.acres), networth: numeric(data.nw), population: numeric(data.population ?? data.peons), peons: numeric(data.peons ?? data.population),
+    acres: numeric(data.acres), networth: numeric(data.nw), population: numeric(data.population), peons: numeric(data.peons),
     soldiers: numeric(data.soldiers), off_specs: numeric(data.off_specs), def_specs: numeric(data.def_specs), elites: numeric(data.elites),
     thieves: numeric(data.thieves), wizards: numeric(data.wizards), generals: numeric(data.generals), prisoners: numeric(data.prisoners), war_horses: numeric(data.war_horses),
     offense: numeric(data.off ?? data.offense), defense: numeric(data.def ?? data.defense), defense_home: numeric(data.defense_home ?? data.def_home ?? data.defHome), o_tpa: numeric(data.o_tpa), d_tpa: numeric(data.d_tpa),
