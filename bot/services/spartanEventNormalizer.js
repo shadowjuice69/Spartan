@@ -12,7 +12,7 @@ function unitLosses(value) {
   for (const match of String(value || '').matchAll(/([\d,]+)\s+([a-z][a-z -]*)/gi)) {
     const count = number(match[1]) || 0;
     const unit = match[2].toLowerCase();
-    if (/thief/.test(unit)) result.thieves += count;
+    if (/thiev|thief/.test(unit)) result.thieves += count;
     else if (/wizard/.test(unit)) result.wizards += count;
     else if (/horse/.test(unit)) result.horses += count;
     else result.troops += count;
