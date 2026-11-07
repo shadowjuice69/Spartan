@@ -344,7 +344,7 @@ export default function IntelVerticalPage() {
     const left=valueAt(unwrapPayload(compareA?.payload??compareA?.parsed_payload),keys)
     const right=valueAt(unwrapPayload(compareB?.payload??compareB?.parsed_payload),keys)
     const a=numValue(left),b=numValue(right)
-    return {label,left,right,delta:a!==null&&b!==null?a-b:null}
+    return {label,left,right,delta:a!==null&&b!==null?b-a:null}
   }).filter(row=>row.left!==null||row.right!==null),[compareA,compareB,vertical])
 
   return <main style={{minHeight:"100vh",background:"#05080d",color:"#e7eef5",fontFamily:"Inter,system-ui,sans-serif",display:"flex"}}>
