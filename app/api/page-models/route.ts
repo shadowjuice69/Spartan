@@ -436,12 +436,17 @@ export async function GET(request: Request) {
       }
     }
 
-    const recordsResult = await db.from('spartan_intel_records').select(COLUMNS).in('page_kind', KINDS[page]).or(scope).order('created_at', { ascending: false }).limit(90)
-    if (recordsResult.error) fail(recordsResult.error)
-    let records = ((recordsResult.data || []) as Rec[]).filter(r =>
-      !(sharedPages.has(page) && r.visibility === 'own' && r.user_id !== user.id && r.user_id !== account.id) &&
-      (r.source !== 'discord-bot' || isStructuredBotIntelText(r.raw_text))
-    )
+    // The Intel grid has its own compact grid query below. Avoid fetching the same
+    // 90 raw-text/parsed-payload records twice for that page.
+    let records: Rec[] = []
+    if (page !== 'intel') {
+      const recordsResult = await db.from('spartan_intel_records').select(COLUMNS).in('page_kind', KINDS[page]).or(scope).order('created_at', { ascending: false }).limit(90)
+      if (recordsResult.error) fail(recordsResult.error)
+      records = ((recordsResult.data || []) as Rec[]).filter(r =>
+        !(sharedPages.has(page) && r.visibility === 'own' && r.user_id !== user.id && r.user_id !== account.id) &&
+        (r.source !== 'discord-bot' || isStructuredBotIntelText(r.raw_text))
+      )
+    }
     if (page === 'science') {
       const startMs = ageStartedAt ? Date.parse(ageStartedAt) : NaN
       records = currentAge === null ? [] : records.filter((r) => {
@@ -518,10 +523,18 @@ export async function GET(request: Request) {
     if (page === 'intel') {
       // Grids scraped from the kingdom intel site. Each capture carries its kingdom code, and viewers pick
       // different columns, so recent captures of the same kingdom are merged into one row per province.
-      const g = await db.from('spartan_intel_records')
-        .select('id,url,created_at,captured_at,parsed_payload,raw_text,grid:raw_payload->grid')
-        .eq('page_kind', 'intel').or(scope).order('created_at', { ascending: false }).limit(60)
+      const [g, statsResult] = await Promise.all([
+        db.from('spartan_intel_records')
+          .select('id,url,created_at,captured_at,parsed_payload,grid:raw_payload->grid')
+          .eq('page_kind', 'intel').or(scope).order('created_at', { ascending: false }).limit(60),
+        db.from('spartan_intel_records')
+          .select('raw_text,captured_at,created_at')
+          .eq('page_kind', 'intel').or(scope)
+          .or('raw_text.ilike.%Our KD%,raw_text.ilike.%Enemy KD%')
+          .order('created_at', { ascending: false }).limit(1).maybeSingle(),
+      ])
       if (g.error) fail(g.error)
+      if (statsResult.error) fail(statsResult.error)
       const rows: any[] = g.data || []
       const captures: GridCapture[] = rows
         .filter(r => Array.isArray(r.grid?.rows))
@@ -542,7 +555,7 @@ export async function GET(request: Request) {
         const provinces = mergeGrids(recent)[kd] || []
         return { kd, own: kd === ownKd, source: recent[0].url, capturedAt: recent[0].at, captures: recent.length, provinces }
       }).sort((a, b) => Number(b.own) - Number(a.own) || Date.parse(b.capturedAt) - Date.parse(a.capturedAt))
-      const statsRow = rows.find(r => /Our KD\s*-|Enemy KD\s*-/.test(String(r.raw_text || '')))
+      const statsRow = statsResult.data || null
       const armies = armiesFrom(byKd[ownKd] || []).filter(a => (a.secondsRemaining ?? 0) > 0)
       body.model = { kingdoms, stats: parseStats(statsRow?.raw_text), statsAt: statsRow ? statsRow.captured_at || statsRow.created_at : null, armies, ownKd, ownName: account.province_name }
       body.fields = []
