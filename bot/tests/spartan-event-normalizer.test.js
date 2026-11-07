@@ -4,7 +4,7 @@ const { parseStructuredNewsEvents } = require('../services/spartanEventNormalize
 
 test('normalizes structured Discord attack reports and extracts losses/return time', () => {
   const [event] = parseStructuredNewsEvents(
-    ':crossed_swords: Finkster [**silen#**] attacked __Ayoko na mag Utopia__ (3:11)|captured: **34**|loss: **113 Griffins and 129 horses**|kills: **45 (+87 prisoners)**|return: 12.38',
+    ':crossed_swords: Finkster [**silen#**] attacked __Ayoko na mag Utopia__ (3:11)|captured: **34**|loss: **113 Griffins and 129 horses**|kills: **45 (+87 prisoners)**|return: 12.38|107 spec creds|120 peasants|37907off (1 gens)',
     { captureId: 'capture-1', capturedAt: '2026-11-07T15:38:46.550Z', ownKingdom: '6:8' },
   );
   assert.equal(event.event_type, 'attack');
