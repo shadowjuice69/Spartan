@@ -4,6 +4,7 @@ export type NavItem = [label: string, href: string]
 export const NAV_COMMAND: NavItem[] = [
   ['Command', '/'],
   ['System Health', '/command/system-health'],
+  ['Data Coverage', '/command/data-coverage'],
   ['Province', '/command/province'],
   ['Throne', '/command/throne'],
   ['Kingdom', '/command/kingdom'],

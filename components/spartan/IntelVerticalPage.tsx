@@ -94,6 +94,12 @@ function pretty(key:string) {
   return key.replaceAll("_"," ").replace(/w/g, c => c.toUpperCase())
 }
 
+function unwrapPayload(payload:any) {
+  if (!payload || typeof payload !== "object") return {}
+  const nested = payload.data ?? payload.parsed_payload?.data
+  return nested && typeof nested === "object" && !Array.isArray(nested) ? nested : payload
+}
+
 function valueAt(payload:any, keys:string[]) {
   if (!payload || typeof payload !== "object") return null
   for (const key of keys) {
@@ -266,7 +272,7 @@ function graphicFor(section:string,records:any[],accent:string) {
 }
 
 function summary(row:any, vertical:Vertical) {
-  const p=row?.payload || {}
+  const p=unwrapPayload(row?.payload ?? row?.parsed_payload)
   const values = vertical.metrics.map(([label,keys]) => [label,valueAt(p,keys)] as const).filter(([,v])=>v!==null)
   if (values.length) return values.slice(0,4).map(([k,v])=>`${k}: ${scalar(v)}`).join(" · ")
   return row?.classification_reason || "Captured intelligence record"
@@ -282,6 +288,11 @@ export default function IntelVerticalPage() {
   const [loading,setLoading]=useState(true)
   const [expanded,setExpanded]=useState<string|null>(null)
   const [showAll,setShowAll]=useState(false)
+  const [recordSearch,setRecordSearch]=useState("")
+  const [sourceFilter,setSourceFilter]=useState("all")
+  const [kindFilter,setKindFilter]=useState("all")
+  const [compareLeft,setCompareLeft]=useState("")
+  const [compareRight,setCompareRight]=useState("")
 
   useEffect(()=>{
     let live=true
@@ -302,13 +313,39 @@ export default function IntelVerticalPage() {
 
   const records=data?.records||[]
   const counts=data?.counts||{}
-  const latest=records[0]?.payload||{}
+  const latest=unwrapPayload(records[0]?.payload ?? records[0]?.parsed_payload)
   const current=useMemo(()=>vertical.metrics.map(([label,keys])=>({label,value:valueAt(latest,keys)})).filter(x=>x.value!==null),[latest,vertical])
   const sourceCounts=useMemo(()=>{
     const m=new Map<string,number>()
     records.forEach((r:any)=>m.set(String(r.source||"unknown"),(m.get(String(r.source||"unknown"))||0)+1))
     return [...m.entries()].sort((a,b)=>b[1]-a[1]).slice(0,6)
   },[records])
+  const recordKey=(row:any,index:number)=>String(row.id||row.capture_id||`${row.source||"record"}-${row.captured_at||index}`)
+  const sourceOptions=useMemo<string[]>(()=>Array.from(new Set<string>(records.map((r:any)=>String(r.source||"unknown")))).sort(),[records])
+  const kindOptions=useMemo<string[]>(()=>Array.from(new Set<string>(records.map((r:any)=>String(r.page_kind||section)))).sort(),[records,section])
+  const visibleRecords=useMemo(()=>{
+    const query=recordSearch.trim().toLowerCase()
+    return records.filter((row:any)=>{
+      if(sourceFilter!=="all"&&String(row.source||"unknown")!==sourceFilter)return false
+      if(kindFilter!=="all"&&String(row.page_kind||section)!==kindFilter)return false
+      if(!query)return true
+      const searchable=[row.province_name,row.province_id,row.kingdom_id,row.source,row.page_kind,row.raw_text,JSON.stringify(row.payload||row.parsed_payload||row.raw_payload||{})].join(" ").toLowerCase()
+      return searchable.includes(query)
+    })
+  },[records,recordSearch,sourceFilter,kindFilter,section])
+  useEffect(()=>{
+    if(records.length<2)return
+    setCompareLeft(current=>current&&records.some((row:any,index:number)=>recordKey(row,index)===current)?current:recordKey(records[1],1))
+    setCompareRight(current=>current&&records.some((row:any,index:number)=>recordKey(row,index)===current)?current:recordKey(records[0],0))
+  },[records])
+  const compareA=records.find((row:any,index:number)=>recordKey(row,index)===compareLeft)||null
+  const compareB=records.find((row:any,index:number)=>recordKey(row,index)===compareRight)||null
+  const compareRows=useMemo(()=>vertical.metrics.map(([label,keys])=>{
+    const left=valueAt(unwrapPayload(compareA?.payload??compareA?.parsed_payload),keys)
+    const right=valueAt(unwrapPayload(compareB?.payload??compareB?.parsed_payload),keys)
+    const a=numValue(left),b=numValue(right)
+    return {label,left,right,delta:a!==null&&b!==null?b-a:null}
+  }).filter(row=>row.left!==null||row.right!==null),[compareA,compareB,vertical])
 
   return <main style={{minHeight:"100vh",background:"#05080d",color:"#e7eef5",fontFamily:"Inter,system-ui,sans-serif",display:"flex"}}>
     <aside style={{width:250,flexShrink:0,borderRight:"1px solid rgba(255,255,255,.08)",padding:24,background:"#071018",position:"sticky",top:0,height:"100vh",overflowY:"auto"}}>
@@ -359,6 +396,29 @@ export default function IntelVerticalPage() {
         </article>
       </section>
 
+      <section style={{padding:18,border:"1px solid rgba(255,255,255,.08)",borderRadius:12,background:"#081119",marginBottom:16}}>
+        <div style={{fontSize:9,color:vertical.accent,letterSpacing:".16em"}}>HISTORICAL COMPARISON</div>
+        <h2 style={{margin:"7px 0 12px",fontSize:20}}>Compare two captured records</h2>
+        {records.length>1?<div style={{display:"grid",gap:12}}>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))",gap:8}}>
+            {[["Earlier / baseline",compareLeft,setCompareLeft],["Later / comparison",compareRight,setCompareRight]].map(([label,value,setter]:any)=><label key={label} style={{display:"grid",gap:5,fontSize:9,color:"#8b99a8"}}>{label}<select value={value} onChange={e=>setter(e.target.value)} style={{width:"100%",padding:10,borderRadius:8,border:"1px solid rgba(255,255,255,.12)",background:"#050b11",color:"#e7eef5",fontSize:11}}>
+              {records.map((row:any,index:number)=><option key={recordKey(row,index)} value={recordKey(row,index)}>{row.page_kind||section} · {row.province_name||row.province_id||"Unknown"} · {row.captured_at?new Date(row.captured_at).toLocaleString():"undated"}</option>)}
+            </select></label>)}
+          </div>
+          {compareA&&compareB&&<div style={{overflowX:"auto"}}>
+            <table style={{width:"100%",borderCollapse:"collapse",fontSize:10}}>
+              <thead><tr>{["FIELD","BASELINE","COMPARISON","CHANGE"].map(label=><th key={label} style={{textAlign:label==="FIELD"?"left":"right",padding:"9px 8px",color:"#748394",borderBottom:"1px solid rgba(255,255,255,.08)"}}>{label}</th>)}</tr></thead>
+              <tbody>{compareRows.map(row=><tr key={row.label}>
+                <td style={{padding:"9px 8px",color:"#aeb9c5",borderBottom:"1px solid rgba(255,255,255,.05)"}}>{row.label}</td>
+                <td style={{padding:"9px 8px",textAlign:"right",borderBottom:"1px solid rgba(255,255,255,.05)"}}>{scalar(row.left)}</td>
+                <td style={{padding:"9px 8px",textAlign:"right",borderBottom:"1px solid rgba(255,255,255,.05)"}}>{scalar(row.right)}</td>
+                <td style={{padding:"9px 8px",textAlign:"right",borderBottom:"1px solid rgba(255,255,255,.05)",color:row.delta===null?"#718091":row.delta>=0?"#67f0b0":"#ff8b8b"}}>{row.delta===null?"—":(row.delta>0?"+":"")+scalar(row.delta)}</td>
+              </tr>)}</tbody>
+            </table>
+          </div>}
+        </div>:<div style={{fontSize:11,color:"#748394"}}>Two records are needed before a comparison can be made.</div>}
+      </section>
+
       <section style={{padding:20,border:"1px solid "+vertical.accent+"22",borderRadius:12,background:"linear-gradient(135deg,#081119,#071018)",marginBottom:16}}>
         <div style={{fontSize:9,color:vertical.accent,letterSpacing:".16em"}}>INTEL DATA CONTRACT</div>
         <h2 style={{margin:"7px 0 12px",fontSize:22}}>Complete signal coverage</h2>
@@ -371,9 +431,15 @@ export default function IntelVerticalPage() {
       <section style={{padding:20,border:"1px solid rgba(255,255,255,.08)",borderRadius:12,background:"#081119"}}>
         <div style={{display:"flex",justifyContent:"space-between",gap:15,flexWrap:"wrap",marginBottom:10}}>
           <div><div style={{fontSize:9,color:vertical.accent,letterSpacing:".16em"}}>CAPTURED INTELLIGENCE</div><h2 style={{margin:"7px 0 4px",fontSize:22}}>Operational records</h2><div style={{fontSize:11,color:"#748190"}}>Newest first. Every record retains identity, classification and source provenance.</div></div>
-          <div style={{fontSize:9,color:vertical.accent}}>AUTO-REFRESH 30s</div>
+          <div style={{fontSize:9,color:vertical.accent}}>AUTO-REFRESH 60s</div>
         </div>
-        {records.slice(0,showAll?records.length:40).map((row:any,i:number)=>{
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:8,margin:"14px 0 8px"}}>
+          <input value={recordSearch} onChange={e=>setRecordSearch(e.target.value)} placeholder="Search province, event, source or payload…" style={{width:"100%",padding:10,borderRadius:8,border:"1px solid rgba(255,255,255,.12)",background:"#050b11",color:"#e7eef5",fontSize:11}}/>
+          <select value={kindFilter} onChange={e=>setKindFilter(e.target.value)} style={{padding:10,borderRadius:8,border:"1px solid rgba(255,255,255,.12)",background:"#050b11",color:"#e7eef5",fontSize:11}}><option value="all">All page types</option>{kindOptions.map(kind=><option key={kind} value={kind}>{kind}</option>)}</select>
+          <select value={sourceFilter} onChange={e=>setSourceFilter(e.target.value)} style={{padding:10,borderRadius:8,border:"1px solid rgba(255,255,255,.12)",background:"#050b11",color:"#e7eef5",fontSize:11}}><option value="all">All sources</option>{sourceOptions.map(source=><option key={source} value={source}>{source}</option>)}</select>
+        </div>
+        <div style={{fontSize:9,color:"#718091",marginBottom:8}}>Showing {visibleRecords.length.toLocaleString()} matching records from {records.length.toLocaleString()} available.</div>
+        {visibleRecords.slice(0,showAll?visibleRecords.length:40).map((row:any,i:number)=>{
           const id=String(row.id||row.capture_id||i)
           const open=expanded===id
           return <article key={id} style={{borderBottom:"1px solid rgba(255,255,255,.07)",padding:"14px 0"}}>
@@ -393,8 +459,8 @@ export default function IntelVerticalPage() {
             </div>}
           </article>
         })}
-        {!records.length&&<div style={{padding:"45px 0",color:"#748190",textAlign:"center"}}>No processed intelligence is available for this vertical yet.</div>}
-        {records.length>40&&<div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,marginTop:14,paddingTop:14,borderTop:"1px solid rgba(255,255,255,.06)"}}><div style={{fontSize:9,color:"#718091"}}>{showAll?"Showing all "+records.length.toLocaleString()+" records from the Intel data contract.":"Showing the latest 40 of "+records.length.toLocaleString()+" records."} Full parsed payload and source evidence remain available on every record.</div><button onClick={()=>setShowAll(v=>!v)} style={{padding:"9px 12px",borderRadius:8,border:"1px solid "+vertical.accent+"55",background:vertical.accent+"12",color:vertical.accent,fontWeight:800,fontSize:9,cursor:"pointer",whiteSpace:"nowrap"}}>{showAll?"SHOW LATEST 40":"SHOW ALL INTEL"}</button></div>}
+        {!visibleRecords.length&&<div style={{padding:"45px 0",color:"#748190",textAlign:"center"}}>{records.length?"No records match these filters.":"No processed intelligence is available for this vertical yet."}</div>}
+        {visibleRecords.length>40&&<div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,marginTop:14,paddingTop:14,borderTop:"1px solid rgba(255,255,255,.06)"}}><div style={{fontSize:9,color:"#718091"}}>{showAll?"Showing all "+visibleRecords.length.toLocaleString()+" matching records.":"Showing the latest 40 of "+visibleRecords.length.toLocaleString()+" matching records."} Full parsed payload and source evidence remain available on every record.</div><button onClick={()=>setShowAll(v=>!v)} style={{padding:"9px 12px",borderRadius:8,border:"1px solid "+vertical.accent+"55",background:vertical.accent+"12",color:vertical.accent,fontWeight:800,fontSize:9,cursor:"pointer",whiteSpace:"nowrap"}}>{showAll?"SHOW LATEST 40":"SHOW ALL INTEL"}</button></div>}
       </section>
     </section>
   </main>

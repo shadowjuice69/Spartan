@@ -30,16 +30,21 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Your Spartan account identity is not linked.' }, { status: 403 })
     }
 
+    const ownKingdom = String(account.province_location).trim().toLowerCase()
+
     const { data, error } = await db
       .from('spartan_intel_records')
       .select(summary
         ? 'id,capture_id,user_id,province_id,kingdom_id,target_province_id,target_kingdom_id,captured_at,created_at,source,url,page_kind,classification_source,classification_confidence,intel_type,visibility,metrics'
         : 'id,capture_id,user_id,province_id,kingdom_id,target_province_id,target_kingdom_id,captured_at,created_at,source,url,page_kind,classification_source,classification_confidence,parsed_payload,raw_payload,intel_type,visibility,metrics')
+      // Filter to enemy-visible/foreign-target records before applying the cap.
+      // Filtering only after a global 1,000-row limit allowed own-province traffic
+      // to crowd older but still-useful enemy intelligence out of the result.
+      .or(`visibility.eq.enemy,target_kingdom_id.neq.${ownKingdom}`)
       .order('captured_at', { ascending: false })
       .limit(1000)
     if (error) throw error
 
-    const ownKingdom = String(account.province_location).trim().toLowerCase()
     const enemyRows = (data || []).filter((row: any) => {
       if (row.visibility === 'own' && row.user_id !== user.id) return false
       const targetKingdom = String(row.target_kingdom_id ?? '').trim().toLowerCase()

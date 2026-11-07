@@ -649,6 +649,34 @@ export async function GET(request: Request) {
         const reportKey = [text.toLowerCase(), attacker.name.toLowerCase(), attacker.kd || '', event.acres, troopsLost, thievesLost, wizardsLost].join('|')
         if (!mpByReport.has(reportKey)) mpByReport.set(reportKey, event)
       }
+      const normalizedResult = await db.from('spartan_event_history')
+        .select('occurred_at,event_type,attacker,defender,target_kingdom,acres_change,troops_lost,thieves_lost,wizards_lost,payload,raw_text')
+        .eq('user_id', user.id).eq('source', 'spartan-event-normalizer')
+        .order('occurred_at', { ascending: false }).limit(250)
+      if (normalizedResult.error) fail(normalizedResult.error)
+      const normalizedEvents = (normalizedResult.data || []).map((row: any) => {
+        const payload = row.payload || {}
+        const attackerOwn = String(row.attacker || '').toLowerCase() === own.name.toLowerCase()
+        const defenderOwn = String(row.defender || '').toLowerCase() === own.name.toLowerCase()
+        const attackerKd = payload.attacker_kingdom || (attackerOwn ? own.kd : null)
+        const defenderKd = payload.defender_kingdom || (defenderOwn ? own.kd : row.target_kingdom || null)
+        const attacker = row.attacker ? parseNewsParty(attackerKd ? `${row.attacker} (${attackerKd})` : row.attacker) : null
+        const defender = row.defender ? parseNewsParty(defenderKd ? `${row.defender} (${defenderKd})` : row.defender) : null
+        const rawType = String(row.event_type || '').toLowerCase()
+        const typeMap: Record<string, 'invade' | 'recapture' | 'ambush' | 'pillage' | 'other' | 'capture' | 'plunder'> = { attack: 'invade', incoming_attack: 'invade', invaded: 'invade', ambushed: 'ambush', pillaged: 'pillage', looted: 'plunder', recaptured: 'recapture', captured: 'capture', attempted_an_invasion: 'invade' }
+        const type = typeMap[rawType] || 'other'
+        const side: 'out' | 'in' | 'other' = attackerOwn || (Boolean(own.kd) && attackerKd === own.kd && defenderKd !== own.kd) ? 'out'
+          : defenderOwn || (Boolean(own.kd) && defenderKd === own.kd && attackerKd !== own.kd) ? 'in' : 'other'
+        const stamp = Date.parse(row.occurred_at || '')
+        return {
+          at: row.occurred_at || null, approx: true,
+          gameDate: Number.isFinite(stamp) ? `Captured ${new Date(stamp).toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric' })}` : 'Captured event',
+          type, attacker, defender, acres: Number(row.acres_change || 0), books: Number(payload.books || 0),
+          troopsLost: Number(row.troops_lost || 0), thievesLost: Number(row.thieves_lost || 0), wizardsLost: Number(row.wizards_lost || 0),
+          side, text: row.raw_text || `${row.attacker || 'Unknown'} ${type} ${row.defender || 'Unknown'}`,
+          order: Number.isFinite(stamp) ? stamp : 0, source: 'Normalized event history',
+        }
+      })
       const signature = (e: any) => [
         String(e.type || '').toLowerCase(),
         String(e.attacker?.name || '').toLowerCase().replace(/\s+/g, ' ').trim(),
@@ -665,13 +693,18 @@ export async function GET(request: Request) {
         const day = Number.isFinite(stamp) ? new Date(stamp).toISOString().slice(0, 10) : String(e.gameDate || '')
         return `${signature(e)}|${day}`
       }
-      const known = new Set(kingdomEvents.map(datedSignature))
-      const events = [
-        ...kingdomEvents,
-        ...botEvents.filter(e => !known.has(datedSignature(e))).map(e => ({ ...e, source: 'KDNEWS' })),
-        ...[...mpByReport.values()].filter(e => !known.has(datedSignature(e))).map(e => ({ ...e, source: 'MPNEWS' })),
-      ].sort((a, b) => b.order - a.order)
-      const latestAt = [...newsRows, ...mpRows].map(when).filter(Boolean).sort((a, b) => Date.parse(b) - Date.parse(a))[0] || null
+      const kingdomKeys = new Set(kingdomEvents.map(datedSignature))
+      const botAdditions = botEvents.filter(event => !kingdomKeys.has(datedSignature(event))).map(event => ({ ...event, source: 'KDNEWS' }))
+      const mpAdditions = [...mpByReport.values()].filter(event => !kingdomKeys.has(datedSignature(event))).map(event => ({ ...event, source: 'MPNEWS' }))
+      const existingKeys = new Set([...kingdomEvents, ...botEvents, ...mpByReport.values()].map(datedSignature))
+      const events = [...kingdomEvents, ...botAdditions, ...mpAdditions]
+      // Preserve repeated identical reports inside a single normalized capture,
+      // while suppressing normalized rows already represented by a raw-feed event.
+      for (const event of normalizedEvents) {
+        if (!existingKeys.has(datedSignature(event))) events.push(event)
+      }
+      events.sort((a, b) => b.order - a.order)
+      const latestAt = [...newsRows, ...mpRows, ...(normalizedResult.data || [])].map((row: any) => row.occurred_at || when(row)).filter(Boolean).sort((a: string, b: string) => Date.parse(b) - Date.parse(a))[0] || null
       body.model = { events, anchor: n.anchor, captures: n.captures + mpRows.length, latestAt, own }
       body.fields = []
     }
