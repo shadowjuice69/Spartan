@@ -34,7 +34,7 @@ export async function GET() {
       db.from('spartan_data_flow')
         .select('flow_id,status,created_at')
         .eq('province_id', account.id)
-        .in('status', ['received', 'retry', 'failed'])
+        .in('status', ['received', 'retry', 'failed', 'quarantined'])
         .order('created_at', { ascending: true })
         .limit(1000),
     ]);
