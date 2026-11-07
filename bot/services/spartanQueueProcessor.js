@@ -131,7 +131,7 @@ async function resolveAuthUserId(sb, capture, flow) {
 async function writeProvinceHistory(sb, flow, state, canonical, capture) {
   if (!canonical?.provinceId || !['throne', 'survey', 'science', 'som', 'magic', 'thievery', 'universal'].includes(flow.page_kind)) return null;
   const data = state?.data || {};
-  const numeric = (value) => { const n = Number(value); return Number.isFinite(n) ? n : null; };
+  const numeric = (value) => { if (value == null || value === '') return null; const n = Number(value); return Number.isFinite(n) ? n : null; };
   const userId = await resolveAuthUserId(sb, capture, flow);
   const row = compact({
     user_id: userId,
