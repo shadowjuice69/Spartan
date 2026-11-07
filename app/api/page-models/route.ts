@@ -665,7 +665,7 @@ export async function GET(request: Request) {
         const rawType = String(row.event_type || '').toLowerCase()
         const typeMap: Record<string, 'invade' | 'recapture' | 'ambush' | 'pillage' | 'other' | 'capture' | 'plunder'> = { attack: 'invade', incoming_attack: 'invade', invaded: 'invade', ambushed: 'ambush', pillaged: 'pillage', looted: 'plunder', recaptured: 'recapture', captured: 'capture' }
         const type = typeMap[rawType] || 'other'
-        const side = attackerOwn || (Boolean(own.kd) && attackerKd === own.kd && defenderKd !== own.kd) ? 'out'
+        const side: 'out' | 'in' | 'other' = attackerOwn || (Boolean(own.kd) && attackerKd === own.kd && defenderKd !== own.kd) ? 'out'
           : defenderOwn || (Boolean(own.kd) && defenderKd === own.kd && attackerKd !== own.kd) ? 'in' : 'other'
         const stamp = Date.parse(row.occurred_at || '')
         return {
