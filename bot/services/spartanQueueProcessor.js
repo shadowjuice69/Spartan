@@ -620,6 +620,12 @@ async function failOne(sb, job, error) {
   await sb.from('spartan_processing_queue').update({ status: terminal ? 'failed' : 'retry', available_at: new Date(Date.now() + delaySeconds * 1000).toISOString(), locked_at: null, error: { message: error.message, worker: WORKER_ID, attempts } }).eq('id', job.id);
   await sb.from('spartan_data_flow').update({ status: terminal ? 'failed' : 'retry', stage: 'processor', current_stage: 'processor', error: { message: error.message, worker: WORKER_ID, attempts } }).eq('flow_id', job.flow_id);
 }
+async function stageOrphanFlows(sb, limit = 100) {
+  const { data, error } = await sb.rpc('spartan_stage_orphan_flows', { p_limit: limit });
+  if (error) throw new Error(`spartan_stage_orphan_flows: ${error.message}`);
+  return Number(data || 0);
+}
+
 async function processBatch() {
   if (running || startupBackfillRunning) return; const sb = supabaseService.getClient(); if (!sb) return; running = true;
   try {
@@ -634,8 +640,15 @@ async function runBacklogSteward() {
   if (!sb) return;
   startupBackfillRunning = true;
   try {
+    let staged = 0;
+    try {
+      staged = await stageOrphanFlows(sb);
+      if (staged) logger.info(`[SPARTAN ORPHAN STAGER] staged=${staged}`);
+    } catch (error) {
+      logger.error(`[SPARTAN ORPHAN STAGER] failed: ${error.stack || error.message}`);
+    }
     const result = await backfillMissingBotIntel(sb);
-    logger.info(`[SPARTAN BACKLOG STEWARD] checked=${result.checked} recovered=${result.recovered} skipped=${result.skipped}`);
+    logger.info(`[SPARTAN BACKLOG STEWARD] staged=${staged} checked=${result.checked} recovered=${result.recovered} skipped=${result.skipped}`);
   } catch (error) {
     logger.error(`[SPARTAN BACKLOG STEWARD] failed: ${error.stack || error.message}`);
   } finally {
@@ -643,6 +656,36 @@ async function runBacklogSteward() {
     processBatch();
   }
 }
-function start() { if (timer || startupBackfillRunning) return; if (process.env.SPARTAN_PROCESSOR_ENABLED === 'false') { logger.info('[SPARTAN PROCESSOR] disabled by SPARTAN_PROCESSOR_ENABLED=false'); return; } stewardSystem.start(); logger.info(`[SPARTAN PROCESSOR] starting worker=${WORKER_ID} interval=${INTERVAL_MS}ms batch=${BATCH_SIZE}`); const sb = supabaseService.getClient(); startupBackfillRunning = true; backfillMissingBotIntel(sb).catch(error => logger.error(`[SPARTAN INTEL BACKFILL] failed: ${error.stack || error.message}`)).finally(() => { startupBackfillRunning = false; processBatch(); timer = setInterval(processBatch, INTERVAL_MS); backlogStewardTimer = setInterval(runBacklogSteward, BACKLOG_STEWARD_INTERVAL_MS); logger.info(`[SPARTAN BACKLOG STEWARD] scheduled interval=${BACKLOG_STEWARD_INTERVAL_MS}ms`); }); }
+function start() {
+  if (timer || startupBackfillRunning) return;
+  if (process.env.SPARTAN_PROCESSOR_ENABLED === 'false') {
+    logger.info('[SPARTAN PROCESSOR] disabled by SPARTAN_PROCESSOR_ENABLED=false');
+    return;
+  }
+  stewardSystem.start();
+  logger.info(`[SPARTAN PROCESSOR] starting worker=${WORKER_ID} interval=${INTERVAL_MS}ms batch=${BATCH_SIZE}`);
+  const sb = supabaseService.getClient();
+  startupBackfillRunning = true;
+  (async () => {
+    try {
+      const staged = await stageOrphanFlows(sb);
+      logger.info(`[SPARTAN ORPHAN STAGER] startup staged=${staged}`);
+    } catch (error) {
+      logger.error(`[SPARTAN ORPHAN STAGER] startup failed: ${error.stack || error.message}`);
+    }
+    try {
+      const result = await backfillMissingBotIntel(sb);
+      logger.info(`[SPARTAN INTEL BACKFILL] checked=${result.checked} recovered=${result.recovered} skipped=${result.skipped}`);
+    } catch (error) {
+      logger.error(`[SPARTAN INTEL BACKFILL] failed: ${error.stack || error.message}`);
+    }
+  })().finally(() => {
+    startupBackfillRunning = false;
+    processBatch();
+    timer = setInterval(processBatch, INTERVAL_MS);
+    backlogStewardTimer = setInterval(runBacklogSteward, BACKLOG_STEWARD_INTERVAL_MS);
+    logger.info(`[SPARTAN BACKLOG STEWARD] scheduled interval=${BACKLOG_STEWARD_INTERVAL_MS}ms`);
+  });
+}
 function stop() { if (timer) clearInterval(timer); if (backlogStewardTimer) clearInterval(backlogStewardTimer); timer = null; backlogStewardTimer = null; }
-module.exports = { start, stop, processBatch, processOne, runBacklogSteward, isStructuredGameIntelMessage, mergeProjectionState };
+module.exports = { start, stop, processBatch, processOne, runBacklogSteward, isStructuredGameIntelMessage, mergeProjectionState, stageOrphanFlows };
