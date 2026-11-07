@@ -15,6 +15,12 @@ test('normalizes structured Discord attack reports and extracts losses/return ti
   assert.equal(event.troops_lost, 113);
   assert.equal(event.payload.unit_losses.horses, 129);
   assert.equal(event.payload.return_hours, 12.38);
+  assert.equal(event.payload.kills, 45);
+  assert.equal(event.payload.prisoners, 87);
+  assert.equal(event.payload.spec_creds, 107);
+  assert.equal(event.payload.peasants_gained, 120);
+  assert.equal(event.payload.offense_sent, 37907);
+  assert.equal(event.payload.generals, 1);
   assert.equal(event.payload.attacker_kingdom, '6:8');
   assert.equal(event.payload.defender_kingdom, '3:11');
   assert.equal(event.payload.normalizer, 'spartan-event-normalizer');
@@ -62,4 +68,14 @@ test('normalizes dated Utopia kingdom news and recapture lines', () => {
   assert.equal(events[0].payload.defender_kingdom, '3:11');
   assert.equal(events[1].event_type, 'invaded');
   assert.equal(events[1].acres_change, 18);
+});
+
+test('captures people killed and attempted invasions from KDNEWS', () => {
+  const events = parseStructuredNewsEvents(
+    'NEW KDNEWS: 13 - Leaf one Out (6:7) invaded 17 - Anduin Lothar (6:8) and killed 246 people.\\nNEW KDNEWS: 2 - Enemy (3:4) attempted an invasion of 9 - Finkster (6:8).',
+    { captureId: 'capture-5', ownProvince: 'Finkster', ownKingdom: '6:8' },
+  );
+  assert.equal(events.length, 2);
+  assert.equal(events[0].payload.people_killed, 246);
+  assert.equal(events[1].event_type, 'attempted_an_invasion');
 });
