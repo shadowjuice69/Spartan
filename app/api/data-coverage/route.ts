@@ -10,10 +10,10 @@ const DISPLAY_DESTINATIONS: Record<string, string[]> = {
   som: ['Military', 'War Room', 'Return Tracker', 'Province History'],
   magic: ['Magic', 'War Room', 'Intel Vertical / Magic'],
   thievery: ['Thievery', 'War Room', 'Intel Vertical / Thievery'],
-  news: ['Newsroom', 'War Room', 'Event History'],
-  attack: ['Newsroom', 'War Room', 'Enemy Intel', 'Event History'],
+  news: ['News', 'War Room', 'Event History'],
+  attack: ['News', 'War Room', 'Enemy Intel', 'Event History'],
   intel: ['Kingdom Intel', 'Enemy Intel'],
-  bot_event: ['Intel Backlog', 'Newsroom', 'Event History'],
+  bot_event: ['Intel Backlog', 'News', 'Event History'],
   universal: ['Intel Vertical', 'Province History'],
 }
 
