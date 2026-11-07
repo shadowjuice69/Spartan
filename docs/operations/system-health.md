@@ -21,6 +21,9 @@
 - The queue recovery migration uses the existing `claim_spartan_queue(text, integer)` signature and treats `locked_at` as a 30-minute worker lease. The existing five-attempt ceiling remains in effect.
 - Operational archive retention is separate from raw capture and province-history retention. Terminal queue rows are archived after 30 days; old provenance edges are archived after 90 days only when their flow is terminal and has no live queue item; processed/failed flows are archived after 90 days. Pending, retry, processing, and other recoverable work is excluded.
 
+
+- The backlog steward periodically calls `spartan_stage_orphan_flows` to enqueue `received`/`retry` flows that have a matching vault capture but no queue row. An active-flow partial unique index prevents duplicate pending/processing/retry rows while preserving completed and failed history.
+
 ## Render configuration
 
 After the liveness endpoint is deployed, the Render service health-check path can be set to `/api/health` in the service settings. The endpoint is intentionally public and returns no account, database, or credential data.
