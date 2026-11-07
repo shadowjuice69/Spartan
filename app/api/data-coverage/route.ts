@@ -18,13 +18,13 @@ const DISPLAY_DESTINATIONS: Record<string, string[]> = {
 }
 
 const FIELD_GROUPS = [
-  { name: 'Province identity', keys: ['name', 'province', 'ruler', 'race', 'personality', 'coordinates'] },
-  { name: 'Land & economy', keys: ['acres', 'nw', 'networth', 'gold', 'food', 'trade_balance', 'peasants', 'peons', 'population', 'wages'] },
-  { name: 'Military', keys: ['off', 'def', 'offense', 'defense', 'defense_home', 'def_home', 'soldiers', 'off_specs', 'def_specs', 'elites', 'generals', 'war_horses', 'prisoners'] },
-  { name: 'Covert & magic', keys: ['thieves', 'wizards', 'o_tpa', 'd_tpa', 'o_wpa', 'd_wpa', 'mana', 'stealth', 'runes'] },
-  { name: 'Buildings & science', keys: ['buildings', 'be', 'efficiency', 'science', 'research', 'books'] },
-  { name: 'Kingdom grid', keys: ['grid', 'rows', 'slot', 'goodSpells', 'kingdomCode'] },
-  { name: 'Events & outcomes', keys: ['events', 'event_type', 'attacker', 'defender', 'attacker_kingdom', 'defender_kingdom', 'target', 'acres_change', 'losses', 'result'] },
+  { name: 'Province identity', keys: ['name', 'province', 'province_name', 'ruler', 'ruler_name', 'race', 'personality', 'coordinates', 'kingdom_code', 'province_location'] },
+  { name: 'Land & economy', keys: ['acres', 'total_acres', 'total_land', 'nw', 'networth', 'net_worth', 'gold', 'food', 'trade_balance', 'tradebalance', 'peasants', 'peons', 'population', 'wages', 'income', 'daily_income', 'honor'] },
+  { name: 'Military', keys: ['off', 'def', 'offense', 'defense', 'defense_home', 'defensehome', 'def_home', 'defhome', 'home_defense', 'home_def', 'soldiers', 'off_specs', 'def_specs', 'elites', 'generals', 'gens', 'war_horses', 'prisoners'] },
+  { name: 'Covert & magic', keys: ['thieves', 'wizards', 'o_tpa', 'd_tpa', 'tpa', 'o_wpa', 'd_wpa', 'wpa', 'mana', 'stealth', 'runes'] },
+  { name: 'Buildings & science', keys: ['buildings', 'be', 'building_efficiency', 'efficiency', 'science', 'science_level', 'research', 'books'] },
+  { name: 'Kingdom grid', keys: ['grid', 'rows', 'slot', 'goodspells', 'kingdomcode'] },
+  { name: 'Events & outcomes', keys: ['events', 'event_type', 'attacker', 'defender', 'attacker_kingdom', 'defender_kingdom', 'target', 'targetprovince', 'acres_change', 'acrescaptured', 'losses', 'thieveslost', 'wizardslost', 'result'] },
 ]
 
 function keysIn(value: any, out = new Set<string>(), depth = 0): Set<string> {
