@@ -321,8 +321,8 @@ export default function IntelVerticalPage() {
     return [...m.entries()].sort((a,b)=>b[1]-a[1]).slice(0,6)
   },[records])
   const recordKey=(row:any,index:number)=>String(row.id||row.capture_id||`${row.source||"record"}-${row.captured_at||index}`)
-  const sourceOptions=useMemo(()=>[...new Set(records.map((r:any)=>String(r.source||"unknown")))].sort(),[records])
-  const kindOptions=useMemo(()=>[...new Set(records.map((r:any)=>String(r.page_kind||section)))].sort(),[records,section])
+  const sourceOptions=useMemo<string[]>(()=>Array.from(new Set<string>(records.map((r:any)=>String(r.source||"unknown")))).sort(),[records])
+  const kindOptions=useMemo<string[]>(()=>Array.from(new Set<string>(records.map((r:any)=>String(r.page_kind||section)))).sort(),[records,section])
   const visibleRecords=useMemo(()=>{
     const query=recordSearch.trim().toLowerCase()
     return records.filter((row:any)=>{
