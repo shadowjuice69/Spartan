@@ -53,25 +53,36 @@ async function getIntel({ kd = "", section = "all", limit = 200, enemyOnly = fal
   if (!sb || !code || !Object.prototype.hasOwnProperty.call(SECTION_KINDS, section)) return [];
 
   const safeLimit = Math.max(1, Math.min(250, Number(limit) || 200));
-  let q = sb.from("spartan_intel_records")
-    .select("id,capture_id,province_id,kingdom_id,target_province_id,target_kingdom_id,captured_at,page_kind,intel_type,visibility,parsed_payload,raw_text,metrics")
-    .or(`kingdom_id.eq.${code},target_kingdom_id.eq.${code}`)
-    // The active Spartan game is World of Legends (Age 117). Genesis captures can
-    // share the same stored kingdom context, so scope reads by the source URL.
-    .ilike("url", ACTIVE_GAME_URL_PATTERN)
-    .order("captured_at", { ascending: false })
-    .limit(Math.min(1000, safeLimit * 25));
-
+  const pageSize = 1000;
   const kinds = SECTION_KINDS[section];
-  if (kinds?.length) q = q.in("page_kind", kinds);
-  if (enemyOnly) q = q.eq("visibility", "enemy");
+  const rows = [];
 
-  const { data, error } = await q;
-  if (error) {
-    console.error("[CANONICAL INTEL] query failed:", error.message);
-    return [];
+  // Page through the complete matching result set. A single newest-first
+  // 1,000-row window can be filled entirely by frequent Throne captures,
+  // hiding lower-volume Science, Magic, Kingdom and other Intel types.
+  for (let offset = 0; offset < 100000; offset += pageSize) {
+    let q = sb.from("spartan_intel_records")
+      .select("id,capture_id,province_id,kingdom_id,target_province_id,target_kingdom_id,captured_at,page_kind,intel_type,visibility,parsed_payload,raw_text,metrics")
+      .or(`kingdom_id.eq.${code},target_kingdom_id.eq.${code}`)
+      // Keep canonical results on the active World of Legends server.
+      .ilike("url", ACTIVE_GAME_URL_PATTERN)
+      .order("captured_at", { ascending: false })
+      .range(offset, offset + pageSize - 1);
+
+    if (kinds?.length) q = q.in("page_kind", kinds);
+    if (enemyOnly) q = q.eq("visibility", "enemy");
+
+    const { data, error } = await q;
+    if (error) {
+      console.error("[CANONICAL INTEL] query failed:", error.message);
+      return [];
+    }
+    const page = data || [];
+    rows.push(...page);
+    if (page.length < pageSize) break;
   }
-  return latestPerProvinceAndKind(data || []).slice(0, safeLimit);
+
+  return latestPerProvinceAndKind(rows).slice(0, safeLimit);
 }
 
 async function getProvinceIntel({ kd = "", province = "", pageKind = "", visibility = "own" } = {}) {
