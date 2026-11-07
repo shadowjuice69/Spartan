@@ -217,27 +217,29 @@ export async function POST(request: Request) {
       if (!captureOwner) return NextResponse.json({ error: 'Spartan account could not be resolved for this capture.' }, { status: 400 })
       capture = await canonicalCaptureIdentity(supabase, capture, captureOwner)
 
-      // Anduin Lothar is limited to one Intel page capture per hour across all
-      // page kinds. This is keyed to the authenticated Spartan account, not
-      // scraped identity, and does not affect event-only submissions.
-      if (captureOwner.accountId === 'aeff76bc-0762-47d4-a329-5483c6f79e21') {
-        const { data: rateLimitData, error: rateLimitError } = await supabase.rpc(
-          'spartan_claim_capture_slot',
-          { p_province_id: captureOwner.accountId },
-        )
-        if (rateLimitError) throw new Error(rateLimitError.message)
-        const rateLimit = Array.isArray(rateLimitData) ? rateLimitData[0] : rateLimitData
-        if (!rateLimit || rateLimit.allowed !== true) {
-          const retryAfterSeconds = Math.max(1, Number(rateLimit?.retry_after_seconds ?? 3600))
-          return NextResponse.json({
-            ok: true,
-            captured: false,
-            storedInVault: false,
-            rateLimited: true,
-            retryAfterSeconds,
-            message: 'This province may submit one Intel page per hour.',
-          }, { status: 200 })
-        }
+      // One shared database throttle covers every Intel page kind and both
+      // capture receivers. All provinces get 25 submissions per rolling hour;
+      // the 26th starts a 60-minute cooldown. Anduin retains its stricter
+      // one-page-per-hour exception inside the database function.
+      const { data: throttleData, error: throttleError } = await supabase.rpc(
+        'spartan_record_intel_attempt',
+        { p_province_id: captureOwner.accountId },
+      )
+      if (throttleError) throw new Error(throttleError.message)
+      const throttle = Array.isArray(throttleData) ? throttleData[0] : throttleData
+      if (!throttle || throttle.allowed !== true) {
+        const retryAfterSeconds = Math.max(1, Number(throttle?.retry_after_seconds ?? 3600))
+        return NextResponse.json({
+          ok: true,
+          captured: false,
+          storedInVault: false,
+          rateLimited: true,
+          throttled: true,
+          attemptsInWindow: Number(throttle?.attempts_in_window ?? 0),
+          retryAfterSeconds,
+          reason: throttle?.reason ?? 'intel_rate_limit',
+          message: 'This province has reached its Intel submission limit.',
+        }, { status: 200 })
       }
 
       body.capture = capture
