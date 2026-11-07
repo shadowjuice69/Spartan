@@ -52,17 +52,31 @@ function parseStructuredNewsEvents(rawText, options = {}) {
     }
 
     if (!event) {
-      const kdNews = line.replace(/^\s*(?::[a-z0-9_]+:\s*)?NEW KDNEWS:\s*/i, '');
-      const match = kdNews.match(/^(.+?)\s+\((\d+:\d+)\)\s+(invaded|recaptured|captured|ambushed|attacked|pillaged|looted)\s+(.+?)\s+\((\d+:\d+)\)(?:\s+and\s+(?:captured|took)\s+([\d,]+)\s+acres?)?/i);
-      if (match) {
+      const kdNews = line
+        .replace(/^\s*(?::[a-z0-9_]+:\s*)?NEW KDNEWS:\s*/i, '')
+        .replace(/^(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2}\s+of\s+YR\d+\s+/i, '');
+      const recapture = kdNews.match(/^(.+?)\s+\((\d+:\d+)\)\s+(recaptured|captured)\s+([\d,]+)\s+acres?\s+of\s+land\s+from\s+(.+?)\s+\((\d+:\d+)\)/i);
+      if (recapture) {
         event = {
-          event_type: match[3].toLowerCase(),
-          attacker: cleanParty(match[1]),
-          defender: cleanParty(match[4]),
-          target_kingdom: match[5],
-          acres_change: number(match[6]),
-          payload: { format: 'discord_kdnews', normalizer: 'spartan-event-normalizer' },
+          event_type: recapture[3].toLowerCase(),
+          attacker: cleanParty(recapture[1]),
+          defender: cleanParty(recapture[5]),
+          target_kingdom: recapture[6],
+          acres_change: number(recapture[4]),
+          payload: { format: 'utopia_news', normalizer: 'spartan-event-normalizer' },
         };
+      } else {
+        const match = kdNews.match(/^(.+?)\s+\((\d+:\d+)\)\s+(invaded|recaptured|captured|ambushed|attacked|pillaged|looted)\s+(.+?)\s+\((\d+:\d+)\)(?:\s+and\s+(?:captured|took)\s+([\d,]+)\s+acres?)?/i);
+        if (match) {
+          event = {
+            event_type: match[3].toLowerCase(),
+            attacker: cleanParty(match[1]),
+            defender: cleanParty(match[4]),
+            target_kingdom: match[5],
+            acres_change: number(match[6]),
+            payload: { format: line.startsWith('NEW KDNEWS:') ? 'discord_kdnews' : 'utopia_news', normalizer: 'spartan-event-normalizer' },
+          };
+        }
       }
     }
 
