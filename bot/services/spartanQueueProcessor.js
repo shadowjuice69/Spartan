@@ -407,6 +407,8 @@ async function backfillMissingBotIntel(sb) {
     .like('raw_text', '%<<__%')
     .like('raw_text', '%__>>%')
     .eq('parsed_payload->data->metadata->>author_bot', 'true')
+    // Bot intel expires 48h after capture and is purged daily, so only recover captures still inside that window.
+    .gte('captured_at', new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString())
     .order('captured_at', { ascending: false })
     .limit(1000);
   if (captureError) throw new Error(`bot Intel backfill capture scan: ${captureError.message}`);
