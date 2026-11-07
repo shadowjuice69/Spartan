@@ -13,6 +13,7 @@ type HealthModel = {
   lastCaptureAt: string | null;
   capturesByPage: CapturePage[];
   flowStatuses: Record<string, number>;
+  openFlowCount: number;
   queueStatuses: Record<string, number>;
   staleProcessing: number;
   failedQueue: number;
@@ -110,7 +111,7 @@ export default function SystemHealthPage() {
           </Grid>
 
           <Grid>
-            <Panel title="DATA FLOW STATUS" sub="Recent accepted, processed, and failed flows">
+            <Panel title="DATA FLOW STATUS" sub={`Recent flow sample · ${fmt(data.openFlowCount)} open/failed flows across the account`}>
               {Object.keys(data.flowStatuses).length ? (
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
                   {Object.entries(data.flowStatuses).sort((a, b) => b[1] - a[1]).map(([status, count]) => (
