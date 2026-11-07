@@ -517,7 +517,7 @@ async function processOne(sb, job) {
     return { flowId: flow.flow_id, queueId: job.id, quarantined: true, pageKind: flow.page_kind };
   }
 
-  const state = extractState(flow, capture);
+  let state = extractState(flow, capture);
   const isBotEvent = flow.source === 'discord-bot' && flow.page_kind === 'bot_event';
 
   // Discord bot events are evidence for the Intel pipeline, not province-state
