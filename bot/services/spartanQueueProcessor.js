@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const supabaseService = require('./supabase');
 const logger = require('./logger');
 const stewardSystem = require('./spartanStewardSystem');
+const { parseStructuredNewsEvents } = require('./spartanEventNormalizer');
 
 const INTERVAL_MS = Math.max(500, Number(process.env.SPARTAN_PROCESSOR_INTERVAL_MS || 2000));
 const BATCH_SIZE = Math.max(1, Math.min(50, Number(process.env.SPARTAN_PROCESSOR_BATCH_SIZE || 10)));
@@ -113,18 +114,34 @@ async function syncSpecializedProvinceData(sb, flow, state) {
   if (error) throw new Error(`specialized province sync: ${error.message}`);
   return { provinceId: province.id, kingdomId: province.kingdom_id, fields: Object.keys(metadata) };
 }
-async function writeProvinceHistory(sb, flow, state, canonical) {
+async function resolveAuthUserId(sb, capture, flow) {
+  const ownerId = capture?.user_id || flow?.user_id || null;
+  if (!ownerId) return null;
+  const { data: account, error } = await sb.from('spartan_accounts')
+    .select('auth_user_id').eq('id', ownerId).maybeSingle();
+  if (error) throw new Error(`account owner lookup: ${error.message}`);
+  if (account?.auth_user_id) return account.auth_user_id;
+  // Some older captures stored the auth user id directly.
+  const { data: authAccount, error: authError } = await sb.from('spartan_accounts')
+    .select('auth_user_id').eq('auth_user_id', ownerId).maybeSingle();
+  if (authError) throw new Error(`auth owner lookup: ${authError.message}`);
+  return authAccount?.auth_user_id || null;
+}
+
+async function writeProvinceHistory(sb, flow, state, canonical, capture) {
   if (!canonical?.provinceId || !['throne', 'survey', 'science', 'som', 'magic', 'thievery', 'universal'].includes(flow.page_kind)) return null;
   const data = state?.data || {};
   const numeric = (value) => { const n = Number(value); return Number.isFinite(n) ? n : null; };
+  const userId = await resolveAuthUserId(sb, capture, flow);
   const row = compact({
+    user_id: userId,
     province_id: canonical.provinceId, kingdom_id: canonical.kingdomId || null,
     observed_at: state.captured_at || state.processed_at || new Date().toISOString(),
     source: flow.source || 'spartan_processor', source_id: flow.source_id || flow.capture_id,
-    acres: numeric(data.acres), networth: numeric(data.nw), population: numeric(data.peons), peons: numeric(data.peons),
+    acres: numeric(data.acres), networth: numeric(data.nw), population: numeric(data.population ?? data.peons), peons: numeric(data.peons ?? data.population),
     soldiers: numeric(data.soldiers), off_specs: numeric(data.off_specs), def_specs: numeric(data.def_specs), elites: numeric(data.elites),
-    thieves: numeric(data.thieves), wizards: numeric(data.wizards), prisoners: numeric(data.prisoners), war_horses: numeric(data.war_horses),
-    offense: numeric(data.off), defense: numeric(data.def), o_tpa: numeric(data.o_tpa), d_tpa: numeric(data.d_tpa),
+    thieves: numeric(data.thieves), wizards: numeric(data.wizards), generals: numeric(data.generals), prisoners: numeric(data.prisoners), war_horses: numeric(data.war_horses),
+    offense: numeric(data.off ?? data.offense), defense: numeric(data.def ?? data.defense), defense_home: numeric(data.defense_home ?? data.def_home ?? data.defHome), o_tpa: numeric(data.o_tpa), d_tpa: numeric(data.d_tpa),
     o_wpa: numeric(data.o_wpa), d_wpa: numeric(data.d_wpa), build_efficiency: numeric(data.be), wages: numeric(data.wages),
     raw_state: data, changes: { page_kind: flow.page_kind, capture_id: flow.capture_id }
   });
@@ -473,12 +490,48 @@ async function backfillMissingBotIntel(sb) {
   return { checked: candidates.length, recovered, skipped };
 }
 
-async function syncNewsEvents(sb, flow, state) {
-  if (flow.page_kind !== 'news') return null;
-  const events = Array.isArray(state?.data?.events) ? state.data.events : [];
-  if (!events.length) return null;
+async function syncNewsEvents(sb, flow, state, capture, classifiedKind = null) {
+  const isNews = flow.page_kind === 'news' || ['news', 'attack'].includes(String(classifiedKind || ''));
+  if (!isNews) return null;
+  const userId = await resolveAuthUserId(sb, capture, flow);
   const province = await findProvince(sb, flow, state);
-  const rows = events.map(event => ({ province_id: province?.id || null, kingdom_id: province?.kingdom_id || null, occurred_at: event.created_at || new Date().toISOString(), event_type: event.event_type || 'news', source: flow.source || 'spartan_processor', source_id: `${flow.capture_id}:${event.created_at || event.raw || ''}`, acres_change: Number.isFinite(Number(event.acres)) ? Number(event.acres) : null, payload: event, raw_text: event.raw || null, created_at: new Date().toISOString() }));
+  const capturedAt = capture?.captured_at || state?.captured_at || state?.processed_at || new Date().toISOString();
+  const existing = Array.isArray(state?.data?.events) ? state.data.events : [];
+  const normalized = parseStructuredNewsEvents(capture?.raw_text || state?.raw_text || '', {
+    captureId: flow.capture_id, capturedAt, ownProvince: state?.data?.name || null, ownKingdom: flow.kingdom_id || null,
+  });
+  const rows = [
+    ...existing.map((event, index) => ({
+      user_id: userId, province_id: province?.id || capture?.province_id || flow.province_id || null,
+      kingdom_id: province?.kingdom_id || flow.kingdom_id || null,
+      occurred_at: event.created_at || capturedAt, age: Number(state?.data?.age) || null,
+      game_year: Number(state?.data?.game_year) || null, game_tick: state?.data?.game_tick || null,
+      event_type: event.event_type || 'news',
+      source: flow.source === 'discord-bot' ? 'spartan-event-normalizer' : (flow.source || 'spartan_processor'),
+      source_id: `${flow.capture_id}:parsed:${index}:${event.created_at || event.raw || ''}`,
+      attacker: event.attacker || null, defender: event.defender || null,
+      target_kingdom: event.target_kingdom || event.defender_kingdom || null,
+      acres_change: Number.isFinite(Number(event.acres ?? event.acres_change)) ? Number(event.acres ?? event.acres_change) : null,
+      troops_lost: Number.isFinite(Number(event.troops_lost)) ? Number(event.troops_lost) : null,
+      thieves_lost: Number.isFinite(Number(event.thieves_lost)) ? Number(event.thieves_lost) : null,
+      wizards_lost: Number.isFinite(Number(event.wizards_lost)) ? Number(event.wizards_lost) : null,
+      payload: { ...event, normalizer: 'spartan-event-normalizer', original_source: flow.source || null },
+      raw_text: event.raw || event.raw_text || null, created_at: new Date().toISOString(),
+    })),
+    ...normalized.map(event => ({
+      user_id: userId, province_id: capture?.province_id || flow.province_id || null,
+      kingdom_id: flow.kingdom_id || null, occurred_at: event.occurred_at,
+      age: Number(state?.data?.age) || null, game_year: Number(state?.data?.game_year) || null,
+      game_tick: state?.data?.game_tick || null, event_type: event.event_type,
+      source: 'spartan-event-normalizer', source_id: event.source_id,
+      attacker: event.attacker || null, defender: event.defender || null,
+      target_kingdom: event.target_kingdom || null, acres_change: event.acres_change,
+      troops_lost: event.troops_lost, thieves_lost: event.thieves_lost, wizards_lost: event.wizards_lost,
+      payload: { ...event.payload, original_source: flow.source || null },
+      raw_text: event.raw_text, created_at: new Date().toISOString(),
+    })),
+  ];
+  if (!rows.length) return 0;
   const { error } = await sb.from('spartan_event_history').upsert(rows, { onConflict: 'source_id' });
   if (error) throw new Error(`news event sync: ${error.message}`);
   return rows.length;
@@ -524,6 +577,7 @@ async function processOne(sb, job) {
   // snapshots. Never merge their Discord payload into spartan_state_projection.
   if (isBotEvent) {
     const intelResult = await syncBotIntelRecord(sb, flow, capture, state);
+    await syncNewsEvents(sb, flow, state, capture, intelResult?.pageKind);
     await addEdge(
       sb,
       flow.flow_id,
@@ -594,8 +648,8 @@ async function processOne(sb, job) {
   });
   const canonical = await syncCanonicalProvince(sb, flow, state);
   const specialized = await syncSpecializedProvinceData(sb, flow, state);
-  await writeProvinceHistory(sb, flow, state, canonical || specialized);
-  await syncNewsEvents(sb, flow, state);
+  await writeProvinceHistory(sb, flow, state, canonical || specialized, capture);
+  await syncNewsEvents(sb, flow, state, capture);
   await syncBotIntelRecord(sb, flow, capture, state);
 
   const integrity = await stewardSystem.run(flow, capture, job.id, projectionKey, { afterProjection: true });
