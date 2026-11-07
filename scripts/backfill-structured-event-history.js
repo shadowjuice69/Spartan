@@ -64,10 +64,10 @@ async function main() {
   process.stdout.write(JSON.stringify({
     mode: apply ? 'apply' : 'dry-run', scanned_intel_records: scanned,
     normalized_events: parsed, skipped_unmapped_owners: skippedOwner, rows_written: written,
-  }, null, 2) + '\\n');
+  }, null, 2) + '\n');
 }
 
 main().catch(error => {
-  process.stderr.write(`[event-history-backfill] ${error.stack || error.message}\\n`);
+  process.stderr.write(`[event-history-backfill] ${error.stack || error.message}\n`);
   process.exitCode = 1;
 });
