@@ -52,7 +52,7 @@ export async function GET() {
 
     const [vaultResult, intelCount, historyCount, eventCount, registryResult] = await Promise.all([
       db.from('spartan_capture_vault')
-        .select('capture_id,source,page_kind,captured_at,raw_text,parsed_payload,raw_payload')
+        .select('capture_id,source,page_kind,captured_at,parsed_payload,raw_payload')
         .eq('user_id', account.id).order('captured_at', { ascending: false }).limit(1500),
       db.from('spartan_intel_records').select('id', { count: 'exact', head: true }).eq('user_id', account.id),
       db.from('spartan_province_history').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
@@ -72,11 +72,10 @@ export async function GET() {
     const fieldCounts = new Map<string, number>()
     for (const row of captures) {
       const kind = row.page_kind || 'unknown'
-      const current = byKind.get(kind) || { page_kind: kind, count: 0, latest: null, sources: new Set<string>(), raw_text: 0, structured: 0 }
+      const current = byKind.get(kind) || { page_kind: kind, count: 0, latest: null, sources: new Set<string>(), structured: 0 }
       current.count += 1
       current.latest ||= row.captured_at
       if (row.source) { current.sources.add(row.source); bySource.set(row.source, (bySource.get(row.source) || 0) + 1) }
-      if (row.raw_text) current.raw_text += 1
       const parsed = row.parsed_payload?.data ?? row.parsed_payload ?? row.raw_payload ?? {}
       if (parsed && typeof parsed === 'object' && Object.keys(parsed).length) current.structured += 1
       const keys = keysIn(parsed)
@@ -84,7 +83,7 @@ export async function GET() {
       byKind.set(kind, current)
     }
 
-    const captureIds = captures.map(row => row.capture_id).filter(Boolean)
+    const captureIds = captures.slice(0, 200).map(row => row.capture_id).filter(Boolean)
     const flowResult = captureIds.length
       ? await db.from('spartan_data_flow').select('capture_id,page_kind,source,status,stage,processed_at,created_at').in('capture_id', captureIds).order('created_at', { ascending: false }).limit(500)
       : { data: [], error: null }
