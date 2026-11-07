@@ -22,10 +22,10 @@ The endpoint returns field names and counts only. It does not return raw capture
 
 ## Event history
 
-The structured event normalizer accepts only recognized Utopia game-feed formats. It excludes ordinary Discord chatter. Event history uses stable capture/line source IDs and records capture-time timestamps where the source does not provide a precise event timestamp.
+The structured event normalizer accepts only recognized Utopia game-feed formats. It excludes ordinary Discord chatter. Discord attack reports preserve unit losses, return hours, kills, prisoners, spec credits, reported peasant counts, offense sent, and generals in the event payload. KDNEWS events preserve acres and people-killed counts when present. Event history uses stable capture/line source IDs and records capture-time timestamps where the source does not provide a precise event timestamp.
 
 The News page reads the normalized event history for the authenticated user and deduplicates it against the existing KDNEWS and MPNEWS feed before display.
 
 ## Backfill safety
 
-`scripts/backfill-structured-event-history.js` defaults to dry-run. Review the printed scan/parse/owner counts before using `--apply`. Applying the backfill writes only to `spartan_event_history` using `source_id` conflict handling; it does not modify the capture vault or Intel records.
+`scripts/backfill-structured-event-history.js` defaults to dry-run. Run `node scripts/backfill-structured-event-history.js --dry-run` to review scanned records, normalized event types, unrecognized records, unmapped owners, and sample events. Review the preview before using `--apply`. Applying the backfill writes only to `spartan_event_history` using `source_id` conflict handling; it does not modify the capture vault or Intel records.
