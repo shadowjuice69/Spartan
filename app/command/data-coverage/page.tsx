@@ -50,7 +50,7 @@ export default function DataCoveragePage() {
           <div style={{display:'grid',gap:9}}>
             {data.coverage.kinds.map(row=><div key={row.page_kind} style={{padding:12,border:'1px solid rgba(255,255,255,.07)',borderRadius:10,background:'rgba(255,255,255,.02)'}}>
               <div style={{display:'flex',justifyContent:'space-between',gap:10,flexWrap:'wrap'}}><b style={{fontSize:12}}>{row.page_kind}</b><Tag color={C.cyan}>{fmt(row.count)} captures</Tag></div>
-              <div style={{fontSize:10,color:'#8d9baa',marginTop:6}}>Latest {ago(row.latest)} · {row.structured} structured · {row.sources.join(', ') || 'source unknown'}}</div>
+              <div style={{fontSize:10,color:'#8d9baa',marginTop:6}}>Latest {ago(row.latest)} · {row.structured} structured · {row.sources.join(', ') || 'source unknown'}</div>
               <div style={{display:'flex',gap:5,flexWrap:'wrap',marginTop:8}}>{row.destinations.map(dest=><Tag key={dest} color={C.green}>{dest}</Tag>)}</div>
             </div>)}
           </div>
