@@ -663,7 +663,7 @@ export async function GET(request: Request) {
         const attacker = row.attacker ? parseNewsParty(attackerKd ? `${row.attacker} (${attackerKd})` : row.attacker) : null
         const defender = row.defender ? parseNewsParty(defenderKd ? `${row.defender} (${defenderKd})` : row.defender) : null
         const rawType = String(row.event_type || '').toLowerCase()
-        const typeMap: Record<string, 'invade' | 'recapture' | 'ambush' | 'pillage' | 'other' | 'capture' | 'plunder'> = { attack: 'invade', incoming_attack: 'invade', invaded: 'invade', ambushed: 'ambush', pillaged: 'pillage', looted: 'plunder', recaptured: 'recapture', captured: 'capture' }
+        const typeMap: Record<string, 'invade' | 'recapture' | 'ambush' | 'pillage' | 'other' | 'capture' | 'plunder'> = { attack: 'invade', incoming_attack: 'invade', invaded: 'invade', ambushed: 'ambush', pillaged: 'pillage', looted: 'plunder', recaptured: 'recapture', captured: 'capture', attempted_an_invasion: 'invade' }
         const type = typeMap[rawType] || 'other'
         const side: 'out' | 'in' | 'other' = attackerOwn || (Boolean(own.kd) && attackerKd === own.kd && defenderKd !== own.kd) ? 'out'
           : defenderOwn || (Boolean(own.kd) && defenderKd === own.kd && attackerKd !== own.kd) ? 'in' : 'other'
