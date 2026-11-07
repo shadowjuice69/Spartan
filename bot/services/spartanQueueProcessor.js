@@ -550,9 +550,28 @@ function mergeProjectionState(existingState, incomingState, previousFlow) {
   const previousData = previousFlow?.source === 'discord-bot' && previousFlow?.page_kind === 'bot_event'
     ? {}
     : (existingState?.data || {});
+  const pageKind = String(incomingState?.page_kind || 'unknown');
+  const incomingTime = Date.parse(incomingState?.captured_at || '');
+  const timestamps = { ...(existingState?.page_capture_timestamps || {}) };
+  const previousPageTime = Date.parse(
+    timestamps[pageKind] ||
+    (existingState?.page_kind === pageKind ? existingState?.captured_at : '') ||
+    (previousFlow?.page_kind === pageKind ? existingState?.captured_at : '')
+  );
+  const staleForPage = Number.isFinite(incomingTime) && Number.isFinite(previousPageTime) && incomingTime < previousPageTime;
+  if (!staleForPage && Number.isFinite(incomingTime)) timestamps[pageKind] = new Date(incomingTime).toISOString();
+
   return {
     ...incomingState,
-    data: { ...previousData, ...(incomingState?.data || {}) },
+    ...(staleForPage ? {
+      capture_id: existingState?.capture_id || incomingState.capture_id,
+      page_kind: existingState?.page_kind || incomingState.page_kind,
+      source: existingState?.source || incomingState.source,
+      captured_at: existingState?.captured_at || incomingState.captured_at,
+    } : {}),
+    page_capture_timestamps: timestamps,
+    stale_page_capture: staleForPage,
+    data: staleForPage ? previousData : { ...previousData, ...(incomingState?.data || {}) },
   };
 }
 
