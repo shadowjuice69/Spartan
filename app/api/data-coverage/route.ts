@@ -24,7 +24,7 @@ const FIELD_GROUPS = [
   { name: 'Covert & magic', keys: ['thieves', 'wizards', 'o_tpa', 'd_tpa', 'o_wpa', 'd_wpa', 'mana', 'stealth', 'runes'] },
   { name: 'Buildings & science', keys: ['buildings', 'be', 'efficiency', 'science', 'research', 'books'] },
   { name: 'Kingdom grid', keys: ['grid', 'rows', 'slot', 'goodSpells', 'kingdomCode'] },
-  { name: 'Events & outcomes', keys: ['events', 'event_type', 'attacker', 'defender', 'target', 'acres_change', 'losses', 'result'] },
+  { name: 'Events & outcomes', keys: ['events', 'event_type', 'attacker', 'defender', 'attacker_kingdom', 'defender_kingdom', 'target', 'acres_change', 'losses', 'result'] },
 ]
 
 function keysIn(value: any, out = new Set<string>(), depth = 0): Set<string> {
