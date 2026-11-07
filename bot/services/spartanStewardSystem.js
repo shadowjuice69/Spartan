@@ -12,7 +12,7 @@ const STEWARDS = [
 const SUPERVISOR_INTERVAL_MS=Math.max(5000,Number(process.env.SPARTAN_STEWARD_INTERVAL_MS||300000));
 const KNOWLEDGE_INTERVAL_MS=Math.max(30000,Number(process.env.SPARTAN_KNOWLEDGE_STEWARD_INTERVAL_MS||3600000));
 const SWEEP_LIMIT=Math.max(1,Math.min(50,Number(process.env.SPARTAN_STEWARD_SWEEP_LIMIT||10)));
-const REVALIDATE_AFTER_MS=Math.max(30000,Number(process.env.SPARTAN_STEWARD_REVALIDATE_AFTER_MS||300000));
+const REVALIDATE_AFTER_MS=Math.max(30000,Number(process.env.SPARTAN_STEWARD_REVALIDATE_AFTER_MS||21600000));
 let supervisorTimer=null,knowledgeTimer=null,supervisorRunning=false,knowledgeRunning=false;
 function result(steward,decision,confidence,reason,details={}){return{steward,decision,confidence,reason,details};}
 function fieldPaths(value,prefix='',out=[]){if(value==null)return out;if(Array.isArray(value)){out.push(prefix||'[]');value.slice(0,50).forEach((v,i)=>fieldPaths(v,`${prefix}[${i}]`,out));return out}if(typeof value!=='object'){out.push(prefix||'value');return out}for(const[k,v]of Object.entries(value)){const p=prefix?`${prefix}.${k}`:k;out.push(p);fieldPaths(v,p,out)}return out}
