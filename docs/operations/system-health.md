@@ -19,7 +19,7 @@
 - Discord `bot_event` records are Intel-only. They must never create or update `spartan_state_projection` rows.
 - Ordinary page captures may merge partial-page state into a prior projection. If the prior projection was sourced from a legacy bot event, its wrapper fields are discarded before merging.
 - The queue recovery migration uses the existing `claim_spartan_queue(text, integer)` signature and treats `locked_at` as a 30-minute worker lease. The existing five-attempt ceiling remains in effect.
-- Operational archive retention is separate from raw capture and province-history retention. Terminal queue rows are archived after 30 days; old provenance edges and processed/failed flows after 90 days. Pending, retry, and processing work is excluded.
+- Operational archive retention is separate from raw capture and province-history retention. Terminal queue rows are archived after 30 days; old provenance edges are archived after 90 days only when their flow is terminal and has no live queue item; processed/failed flows are archived after 90 days. Pending, retry, processing, and other recoverable work is excluded.
 
 ## Render configuration
 
