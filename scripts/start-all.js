@@ -10,34 +10,64 @@ const fs = require('node:fs');
 const num = (name, def) => { const v = Number(process.env[name]); return Number.isFinite(v) && v >= 0 ? v : def; };
 const children = [];
 let shuttingDown = false;
+let botRestartTimer = null;
+let botRestartAttempts = 0;
+const MAX_BOT_RESTART_DELAY_MS = 60000;
 
 function withHeap(mb) {
   const existing = String(process.env.NODE_OPTIONS || '').replace(/--max-old-space-size=\d+/g, '').trim();
   return mb > 0 ? (existing + ' --max-old-space-size=' + mb).trim() : existing;
 }
 
-function launch(command, args, label, heapMb) {
+function scheduleRestart(command, args, label, heapMb, options) {
+  if (shuttingDown || botRestartTimer) return;
+  botRestartAttempts += 1;
+  const delay = Math.min(MAX_BOT_RESTART_DELAY_MS, 1000 * (2 ** Math.min(botRestartAttempts - 1, 6)));
+  console.error('[START-ALL] restarting ' + label + ' in ' + delay + 'ms (attempt ' + botRestartAttempts + ')');
+  botRestartTimer = setTimeout(() => {
+    botRestartTimer = null;
+    if (!shuttingDown) launch(command, args, label, heapMb, options);
+  }, delay);
+  botRestartTimer.unref();
+}
+
+function launch(command, args, label, heapMb, options = {}) {
   const env = { ...process.env, EMBEDDED_SPARTAN: 'true', NODE_OPTIONS: withHeap(heapMb) };
   const child = spawn(command, args, { cwd: process.cwd(), env, stdio: 'inherit' });
   child.label = label;
+  children.push(child);
+  const stableTimer = options.restart
+    ? setTimeout(() => {
+        if (child.exitCode === null && child.signalCode === null) botRestartAttempts = 0;
+      }, 300000)
+    : null;
+  if (stableTimer) stableTimer.unref();
+
   child.on('exit', (code, signal) => {
-    if (!shuttingDown) {
-      console.error('[START-ALL] ' + label + ' exited code=' + code + ' signal=' + (signal || 'none'));
-      shutdown(code || 1);
-    }
+    if (stableTimer) clearTimeout(stableTimer);
+    const index = children.indexOf(child);
+    if (index >= 0) children.splice(index, 1);
+    if (shuttingDown) return;
+    console.error('[START-ALL] ' + label + ' exited code=' + code + ' signal=' + (signal || 'none'));
+    if (options.restart) scheduleRestart(command, args, label, heapMb, options);
+    else shutdown(code || 1);
   });
   child.on('error', (error) => {
     console.error('[START-ALL] ' + label + ' failed: ' + error.message);
-    shutdown(1);
+    if (options.restart) scheduleRestart(command, args, label, heapMb, options);
+    else shutdown(1);
   });
-  children.push(child);
   return child;
 }
 
 function shutdown(code = 0) {
   if (shuttingDown) return;
   shuttingDown = true;
-  for (const child of children) { try { child.kill('SIGTERM'); } catch {} }
+  if (botRestartTimer) clearTimeout(botRestartTimer);
+  botRestartTimer = null;
+  for (const child of children) {
+    if (child.exitCode === null && child.signalCode === null) { try { child.kill('SIGTERM'); } catch {} }
+  }
   setTimeout(() => process.exit(code), 1500).unref();
 }
 
@@ -52,7 +82,7 @@ function rssMb(pid) {
   } catch { return null; }
 }
 function logMem(tag) {
-  const parts = [['parent', process.pid], ...children.filter(c => c.pid).map(c => [c.label, c.pid])];
+  const parts = [['parent', process.pid], ...children.filter(c => c.pid && c.exitCode === null && c.signalCode === null).map(c => [c.label, c.pid])];
   let total = 0;
   const text = parts.map(([label, pid]) => { const v = rssMb(pid); if (v) total += v; return label + '=' + (v ?? '?') + 'MB'; }).join(' ');
   console.log('[MEM]' + (tag ? ' ' + tag : '') + ' ' + text + ' total=' + total + 'MB');
@@ -103,7 +133,7 @@ const nextHeap = num('NEXT_MAX_HEAP_MB', 256);
 const botHeap = num('BOT_MAX_HEAP_MB', 160);
 console.log('[START-ALL] Starting Spartan web, then Discord bot in ' + botDelay + 'ms (heap caps next=' + nextHeap + 'MB bot=' + botHeap + 'MB)');
 launch(process.execPath, [require.resolve('next/dist/bin/next'), 'start', '-H', '0.0.0.0'], 'next', nextHeap);
-setTimeout(() => { if (!shuttingDown) launch(process.execPath, ['bot/bot.js'], 'bot', botHeap); }, botDelay);
+setTimeout(() => { if (!shuttingDown) launch(process.execPath, ['bot/bot.js'], 'bot', botHeap, { restart: true }); }, botDelay);
 setTimeout(() => { if (!shuttingDown) startSteward(); }, botDelay + 25000);
 
 const memEvery = num('MEM_LOG_INTERVAL_MS', 300000);

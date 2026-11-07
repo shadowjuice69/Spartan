@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "node --test bot/tests/wiki-age-generator.test.js bot/tests/github-wiki-sync.test.js bot/tests/discord-intel-filter.test.js bot/tests/canonical-intel-parser.test.js bot/tests/canonical-intel-service.test.js bot/tests/discord-canonical-intel-handlers.test.js bot/tests/intel-ops-handler.test.js bot/tests/return-tracker.test.cjs bot/tests/target-ranker.test.js bot/tests/target-handler.test.js && node scripts/ensure-python-parser.js && next build",
+    "build": "node --test bot/tests/wiki-age-generator.test.js bot/tests/github-wiki-sync.test.js bot/tests/discord-intel-filter.test.js bot/tests/canonical-intel-parser.test.js bot/tests/canonical-intel-service.test.js bot/tests/discord-canonical-intel-handlers.test.js bot/tests/intel-ops-handler.test.js bot/tests/return-tracker.test.cjs bot/tests/target-ranker.test.js bot/tests/target-handler.test.js bot/tests/spartan-bot-event-projection.test.js bot/tests/combined-effects.test.js && node scripts/ensure-python-parser.js && next build",
     "start": "node scripts/start-all.js",
     "lint": "next lint"
   },
@@ -12,23 +12,29 @@
     "@discordjs/rest": "^2.6.3",
     "@discordjs/voice": "^0.19.2",
     "@snazzah/davey": "^0.1.12",
-    "@supabase/ssr": "latest",
+    "@supabase/ssr": "0.12.7",
     "@supabase/supabase-js": "^2.117.1",
     "axios": "^1.20.0",
     "discord-api-types": "^0.38.55",
     "discord.js": "^14.27.0",
     "dotenv": "^17.4.2",
     "lowdb": "^1.0.0",
-    "next": "15.5.7",
+    "next": "15.5.29",
     "opusscript": "^0.0.8",
     "pdf-parse": "^2.4.5",
-    "react": "19.1.0",
-    "react-dom": "19.1.0"
+    "react": "19.1.10",
+    "react-dom": "19.1.10",
+    "sharp": "0.35.5"
   },
   "devDependencies": {
     "@types/node": "24.0.10",
     "@types/react": "19.1.9",
     "@types/react-dom": "19.1.7",
     "typescript": "5.9.2"
+  },
+  "overrides": {
+    "next": {
+      "postcss": "8.5.23"
+    }
   }
 }

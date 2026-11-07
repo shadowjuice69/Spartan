@@ -19,6 +19,10 @@ const ALIASES: Array<[string, RegExp]> = [
   ["ATTACK TIME", /\b(?:attack|march|military) travel time\b|\battack time\b/i],
   ["COMBAT GAINS", /\b(?:combat|land|attack) gains\b/i],
   ["SPELL SUCCESS", /\bspell success\b|\bsuccessful spellcasting\b/i],
+  ["COMBAT INSTANT SPELL DAMAGE RECEIVED", /\bcombat instant spell damage received\b/i],
+  ["SPELL DAMAGE RECEIVED", /\bspell damage received\b/i],
+  ["SABOTAGE DAMAGE RECEIVED", /\bsabotage damage received\b/i],
+  ["DAMAGE TAKEN", /\bdamage taken\b/i],
   ["SPELL DAMAGE", /\bspell damage\b|\bspell strength\b/i],
   ["MILITARY CASUALTIES", /\b(?:military|army|troop) casualties\b/i],
   ["THIEF LOSSES", /\b(?:thief|thievery) losses\b/i],
@@ -49,7 +53,7 @@ const CASE_SENSITIVE: Array<[string, RegExp]> = [
 
 const DELIMS = /[;,\.\n!·•]/
 // For these stats a positive number is bad for the player (more cost, longer time, more losses).
-const BAD_WHEN_POSITIVE = /COST|TRAINING TIME|TRAVEL TIME|ATTACK TIME|CASUALT|LOSSES|LOSS\b/
+const BAD_WHEN_POSITIVE = /COST|TRAINING TIME|TRAVEL TIME|ATTACK TIME|CASUALT|LOSSES|LOSS\b|FOOD CONSUMPTION|DAMAGE TAKEN|DAMAGE RECEIVED/
 
 export function isFavorable(stat: string, amount: number): boolean {
   return BAD_WHEN_POSITIVE.test(stat) ? amount < 0 : amount > 0
