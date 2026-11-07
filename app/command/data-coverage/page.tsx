@@ -10,6 +10,8 @@ type Coverage = {
     kinds: Array<{ page_kind: string; count: number; latest: string | null; sources: string[]; structured: number; destinations: string[] }>
     sources: Array<{ source: string; count: number }>
     fields: Array<{ name: string; fields: Array<{ key: string; records: number; present: boolean }> }>
+    historyFields: Array<{ key: string; records: number; present: boolean }>
+    eventFields: Array<{ key: string; records: number; present: boolean }>
     flows: Array<{ page_kind: string; count: number; latest: string | null; statuses: Record<string, number> }>
     registry: Array<{ province: string; kingdom: string; latest: string | null; available: string[] }>
     capturedAt: string | null
@@ -40,7 +42,7 @@ export default function DataCoveragePage() {
     {data && <>
       <p style={{fontSize:11,color:'#8993a1',margin:'0 0 14px'}}>{data.account.province} · {data.account.kingdom} · latest capture {ago(data.coverage.capturedAt)}</p>
       <Grid>
-        <Stat label="Captures scanned" value={data.totals.captures} sub={data.coverage.truncated ? 'Latest 1,500; more exist' : 'All account captures'} color={C.cyan} delay={0}/>
+        <Stat label="Captures scanned" value={data.totals.captures} sub={data.coverage.truncated ? 'At least 1,500; may be capped' : 'All account captures'} color={C.cyan} delay={0}/>
         <Stat label="Intel records" value={data.totals.intelRecords} sub="Structured Intel projection" color={C.violet} delay={1}/>
         <Stat label="Province history" value={data.totals.provinceHistory} sub="Historical snapshots" color={C.lime} delay={2}/>
         <Stat label="Event history" value={data.totals.eventHistory} sub="Normalized game events" color={C.amber} delay={3}/>
@@ -69,6 +71,22 @@ export default function DataCoveragePage() {
           </div>
         </div>)}
       </Panel>
+      <Grid>
+        <Panel title="STORED PROVINCE HISTORY" sub="Non-null field counts in the latest 250 snapshots. Missing source values remain unknown, not zero.">
+          <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(130px,1fr))',gap:6}}>
+            {data.coverage.historyFields.map(field=><div key={field.key} style={{padding:'8px 10px',borderRadius:8,background:'rgba(255,255,255,.03)',border:'1px solid rgba(255,255,255,.06)'}}>
+              <div style={{fontSize:10,color:'#b7c3ce'}}>{field.key}</div><div style={{fontSize:13,fontWeight:800,color:field.present?C.green:C.red,marginTop:4}}>{fmt(field.records)} snapshots</div>
+            </div>)}
+          </div>
+        </Panel>
+        <Panel title="STORED EVENT HISTORY" sub="Non-null event fields in the latest 250 normalized events.">
+          <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(130px,1fr))',gap:6}}>
+            {data.coverage.eventFields.map(field=><div key={field.key} style={{padding:'8px 10px',borderRadius:8,background:'rgba(255,255,255,.03)',border:'1px solid rgba(255,255,255,.06)'}}>
+              <div style={{fontSize:10,color:'#b7c3ce'}}>{field.key}</div><div style={{fontSize:13,fontWeight:800,color:field.present?C.green:C.red,marginTop:4}}>{fmt(field.records)} events</div>
+            </div>)}
+          </div>
+        </Panel>
+      </Grid>
       <Grid>
         <Panel title="PROCESSING FLOWS" sub="Recent flows tied to this account’s latest captured records.">
           {data.coverage.flows.length ? data.coverage.flows.map(flow=><div key={flow.page_kind} style={{padding:'9px 0',borderBottom:'1px solid rgba(255,255,255,.06)'}}>
