@@ -5,7 +5,7 @@ const number = (value) => {
   const match = String(value).replace(/,/g, '').match(/-?\d+(?:\.\d+)?/);
   return match ? Number(match[0]) : null;
 };
-const cleanParty = (value) => String(value || '').replace(/^\s*of\s+/i, '').replace(/^\s*\d+\s*-\s*/, '').replace(/\s+/g, ' ').trim();
+const cleanParty = (value) => String(value || '').replace(/^\s*\d+\s*-\s*/, '').replace(/\s+/g, ' ').trim();
 
 function unitLosses(value) {
   const result = { troops: 0, thieves: 0, wizards: 0, horses: 0, raw: String(value || '').trim() };
