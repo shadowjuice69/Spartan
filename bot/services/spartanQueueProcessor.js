@@ -497,7 +497,7 @@ async function syncNewsEvents(sb, flow, state, capture, classifiedKind = null) {
   const province = await findProvince(sb, flow, state);
   const capturedAt = capture?.captured_at || state?.captured_at || state?.processed_at || new Date().toISOString();
   const existing = Array.isArray(state?.data?.events) ? state.data.events : [];
-  const normalized = parseStructuredNewsEvents(capture?.raw_text || state?.raw_text || '', {
+  const normalized = existing.length ? [] : parseStructuredNewsEvents(capture?.raw_text || state?.raw_text || '', {
     captureId: flow.capture_id, capturedAt, ownProvince: state?.data?.name || null, ownKingdom: flow.kingdom_id || null,
   });
   const rows = [
