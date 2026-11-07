@@ -545,7 +545,7 @@ async function syncNewsEvents(sb, flow, state, capture, classifiedKind = null) {
     })),
     ...normalized.map(event => ({
       user_id: userId, province_id: province?.id || null,
-      kingdom_id: flow.kingdom_id || null, occurred_at: event.occurred_at,
+      kingdom_id: province?.kingdom_id || flow.kingdom_id || null, occurred_at: event.occurred_at,
       age: Number(state?.data?.age) || null, game_year: Number(state?.data?.game_year) || null,
       game_tick: state?.data?.game_tick || null, event_type: event.event_type,
       source: 'spartan-event-normalizer', source_id: event.source_id,
