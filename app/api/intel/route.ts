@@ -152,6 +152,33 @@ export async function POST(request: Request) {
       return response({ success: false, error: 'The matching Spartan account is missing its linked user or kingdom location.' }, 409)
     }
 
+    // Apply the same atomic province-wide cooldown used by the Universal Capture
+    // endpoint, so UtopiaIntel cannot bypass the one-hour limit via this receiver.
+    const throttledProvinces = (process.env.UTOPIA_INTEL_THROTTLE_PROVINCES ?? 'anduin lothar')
+      .split(',')
+      .map(normalizeName)
+      .filter(Boolean)
+    if (throttledProvinces.includes(normalizeName(account.province_name))) {
+      const { data: rateLimitData, error: rateLimitError } = await supabase.rpc(
+        'spartan_claim_capture_slot',
+        { p_province_id: account.id },
+      )
+      if (rateLimitError) throw new Error(rateLimitError.message)
+      const rateLimit = Array.isArray(rateLimitData) ? rateLimitData[0] : rateLimitData
+      if (!rateLimit || rateLimit.allowed !== true) {
+        const retryAfterSeconds = Math.max(1, Number(rateLimit?.retry_after_seconds ?? 3600))
+        return response({
+          success: true,
+          captured: false,
+          storedInVault: false,
+          throttled: true,
+          province: account.province_name,
+          retryAfterSeconds,
+          minutes: 60,
+        })
+      }
+    }
+
     const receivedAt = new Date().toISOString()
     const fingerprint = crypto
       .createHash('sha256')
