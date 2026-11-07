@@ -27,16 +27,18 @@ async function main() {
     scanned += records.length;
     const ownerIds = [...new Set(records.map(row => row.user_id).filter(Boolean))];
     const ownersResult = ownerIds.length
-      ? await db.from('spartan_accounts').select('id,auth_user_id').in('id', ownerIds)
+      ? await db.from('spartan_accounts').select('id,auth_user_id,province_name,province_location').in('id', ownerIds)
       : { data: [], error: null };
     if (ownersResult.error) throw new Error(`Account owner lookup failed: ${ownersResult.error.message}`);
-    const ownerMap = new Map((ownersResult.data || []).map(row => [row.id, row.auth_user_id]));
+    const ownerMap = new Map((ownersResult.data || []).map(row => [row.id, row]));
     const rows = [];
     for (const record of records) {
-      const userId = ownerMap.get(record.user_id);
+      const owner = ownerMap.get(record.user_id);
+      const userId = owner?.auth_user_id;
       if (!userId) { skippedOwner++; continue; }
       const events = parseStructuredNewsEvents(record.raw_text, {
         captureId: record.capture_id, capturedAt: record.captured_at,
+        ownProvince: owner.province_name, ownKingdom: owner.province_location,
       });
       for (const event of events) {
         parsed++;
