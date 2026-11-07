@@ -457,11 +457,19 @@ export async function GET(request: Request) {
     }
 
     // Time series of the province's own numbers (one row per throne visit).
-    const historyResult = await db
-      .from('spartan_province_history')
-      .select('observed_at,acres,networth,population,peons,soldiers,off_specs,def_specs,elites,thieves,wizards,generals,war_horses,offense,defense,defense_home,build_efficiency,wages')
-      .eq('user_id', user.id).order('observed_at', { ascending: true }).limit(240)
-    const history = historyResult.error ? [] : historyResult.data || []
+    // Only pages that render province-history charts need the full series.
+    // War Room needs only the latest acreage snapshot; other pages should not
+    // repeatedly transfer 240 rows they never display.
+    let history: any[] = []
+    if (['province', 'military', 'war-room'].includes(page)) {
+      const historyResult = await db
+        .from('spartan_province_history')
+        .select('observed_at,acres,networth,population,peons,soldiers,off_specs,def_specs,elites,thieves,wizards,generals,war_horses,offense,defense,defense_home,build_efficiency,wages')
+        .eq('user_id', user.id)
+        .order('observed_at', { ascending: page !== 'war-room' })
+        .limit(page === 'war-room' ? 1 : 240)
+      history = historyResult.error ? [] : historyResult.data || []
+    }
 
     const body: any = {
       ok: true, page,
