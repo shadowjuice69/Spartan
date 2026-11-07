@@ -693,19 +693,15 @@ export async function GET(request: Request) {
         const day = Number.isFinite(stamp) ? new Date(stamp).toISOString().slice(0, 10) : String(e.gameDate || '')
         return `${signature(e)}|${day}`
       }
-      const known = new Set(kingdomEvents.map(datedSignature))
-      const events = [...kingdomEvents]
-      for (const event of botEvents) {
-        const key = datedSignature(event)
-        if (!known.has(key)) { events.push({ ...event, source: 'KDNEWS' }); known.add(key) }
-      }
-      for (const event of mpByReport.values()) {
-        const key = datedSignature(event)
-        if (!known.has(key)) { events.push({ ...event, source: 'MPNEWS' }); known.add(key) }
-      }
+      const kingdomKeys = new Set(kingdomEvents.map(datedSignature))
+      const botAdditions = botEvents.filter(event => !kingdomKeys.has(datedSignature(event))).map(event => ({ ...event, source: 'KDNEWS' }))
+      const mpAdditions = [...mpByReport.values()].filter(event => !kingdomKeys.has(datedSignature(event))).map(event => ({ ...event, source: 'MPNEWS' }))
+      const existingKeys = new Set([...kingdomEvents, ...botEvents, ...mpByReport.values()].map(datedSignature))
+      const events = [...kingdomEvents, ...botAdditions, ...mpAdditions]
+      // Preserve repeated identical reports inside a single normalized capture,
+      // while suppressing normalized rows already represented by a raw-feed event.
       for (const event of normalizedEvents) {
-        const key = datedSignature(event)
-        if (!known.has(key)) { events.push(event); known.add(key) }
+        if (!existingKeys.has(datedSignature(event))) events.push(event)
       }
       events.sort((a, b) => b.order - a.order)
       const latestAt = [...newsRows, ...mpRows, ...(normalizedResult.data || [])].map((row: any) => row.occurred_at || when(row)).filter(Boolean).sort((a: string, b: string) => Date.parse(b) - Date.parse(a))[0] || null
