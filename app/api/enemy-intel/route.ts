@@ -30,6 +30,8 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Your Spartan account identity is not linked.' }, { status: 403 })
     }
 
+    const ownKingdom = String(account.province_location).trim().toLowerCase()
+
     const { data, error } = await db
       .from('spartan_intel_records')
       .select(summary
@@ -43,7 +45,6 @@ export async function GET(request: Request) {
       .limit(1000)
     if (error) throw error
 
-    const ownKingdom = String(account.province_location).trim().toLowerCase()
     const enemyRows = (data || []).filter((row: any) => {
       if (row.visibility === 'own' && row.user_id !== user.id) return false
       const targetKingdom = String(row.target_kingdom_id ?? '').trim().toLowerCase()
