@@ -5,7 +5,7 @@ const { parseStructuredNewsEvents } = require('../services/spartanEventNormalize
 test('normalizes structured Discord attack reports and extracts losses/return time', () => {
   const [event] = parseStructuredNewsEvents(
     ':crossed_swords: Finkster [**silen#**] attacked __Ayoko na mag Utopia__ (3:11)|captured: **34**|loss: **113 Griffins and 129 horses**|kills: **45 (+87 prisoners)**|return: 12.38',
-    { captureId: 'capture-1', capturedAt: '2026-11-07T15:38:46.550Z' },
+    { captureId: 'capture-1', capturedAt: '2026-11-07T15:38:46.550Z', ownKingdom: '6:8' },
   );
   assert.equal(event.event_type, 'attack');
   assert.equal(event.attacker, 'Finkster');
@@ -15,6 +15,8 @@ test('normalizes structured Discord attack reports and extracts losses/return ti
   assert.equal(event.troops_lost, 113);
   assert.equal(event.payload.unit_losses.horses, 129);
   assert.equal(event.payload.return_hours, 12.38);
+  assert.equal(event.payload.attacker_kingdom, '6:8');
+  assert.equal(event.payload.defender_kingdom, '3:11');
   assert.equal(event.payload.normalizer, 'spartan-event-normalizer');
 });
 
@@ -28,6 +30,8 @@ test('normalizes NEW KDNEWS attacks while excluding unrelated bot chatter', () =
   assert.equal(events[0].attacker, 'Ayoko na mag Utopia');
   assert.equal(events[0].defender, 'Finkster');
   assert.equal(events[0].target_kingdom, '6:8');
+  assert.equal(events[0].payload.attacker_kingdom, '3:11');
+  assert.equal(events[0].payload.defender_kingdom, '6:8');
   assert.equal(events[0].acres_change, 75);
 });
 
@@ -42,6 +46,8 @@ test('normalizes incoming province reports and preserves unknown losses', () => 
   assert.equal(event.acres_change, 46);
   assert.equal(event.thieves_lost, 12);
   assert.equal(event.wizards_lost, 9);
+  assert.equal(event.payload.attacker_kingdom, '2:10');
+  assert.equal(event.payload.defender_kingdom, '6:8');
 });
 
 test('normalizes dated Utopia kingdom news and recapture lines', () => {
@@ -52,6 +58,8 @@ test('normalizes dated Utopia kingdom news and recapture lines', () => {
   assert.equal(events.length, 2);
   assert.equal(events[0].event_type, 'recaptured');
   assert.equal(events[0].acres_change, 24);
+  assert.equal(events[0].payload.attacker_kingdom, '6:8');
+  assert.equal(events[0].payload.defender_kingdom, '3:11');
   assert.equal(events[1].event_type, 'invaded');
   assert.equal(events[1].acres_change, 18);
 });
