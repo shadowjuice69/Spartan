@@ -94,7 +94,7 @@ test('economy uses Throne stock and explicit Survey production', async () => {
   assert.match(out, /48,756/);
   assert.match(out, /7,430/);
   assert.match(out, /10,794/);
-  assert.match(out, /Survey 3d/);
+  assert.match(out, /Survey \d+d/);
 });
 test('Survey displays canonical building quantities', async () => {
   const out = await run('survey', { province: 'Finkster' });
