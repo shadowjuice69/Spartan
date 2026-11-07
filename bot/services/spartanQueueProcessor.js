@@ -495,28 +495,105 @@ async function quarantine(sb, flow, job, stewardResult) {
 }
 async function processOne(sb, job) {
   const { data: flow, error: flowError } = await sb.from('spartan_data_flow').select('*').eq('flow_id', job.flow_id).maybeSingle();
-  if (flowError) throw new Error(`flow lookup: ${flowError.message}`); if (!flow) throw new Error(`flow ${job.flow_id} not found`);
-  const capture = await loadCapture(sb, flow); if (!capture) throw new Error(`capture ${flow.capture_id || ''} not found in Spartan vault`);
+  if (flowError) throw new Error(`flow lookup: ${flowError.message}`);
+  if (!flow) throw new Error(`flow ${job.flow_id} not found`);
+
+  const capture = await loadCapture(sb, flow);
+  if (!capture) throw new Error(`capture ${flow.capture_id || ''} not found in Spartan vault`);
+
   const stewardResult = await stewardSystem.run(flow, capture, job.id, flow.province_id || flow.flow_id);
-  if (stewardResult.decision === 'quarantine' || stewardResult.decision === 'fail') { await quarantine(sb, flow, job, stewardResult); return { flowId: flow.flow_id, queueId: job.id, quarantined: true, pageKind: flow.page_kind }; }
-  const state = extractState(flow, capture); const projectionKey = flow.province_id || flow.flow_id;
-  const { data: existing } = await sb.from('spartan_state_projection').select('version,state').eq('province_id', projectionKey).maybeSingle();
+  if (stewardResult.decision === 'quarantine' || stewardResult.decision === 'fail') {
+    await quarantine(sb, flow, job, stewardResult);
+    return { flowId: flow.flow_id, queueId: job.id, quarantined: true, pageKind: flow.page_kind };
+  }
+
+  const state = extractState(flow, capture);
+  const isBotEvent = flow.source === 'discord-bot' && flow.page_kind === 'bot_event';
+
+  // Discord bot events are evidence for the Intel pipeline, not province-state
+  // snapshots. Never merge their Discord payload into spartan_state_projection.
+  if (isBotEvent) {
+    const intelResult = await syncBotIntelRecord(sb, flow, capture, state);
+    await addEdge(
+      sb,
+      flow.flow_id,
+      'spartan_processing_queue',
+      'spartan_intel_records',
+      'bot_intel',
+      {
+        queue_id: job.id,
+        capture_id: flow.capture_id,
+        outcome: intelResult ? (intelResult.skippedExisting ? 'already_present' : 'projected') : 'ignored_non_game',
+        page_kind: intelResult?.pageKind || 'bot_event',
+      },
+    );
+
+    const integrity = await stewardSystem.run(
+      flow,
+      capture,
+      job.id,
+      flow.province_id || flow.flow_id,
+      { afterProjection: true, skipProjection: true },
+    );
+    if (integrity.results.some(item => item.steward === 'integrity' && (item.decision === 'fail' || item.decision === 'quarantine'))) {
+      throw new Error(`Integrity Steward failed: ${integrity.results.find(item => item.steward === 'integrity')?.reason || 'unknown'}`);
+    }
+
+    const { error: flowUpdateError } = await sb.from('spartan_data_flow')
+      .update({ status: 'processed', stage: 'bot_intel', current_stage: 'bot_intel', processed_at: new Date().toISOString(), error: null })
+      .eq('flow_id', flow.flow_id);
+    if (flowUpdateError) throw new Error(`flow update: ${flowUpdateError.message}`);
+
+    const { error: queueError } = await sb.from('spartan_processing_queue')
+      .update({ status: 'completed', completed_at: new Date().toISOString(), locked_at: null, error: null })
+      .eq('id', job.id);
+    if (queueError) throw new Error(`queue complete: ${queueError.message}`);
+
+    return { flowId: flow.flow_id, queueId: job.id, version: null, pageKind: flow.page_kind, botIntel: true };
+  }
+
+  const projectionKey = flow.province_id || flow.flow_id;
+  const { data: existing } = await sb.from('spartan_state_projection')
+    .select('version,state').eq('province_id', projectionKey).maybeSingle();
   const version = Number(existing?.version || 0) + 1;
-  // Merge onto the previous projection's data instead of replacing it outright — otherwise a
-  // Throne capture (which has no mana/stealth/wages) wipes out whatever a Magic/Thievery/Military
-  // page capture last set for those fields, and vice versa for whatever Throne alone owns.
+
+  // Merge page-owned fields onto the previous projection so partial pages do not
+  // erase values captured by other page kinds.
   state.data = { ...(existing?.state?.data || {}), ...(state.data || {}) };
-  const { error: projectionError } = await sb.from('spartan_state_projection').upsert({ province_id: projectionKey, kingdom_id: flow.kingdom_id || null, state, version, source_flow_id: flow.flow_id, updated_at: new Date().toISOString() }, { onConflict: 'province_id' });
+  const { error: projectionError } = await sb.from('spartan_state_projection').upsert({
+    province_id: projectionKey,
+    kingdom_id: flow.kingdom_id || null,
+    state,
+    version,
+    source_flow_id: flow.flow_id,
+    updated_at: new Date().toISOString(),
+  }, { onConflict: 'province_id' });
   if (projectionError) throw new Error(`spartan_state_projection: ${projectionError.message}`);
-  await addEdge(sb, flow.flow_id, 'spartan_processing_queue', 'spartan_state_projection', 'projection', { queue_id: job.id, processor: WORKER_ID, version, capture_id: flow.capture_id });
-  const canonical = await syncCanonicalProvince(sb, flow, state); const specialized = await syncSpecializedProvinceData(sb, flow, state);
-  await writeProvinceHistory(sb, flow, state, canonical || specialized); await syncNewsEvents(sb, flow, state); await syncBotIntelRecord(sb, flow, capture, state);
+
+  await addEdge(sb, flow.flow_id, 'spartan_processing_queue', 'spartan_state_projection', 'projection', {
+    queue_id: job.id, processor: WORKER_ID, version, capture_id: flow.capture_id,
+  });
+  const canonical = await syncCanonicalProvince(sb, flow, state);
+  const specialized = await syncSpecializedProvinceData(sb, flow, state);
+  await writeProvinceHistory(sb, flow, state, canonical || specialized);
+  await syncNewsEvents(sb, flow, state);
+  await syncBotIntelRecord(sb, flow, capture, state);
+
   const integrity = await stewardSystem.run(flow, capture, job.id, projectionKey, { afterProjection: true });
-  if (integrity.results.some(item => item.steward === 'integrity' && (item.decision === 'fail' || item.decision === 'quarantine'))) throw new Error(`Integrity Steward failed: ${integrity.results.find(item => item.steward === 'integrity')?.reason || 'unknown'}`);
-  const { error: flowUpdateError } = await sb.from('spartan_data_flow').update({ status: 'processed', stage: 'projection', current_stage: 'projection', processed_at: new Date().toISOString(), error: null }).eq('flow_id', flow.flow_id);
+  if (integrity.results.some(item => item.steward === 'integrity' && (item.decision === 'fail' || item.decision === 'quarantine'))) {
+    throw new Error(`Integrity Steward failed: ${integrity.results.find(item => item.steward === 'integrity')?.reason || 'unknown'}`);
+  }
+
+  const { error: flowUpdateError } = await sb.from('spartan_data_flow')
+    .update({ status: 'processed', stage: 'projection', current_stage: 'projection', processed_at: new Date().toISOString(), error: null })
+    .eq('flow_id', flow.flow_id);
   if (flowUpdateError) throw new Error(`flow update: ${flowUpdateError.message}`);
-  const { error: queueError } = await sb.from('spartan_processing_queue').update({ status: 'completed', completed_at: new Date().toISOString(), locked_at: null, error: null }).eq('id', job.id);
+
+  const { error: queueError } = await sb.from('spartan_processing_queue')
+    .update({ status: 'completed', completed_at: new Date().toISOString(), locked_at: null, error: null })
+    .eq('id', job.id);
   if (queueError) throw new Error(`queue complete: ${queueError.message}`);
+
   return { flowId: flow.flow_id, queueId: job.id, version, pageKind: flow.page_kind };
 }
 async function failOne(sb, job, error) {
