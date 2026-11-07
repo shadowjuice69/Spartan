@@ -490,15 +490,29 @@ async function backfillMissingBotIntel(sb) {
   return { checked: candidates.length, recovered, skipped };
 }
 
+async function resolveAccountContext(sb, capture, flow) {
+  const ownerId = capture?.user_id || flow?.user_id || null;
+  if (!ownerId) return null;
+  const byId = await sb.from('spartan_accounts')
+    .select('auth_user_id,province_name,province_location').eq('id', ownerId).maybeSingle();
+  if (byId.error) throw new Error(`account context lookup: ${byId.error.message}`);
+  if (byId.data) return byId.data;
+  const byAuthId = await sb.from('spartan_accounts')
+    .select('auth_user_id,province_name,province_location').eq('auth_user_id', ownerId).maybeSingle();
+  if (byAuthId.error) throw new Error(`auth context lookup: ${byAuthId.error.message}`);
+  return byAuthId.data || null;
+}
+
 async function syncNewsEvents(sb, flow, state, capture, classifiedKind = null) {
   const isNews = flow.page_kind === 'news' || ['news', 'attack'].includes(String(classifiedKind || ''));
   if (!isNews) return null;
-  const userId = await resolveAuthUserId(sb, capture, flow);
+  const account = await resolveAccountContext(sb, capture, flow);
+  const userId = account?.auth_user_id || await resolveAuthUserId(sb, capture, flow);
   const province = await findProvince(sb, flow, state);
   const capturedAt = capture?.captured_at || state?.captured_at || state?.processed_at || new Date().toISOString();
   const existing = Array.isArray(state?.data?.events) ? state.data.events : [];
   const normalized = existing.length ? [] : parseStructuredNewsEvents(capture?.raw_text || state?.raw_text || '', {
-    captureId: flow.capture_id, capturedAt, ownProvince: state?.data?.name || null, ownKingdom: flow.kingdom_id || null,
+    captureId: flow.capture_id, capturedAt, ownProvince: state?.data?.name || account?.province_name || null, ownKingdom: flow.kingdom_id || account?.province_location || null,
   });
   const rows = [
     ...existing.map((event, index) => ({
