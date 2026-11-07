@@ -493,6 +493,16 @@ async function quarantine(sb, flow, job, stewardResult) {
   await sb.from('spartan_processing_queue').update({ status: 'failed', locked_at: null, error: { steward: stewardResult.results, reason: 'quarantined by fresh Spartan Stewards' } }).eq('id', job.id);
   await sb.from('spartan_data_flow').update({ status: 'failed', stage: 'steward', current_stage: 'steward', error: { reason: 'quarantined by fresh Spartan Stewards', steward_results: stewardResult.results } }).eq('flow_id', flow.flow_id);
 }
+function mergeProjectionState(existingState, incomingState, previousFlow) {
+  const previousData = previousFlow?.source === 'discord-bot' && previousFlow?.page_kind === 'bot_event'
+    ? {}
+    : (existingState?.data || {});
+  return {
+    ...incomingState,
+    data: { ...previousData, ...(incomingState?.data || {}) },
+  };
+}
+
 async function processOne(sb, job) {
   const { data: flow, error: flowError } = await sb.from('spartan_data_flow').select('*').eq('flow_id', job.flow_id).maybeSingle();
   if (flowError) throw new Error(`flow lookup: ${flowError.message}`);
@@ -553,13 +563,22 @@ async function processOne(sb, job) {
   }
 
   const projectionKey = flow.province_id || flow.flow_id;
-  const { data: existing } = await sb.from('spartan_state_projection')
-    .select('version,state').eq('province_id', projectionKey).maybeSingle();
+  const { data: existing, error: existingError } = await sb.from('spartan_state_projection')
+    .select('version,state,source_flow_id').eq('province_id', projectionKey).maybeSingle();
+  if (existingError) throw new Error(`projection lookup: ${existingError.message}`);
   const version = Number(existing?.version || 0) + 1;
 
-  // Merge page-owned fields onto the previous projection so partial pages do not
-  // erase values captured by other page kinds.
-  state.data = { ...(existing?.state?.data || {}), ...(state.data || {}) };
+  let previousFlow = null;
+  if (existing?.source_flow_id) {
+    const { data, error } = await sb.from('spartan_data_flow')
+      .select('source,page_kind').eq('flow_id', existing.source_flow_id).maybeSingle();
+    if (error) throw new Error(`previous projection source lookup: ${error.message}`);
+    previousFlow = data;
+  }
+
+  // Preserve partial-page data, but never carry Discord event wrapper fields
+  // forward from a legacy projection that was incorrectly sourced from bot_event.
+  state = mergeProjectionState(existing?.state, state, previousFlow);
   const { error: projectionError } = await sb.from('spartan_state_projection').upsert({
     province_id: projectionKey,
     kingdom_id: flow.kingdom_id || null,
@@ -626,4 +645,4 @@ async function runBacklogSteward() {
 }
 function start() { if (timer || startupBackfillRunning) return; if (process.env.SPARTAN_PROCESSOR_ENABLED === 'false') { logger.info('[SPARTAN PROCESSOR] disabled by SPARTAN_PROCESSOR_ENABLED=false'); return; } stewardSystem.start(); logger.info(`[SPARTAN PROCESSOR] starting worker=${WORKER_ID} interval=${INTERVAL_MS}ms batch=${BATCH_SIZE}`); const sb = supabaseService.getClient(); startupBackfillRunning = true; backfillMissingBotIntel(sb).catch(error => logger.error(`[SPARTAN INTEL BACKFILL] failed: ${error.stack || error.message}`)).finally(() => { startupBackfillRunning = false; processBatch(); timer = setInterval(processBatch, INTERVAL_MS); backlogStewardTimer = setInterval(runBacklogSteward, BACKLOG_STEWARD_INTERVAL_MS); logger.info(`[SPARTAN BACKLOG STEWARD] scheduled interval=${BACKLOG_STEWARD_INTERVAL_MS}ms`); }); }
 function stop() { if (timer) clearInterval(timer); if (backlogStewardTimer) clearInterval(backlogStewardTimer); timer = null; backlogStewardTimer = null; }
-module.exports = { start, stop, processBatch, processOne, runBacklogSteward, isStructuredGameIntelMessage };
+module.exports = { start, stop, processBatch, processOne, runBacklogSteward, isStructuredGameIntelMessage, mergeProjectionState };
