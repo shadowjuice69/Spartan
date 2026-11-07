@@ -335,8 +335,8 @@ export default function IntelVerticalPage() {
   },[records,recordSearch,sourceFilter,kindFilter,section])
   useEffect(()=>{
     if(records.length<2)return
-    setCompareLeft(current=>current&&records.some((row:any,index:number)=>recordKey(row,index)===current)?current:recordKey(records[0],0))
-    setCompareRight(current=>current&&records.some((row:any,index:number)=>recordKey(row,index)===current)?current:recordKey(records[1],1))
+    setCompareLeft(current=>current&&records.some((row:any,index:number)=>recordKey(row,index)===current)?current:recordKey(records[1],1))
+    setCompareRight(current=>current&&records.some((row:any,index:number)=>recordKey(row,index)===current)?current:recordKey(records[0],0))
   },[records])
   const compareA=records.find((row:any,index:number)=>recordKey(row,index)===compareLeft)||null
   const compareB=records.find((row:any,index:number)=>recordKey(row,index)===compareRight)||null
