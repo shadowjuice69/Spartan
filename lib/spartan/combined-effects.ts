@@ -49,7 +49,7 @@ const CASE_SENSITIVE: Array<[string, RegExp]> = [
 
 const DELIMS = /[;,\.\n!·•]/
 // For these stats a positive number is bad for the player (more cost, longer time, more losses).
-const BAD_WHEN_POSITIVE = /COST|TRAINING TIME|TRAVEL TIME|ATTACK TIME|CASUALT|LOSSES|LOSS\b/
+const BAD_WHEN_POSITIVE = /COST|TRAINING TIME|TRAVEL TIME|ATTACK TIME|CASUALT|LOSSES|LOSS\\b|FOOD CONSUMPTION|DAMAGE TAKEN|DAMAGE RECEIVED/
 
 export function isFavorable(stat: string, amount: number): boolean {
   return BAD_WHEN_POSITIVE.test(stat) ? amount < 0 : amount > 0
