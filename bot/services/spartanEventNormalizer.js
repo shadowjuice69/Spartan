@@ -48,7 +48,7 @@ function parseStructuredNewsEvents(rawText, options = {}) {
         troops_lost: losses.troops || null,
         thieves_lost: losses.thieves || null,
         wizards_lost: losses.wizards || null,
-        payload: { format: 'discord_attack_report', action, unit_losses: losses, return_hours: number(returnMatch?.[1]), normalizer: 'spartan-event-normalizer' },
+        payload: { format: 'discord_attack_report', action, attacker_kingdom: options.ownKingdom || null, defender_kingdom: botAttack[4], unit_losses: losses, return_hours: number(returnMatch?.[1]), normalizer: 'spartan-event-normalizer' },
       };
     }
 
@@ -64,7 +64,7 @@ function parseStructuredNewsEvents(rawText, options = {}) {
           defender: cleanParty(recapture[5]),
           target_kingdom: recapture[6],
           acres_change: number(recapture[4]),
-          payload: { format: 'utopia_news', normalizer: 'spartan-event-normalizer' },
+          payload: { format: 'utopia_news', attacker_kingdom: recapture[2], defender_kingdom: recapture[6], normalizer: 'spartan-event-normalizer' },
         };
       } else {
         const match = kdNews.match(/^(.+?)\s+\((\d+:\d+)\)\s+(invaded|recaptured|captured|ambushed|attacked|pillaged|looted)\s+(.+?)\s+\((\d+:\d+)\)(?:\s+and\s+(?:captured|took)\s+([\d,]+)\s+acres?)?/i);
@@ -75,7 +75,7 @@ function parseStructuredNewsEvents(rawText, options = {}) {
             defender: cleanParty(match[4]),
             target_kingdom: match[5],
             acres_change: number(match[6]),
-            payload: { format: line.startsWith('NEW KDNEWS:') ? 'discord_kdnews' : 'utopia_news', normalizer: 'spartan-event-normalizer' },
+            payload: { format: line.startsWith('NEW KDNEWS:') ? 'discord_kdnews' : 'utopia_news', attacker_kingdom: match[2], defender_kingdom: match[5], normalizer: 'spartan-event-normalizer' },
           };
         }
       }
@@ -94,7 +94,7 @@ function parseStructuredNewsEvents(rawText, options = {}) {
           troops_lost: losses.troops || null,
           thieves_lost: losses.thieves || null,
           wizards_lost: losses.wizards || null,
-          payload: { format: 'province_report', unit_losses: losses, normalizer: 'spartan-event-normalizer' },
+          payload: { format: 'province_report', attacker_kingdom: incoming[2], defender_kingdom: options.ownKingdom || null, unit_losses: losses, normalizer: 'spartan-event-normalizer' },
         };
       }
     }
