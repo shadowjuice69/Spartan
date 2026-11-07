@@ -7,12 +7,16 @@ const { parseStructuredNewsEvents } = require('../bot/services/spartanEventNorma
 
 async function main() {
   const apply = process.argv.includes('--apply');
+  const dryRun = process.argv.includes('--dry-run');
+  if (apply && dryRun) throw new Error('Choose either --dry-run or --apply, not both.');
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY;
   if (!url || !key) throw new Error('Set Supabase URL and service-role/secret key before running this script.');
   const db = createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } });
   const pageSize = 500;
-  let offset = 0, scanned = 0, parsed = 0, skippedOwner = 0, written = 0;
+  let offset = 0, scanned = 0, parsed = 0, skippedOwner = 0, unrecognized = 0, written = 0;
+  const eventTypes = {};
+  const samples = [];
 
   while (true) {
     const { data, error } = await db.from('spartan_intel_records')
@@ -40,8 +44,11 @@ async function main() {
         captureId: record.capture_id, capturedAt: record.captured_at,
         ownProvince: owner.province_name, ownKingdom: owner.province_location,
       });
+      if (!events.length) unrecognized++;
       for (const event of events) {
         parsed++;
+        eventTypes[event.event_type] = (eventTypes[event.event_type] || 0) + 1;
+        if (samples.length < 12) samples.push({ province: owner.province_name, event_type: event.event_type, attacker: event.attacker, defender: event.defender, acres: event.acres_change, captured_at: record.captured_at });
         rows.push({
           user_id: userId, province_id: record.province_id || null, kingdom_id: record.kingdom_id || null,
           occurred_at: event.occurred_at, age: record.age || null, game_year: record.game_year || null,
@@ -65,7 +72,8 @@ async function main() {
 
   process.stdout.write(JSON.stringify({
     mode: apply ? 'apply' : 'dry-run', scanned_intel_records: scanned,
-    normalized_events: parsed, skipped_unmapped_owners: skippedOwner, rows_written: written,
+    normalized_events: parsed, event_types: eventTypes, unrecognized_records: unrecognized,
+    skipped_unmapped_owners: skippedOwner, rows_written: written, sample_events: samples,
   }, null, 2) + '\n');
 }
 
