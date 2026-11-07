@@ -96,7 +96,7 @@ export default function SystemHealthPage() {
               ) : <Empty title="No captures yet" hint="Run the Spartan capture extension on your Utopia pages to begin filling this panel." />}
             </Panel>
 
-            <Panel title="PROCESSING QUEUE" sub="Queue items associated with your recent flows" span={5}>
+            <Panel title="PROCESSING QUEUE" sub="Outstanding queue items for your province" span={5}>
               {Object.keys(data.queueStatuses).length ? (
                 <div style={{ display: 'grid', gap: 12 }}>
                   {Object.entries(data.queueStatuses).sort((a, b) => b[1] - a[1]).map(([status, count]) => (
