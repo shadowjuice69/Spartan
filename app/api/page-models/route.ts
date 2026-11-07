@@ -17,7 +17,7 @@ export const dynamic = 'force-dynamic'
 // The old Intel query pulled ~18 MB per request and timed out.
 const COLUMNS = 'id,user_id,province_id,kingdom_id,visibility,page_kind,url,source,captured_at,created_at,age,parsed_payload,raw_text'
 const CACHE = new Map<string, { at: number; body: any }>()
-const TTL_MS = 12_000
+const TTL_MS = 30_000
 
 const KINDS: Record<string, string[]> = {
   military: ['military', 'council_military'],
