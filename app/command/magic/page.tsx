@@ -35,6 +35,9 @@ export default function MagicPage() {
     { name: 'Wizards', color: C.cyan, format: compact, points: series.map(s => ({ x: s.at, y: s.wizards })) },
     { name: 'Mana %', color: C.amber, format: (v: number) => `${v}%`, points: series.map(s => ({ x: s.at, y: s.mana })) },
   ]
+  const rawWpaSeries = [
+    { name: 'Raw WPA', color: C.violet, format: (v: number) => v.toFixed(2), points: series.map(s => ({ x: s.at, y: s.rawWpa })) },
+  ]
 
   return (
     <Shell title="Mystic Circle" eyebrow="SPARTAN // MAGIC INTELLIGENCE" accent={C.violet}
@@ -123,6 +126,13 @@ export default function MagicPage() {
               </Panel>
               <Panel span={6} title="WIZARDS & MANA OVER TIME" delay={5}>
                 <LineChart series={wizardSeries} height={200} />
+              </Panel>
+            </Grid>
+          )}
+          {series.filter(s => s.rawWpa != null).length > 1 && (
+            <Grid>
+              <Panel span={12} title="RAW WPA OVER TIME" sub="Wizards ÷ Land · Spartan Utopia wiki → All Formulas → Magic. Modified WPA is not inferred without complete modifiers." delay={6}>
+                <LineChart series={rawWpaSeries} height={200} />
               </Panel>
             </Grid>
           )}
