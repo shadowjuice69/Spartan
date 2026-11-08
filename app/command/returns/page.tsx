@@ -29,8 +29,8 @@ function dedupeAttackEvents(events: AttackEvent[]) {
     const key = [
       Number.isFinite(stamp) ? stamp : event.at,
       event.direction,
-      String(event.attacker || '').trim().toLowerCase().replace(/\\s+/g, ' '),
-      String(event.defender || '').trim().toLowerCase().replace(/\\s+/g, ' '),
+      String(event.attacker || '').trim().toLowerCase().replace(/\s+/g, ' '),
+      String(event.defender || '').trim().toLowerCase().replace(/\s+/g, ' '),
       String(event.targetKingdom || '').trim(),
       Math.abs(Number(event.acres) || 0),
       Number(event.troops) || 0,
