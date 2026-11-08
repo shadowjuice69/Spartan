@@ -488,7 +488,7 @@ export async function GET(request: Request) {
           : Promise.resolve({ data: [], error: null }),
       ])
       const storedHistory = historyResult.error ? [] : historyResult.data || []
-      const derivedHistory = (throneCaptureResult.error ? [] : throneCaptureResult.data || [])
+      const derivedHistory: any[] = (throneCaptureResult.error ? [] : throneCaptureResult.data || [])
         .map((capture: any) => {
           const parsed = parseThrone(String(capture.raw_text || capture.parsed_payload?.data_simple || ''))
           if (parsed.acres == null && parsed.networth == null) return null
