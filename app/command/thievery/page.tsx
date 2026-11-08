@@ -31,6 +31,9 @@ export default function ThieveryPage() {
   const thiefSeries = [
     { name: 'Thieves', color: C.amber, format: compact, points: series.map(s => ({ x: s.at, y: s.thieves })) },
   ]
+  const rawTpaSeries = [
+    { name: 'Raw TPA', color: C.amber, format: (v: number) => v.toFixed(2), points: series.map(s => ({ x: s.at, y: s.rawTpa })) },
+  ]
 
   return (
     <Shell title="Guild of Thieves" eyebrow="SPARTAN // THIEVERY INTELLIGENCE" accent={C.amber}
@@ -90,6 +93,13 @@ export default function ThieveryPage() {
               </Panel>
               <Panel span={6} title="THIEVES OVER TIME" delay={3}>
                 <LineChart series={thiefSeries} height={200} />
+              </Panel>
+            </Grid>
+          )}
+          {series.filter(s => s.rawTpa != null).length > 1 && (
+            <Grid>
+              <Panel span={12} title="RAW TPA OVER TIME" sub="Thieves ÷ Land · Spartan Utopia wiki → All Formulas → Thievery. Modified TPA is not inferred without complete modifiers." delay={4}>
+                <LineChart series={rawTpaSeries} height={200} />
               </Panel>
             </Grid>
           )}
