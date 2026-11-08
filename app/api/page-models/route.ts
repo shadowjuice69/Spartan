@@ -11,6 +11,8 @@ import { buildMagicModel } from '@/lib/spartan/magic-model'
 import { buildThieveryModel } from '@/lib/spartan/thievery-model'
 import { mergeGrids, armiesFrom, parseStats, type GridCapture } from '@/lib/spartan/intel-site'
 
+const { destinationKingdomForEvent } = require('../../../lib/spartan/return-time.cjs')
+
 export const dynamic = 'force-dynamic'
 
 // Lean on purpose: only small columns, never the full page capture (raw_payload).
@@ -970,9 +972,16 @@ export async function GET(request: Request) {
           const defender = e.defender || null
           const direction = attacker && String(attacker).trim().toLowerCase() === own ? 'out'
             : defender && String(defender).trim().toLowerCase() === own ? 'in' : 'other'
-          const travel = attackTravelInfo(e.payload, e.raw_text)
+          const eventPayload = e.payload || {}
+          const targetKingdom = destinationKingdomForEvent({
+            direction,
+            attackerKingdom: eventPayload.attacker_kingdom || null,
+            defenderKingdom: eventPayload.defender_kingdom || e.target_kingdom || null,
+            fallback: e.target_kingdom || null,
+          })
+          const travel = attackTravelInfo(eventPayload, e.raw_text)
           return {
-            at: e.occurred_at, type: e.event_type, attacker, defender, targetKingdom: e.target_kingdom || null, direction,
+            at: e.occurred_at, type: e.event_type, attacker, defender, targetKingdom, direction,
             acres: n(e.acres_change), troops: n(e.troops_lost), thieves: n(e.thieves_lost), wizards: n(e.wizards_lost),
             gold: n(e.gold_change), food: n(e.food_change), runes: n(e.runes_change),
             returnAt: travel.returnAt, travelHours: travel.travelHours,
