@@ -46,4 +46,7 @@ test('Aid has a dedicated page consumer', () => {
   const route = fs.readFileSync(path.join(__dirname, '../../app/command/[section]/page.tsx'), 'utf8')
   assert.match(vertical, /title: "AID INTELLIGENCE"/)
   assert.match(route, /'aid'/)
+  assert.match(vertical, /trade_balance: numberAfter\("Current trade balance"\)/)
+  assert.match(vertical, /shipment: sent \?/)
+  assert.match(vertical, /incoming_aid: incoming/)
 })
