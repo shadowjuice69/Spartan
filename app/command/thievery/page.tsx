@@ -31,6 +31,9 @@ export default function ThieveryPage() {
   const thiefSeries = [
     { name: 'Thieves', color: C.amber, format: compact, points: series.map(s => ({ x: s.at, y: s.thieves })) },
   ]
+  const rawTpaSeries = [
+    { name: 'Raw TPA', color: C.amber, format: (v: number) => v.toFixed(2), points: series.map(s => ({ x: s.at, y: s.rawTpa })) },
+  ]
 
   return (
     <Shell title="Guild of Thieves" eyebrow="SPARTAN // THIEVERY INTELLIGENCE" accent={C.amber}
@@ -43,7 +46,7 @@ export default function ThieveryPage() {
       {hasAny && (
         <>
           <Grid>
-            <Stat label="Thieves" value={h?.thieves} sub={h?.tpa != null ? `${h.tpa} per acre` : undefined} color={C.amber} delay={0} />
+            <Stat label="Thieves" value={h?.thieves} sub={h?.rawTpa != null ? `${h.rawTpa.toFixed(2)} raw TPA · modified unavailable${h.ratioAt ? ` · ${ago(h.ratioAt)}` : ''}` : 'Modified TPA needs current modifiers'} color={C.amber} delay={0} />
             <Stat label="Stealth" value={h?.stealth} format={v => `${v}%`} color={h?.stealth != null && h.stealth < 70 ? C.red : C.cyan} delay={1} />
             <Stat label="Operations captured" value={results.length} sub={results.length ? `${wins} succeeded${fails ? ` · ${fails} failed` : ''}` : undefined} color={C.green} delay={2} />
             <Stat label="Thieves lost" value={lost} sub="Across captured operations" color={lost ? C.red : C.lime} delay={3} />
@@ -90,6 +93,13 @@ export default function ThieveryPage() {
               </Panel>
               <Panel span={6} title="THIEVES OVER TIME" delay={3}>
                 <LineChart series={thiefSeries} height={200} />
+              </Panel>
+            </Grid>
+          )}
+          {series.filter(s => s.rawTpa != null).length > 1 && (
+            <Grid>
+              <Panel span={12} title="RAW TPA OVER TIME" sub="Thieves ÷ Land · Spartan Utopia wiki → All Formulas → Thievery. Modified TPA is not inferred without complete modifiers." delay={4}>
+                <LineChart series={rawTpaSeries} height={200} />
               </Panel>
             </Grid>
           )}
