@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { parseBotMagicReports, parseBotThieveryReports, parseBotAidTransfers } = require('../lib/spartan/bot-intel-parsers.cjs');
+const { parseBotMagicReports, parseBotThieveryReports, parseBotAidTransfers } = require('../../lib/spartan/bot-intel-parsers.cjs');
 
 test('Magic bot parser captures successful self spells and failed targeted spells with provenance', () => {
   const records = [{
