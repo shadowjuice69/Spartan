@@ -48,8 +48,8 @@ export default function MilitaryPage() {
           </Grid>
 
           <Grid>
-            <Stat label="OSPA · Off specs/acre" value={latestHistory?.off_spa ?? cur?.offSpa} format={v => Number(v).toFixed(2)} sub="Raw off-spec count ÷ acres; not modified offense" color={C.red} delay={0} />
-            <Stat label="DSPA · Def specs/acre" value={latestHistory?.def_spa ?? cur?.defSpa} format={v => Number(v).toFixed(2)} sub="Raw def-spec count ÷ acres; not modified defense" color={C.cyan} delay={1} />
+            <Stat label="Off specs / acre" value={latestHistory?.off_spa ?? cur?.offSpa} format={v => Number(v).toFixed(2)} sub="Raw off-spec count ÷ acres; not modified offense" color={C.red} delay={0} />
+            <Stat label="Def specs / acre" value={latestHistory?.def_spa ?? cur?.defSpa} format={v => Number(v).toFixed(2)} sub="Raw def-spec count ÷ acres; not modified defense" color={C.cyan} delay={1} />
             <Stat label="Specialists" value={(Number(latestHistory?.off_specs) > 0 ? Number(latestHistory?.off_specs) : Number(cur?.offSpecs ?? latestHistory?.off_specs ?? 0)) + (Number(latestHistory?.def_specs) > 0 ? Number(latestHistory?.def_specs) : Number(cur?.defSpecs ?? latestHistory?.def_specs ?? 0)) || null} sub="Offensive + defensive specialist count" color={C.violet} delay={2} />
             <Stat label="Snapshot" value={null} text={latestHistory?.observed_at ? ago(latestHistory.observed_at) : '—'} sub="Latest retained Throne snapshot" color={C.lime} delay={3} />
           </Grid>
