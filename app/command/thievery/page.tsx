@@ -15,6 +15,7 @@ export default function ThieveryPage() {
   const h = m?.header
   const results: any[] = m?.results || []
   const series: any[] = m?.series || []
+  const botResults: any[] = m?.botResults || []
   const targets = m?.targets
   const provs: any[] = targets?.provinces || []
   const uniques: any[] = m?.uniques || []
@@ -23,7 +24,7 @@ export default function ThieveryPage() {
   const wins = results.filter(r => r.outcome === 'success').length
   const fails = results.filter(r => r.outcome === 'failed').length
   const lost = results.reduce((s, r) => s + (r.thievesLost || 0), 0)
-  const hasAny = Boolean(h || results.length || m?.ops)
+  const hasAny = Boolean(h || results.length || m?.ops || botResults.length)
 
   const stealthSeries = [
     { name: 'Stealth %', color: C.cyan, format: (v: number) => `${v}%`, points: series.map(s => ({ x: s.at, y: s.stealth })) },
@@ -66,6 +67,20 @@ export default function ThieveryPage() {
               ) : <Empty title="No operation results captured" hint="Run an operation in Utopia with the scraper running and its result shows up here." />}
             </Panel>
 
+            {botResults.length > 0 && (
+              <Panel span={12} title="DISCORD BOT OPERATION REPORTS" sub="Kingdom thievery results with original Discord message provenance" delay={2}>
+                <DataTable<any> initialSort="at" maxHeight={380} columns={[
+                  { key: 'at', label: 'WHEN', value: r => Date.parse(r.at) || 0, render: r => ago(r.at) },
+                  { key: 'actor', label: 'PROVINCE', value: r => r.actor },
+                  { key: 'op', label: 'OPERATION', value: r => r.op },
+                  { key: 'target', label: 'TARGET', value: r => `${r.province || ''} ${r.kingdom ? `(${r.kingdom})` : ''}`.trim() },
+                  { key: 'sent', label: 'THIEVES SENT', value: r => r.thievesSent ?? -1, render: r => r.thievesSent == null ? '—' : fmt(r.thievesSent), align: 'right' },
+                  { key: 'tpa', label: 'TARGET TPA', value: r => r.targetTpa ?? -1, render: r => r.targetTpa == null ? '—' : `${r.targetTpa.toFixed(2)}${r.targetModifiedTpa != null ? ` (m.${r.targetModifiedTpa.toFixed(2)})` : ''}`, align: 'right' },
+                  { key: 'outcome', label: 'RESULT', value: r => r.outcome, render: r => <Tag color={r.outcome === 'success' ? C.green : r.outcome === 'failed' ? C.red : C.mute}>{String(r.outcome).toUpperCase()}</Tag> },
+                  { key: 'message', label: 'DISCORD MSG', value: r => r.sourceId, render: r => <span title={r.sourceId}>{String(r.sourceId || '').slice(-8) || '—'}</span> },
+                ]} rows={botResults} />
+              </Panel>
+            )}
             <Panel span={5} title="AVAILABLE OPERATIONS" delay={2}
               sub={m?.ops?.at ? `Captured ${ago(m.ops.at)}` : undefined}>
               {m?.ops ? (
