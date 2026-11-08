@@ -51,10 +51,11 @@ export async function GET() {
     if (accountError) throw accountError
     if (!account) return NextResponse.json({ error: 'No linked Spartan account.' }, { status: 403 })
 
-    const [vaultResult, intelCount, archivedIntelCount, expiredIntelCount, historyCount, eventCount, historyRowsResult, eventRowsResult, registryResult] = await Promise.all([
+    const [vaultResult, intelRowsResult, intelCount, archivedIntelCount, expiredIntelCount, historyCount, eventCount, historyRowsResult, eventRowsResult, registryResult] = await Promise.all([
       db.from('spartan_capture_vault')
         .select('capture_id,source,page_kind,captured_at,parsed_payload,raw_payload')
         .eq('user_id', account.id).order('captured_at', { ascending: false }).limit(1500),
+      db.from('spartan_intel_records_with_archive').select('page_kind,source,captured_at,expires_at,archived,parsed_payload,raw_payload,raw_text,metrics').eq('user_id', account.id).order('captured_at', { ascending: false }).limit(1500),
       db.from('spartan_intel_records_with_archive').select('id', { count: 'exact', head: true }).eq('user_id', account.id),
       db.from('spartan_intel_records_with_archive').select('id', { count: 'exact', head: true }).eq('user_id', account.id).eq('archived', true),
       db.from('spartan_intel_records_with_archive').select('id', { count: 'exact', head: true }).eq('user_id', account.id).lt('expires_at', new Date().toISOString()),
@@ -65,6 +66,7 @@ export async function GET() {
       db.from('spartan_province_registry').select('province_id,province_name,kingdom_code,last_seen_at,metadata').or(`user_id.eq.${user.id},user_id.eq.${account.id}`).eq('province_name', account.province_name).limit(100),
     ])
     if (vaultResult.error) throw vaultResult.error
+    if (intelRowsResult.error) throw intelRowsResult.error
     if (intelCount.error) throw intelCount.error
     if (archivedIntelCount.error) throw archivedIntelCount.error
     if (expiredIntelCount.error) throw expiredIntelCount.error
@@ -75,6 +77,27 @@ export async function GET() {
     if (registryResult.error) throw registryResult.error
 
     const captures = vaultResult.data || []
+    const intelRows = intelRowsResult.data || []
+    const intelByKind = new Map<string, any>()
+    for (const row of intelRows) {
+      const kind = row.page_kind || 'unknown'
+      const current = intelByKind.get(kind) || { page_kind: kind, count: 0, latest: null, archived: 0, stale: 0, sources: new Set<string>(), fields: new Set<string>() }
+      current.count += 1
+      current.latest ||= row.captured_at
+      current.archived += row.archived === true ? 1 : 0
+      current.stale += row.archived === true || (row.expires_at && new Date(row.expires_at).getTime() < Date.now()) ? 1 : 0
+      current.sources.add(row.source || 'unknown')
+      const parsed = row.parsed_payload?.data ?? row.parsed_payload ?? row.raw_payload ?? {}
+      const keys = keysIn(parsed)
+      keysIn(row.metrics, keys)
+      const rawText = String(row.raw_text || parsed?.data_simple || '')
+      for (const line of rawText.split(/\\r?\\n/)) {
+        const cells = line.split(/\\t+/).map((value: string) => value.trim())
+        if (cells.length > 1 && cells[0] && cells[0].length <= 48) keys.add(cells[0].toLowerCase().replace(/\\s+/g, '_'))
+      }
+      keys.forEach(key => current.fields.add(key))
+      intelByKind.set(kind, current)
+    }
     const byKind = new Map<string, any>()
     const bySource = new Map<string, number>()
     const allKeys = new Set<string>()
@@ -98,6 +121,10 @@ export async function GET() {
       : { data: [], error: null }
     if (flowResult.error) throw flowResult.error
 
+    const intelKinds = [...intelByKind.values()].map(row => ({
+      ...row, sources: [...row.sources], fields: [...row.fields].slice(0, 32),
+      destinations: DISPLAY_DESTINATIONS[row.page_kind] || [`Intel Vertical / ${row.page_kind}`],
+    })).sort((a, b) => b.count - a.count)
     const kinds = [...byKind.values()].map(row => ({
       ...row, sources: [...row.sources],
       destinations: DISPLAY_DESTINATIONS[row.page_kind] || ['Raw Capture / Intel Vertical (verify consumer)'],
@@ -139,7 +166,7 @@ export async function GET() {
         registryProvinces: registryResult.data?.length || 0,
       },
       coverage: {
-        kinds, sources: [...bySource.entries()].map(([source, count]) => ({ source, count })).sort((a, b) => b.count - a.count),
+        kinds, intelKinds, intelSampleLimit: 1500, intelTruncated: intelRows.length === 1500, sources: [...bySource.entries()].map(([source, count]) => ({ source, count })).sort((a, b) => b.count - a.count),
         fields, historyFields, eventFields, flows: [...flowByKind.values()],
         registry: (registryResult.data || []).map(row => ({
           province: row.province_name, kingdom: row.kingdom_code, latest: row.last_seen_at,
