@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { parseBotMagicReports, parseBotThieveryReports } = require('../lib/spartan/bot-intel-parsers.cjs');
+const { parseBotMagicReports, parseBotThieveryReports, parseBotAidTransfers } = require('../lib/spartan/bot-intel-parsers.cjs');
 
 test('Magic bot parser captures successful self spells and failed targeted spells with provenance', () => {
   const records = [{
@@ -52,4 +52,42 @@ test('Magic and Thievery load bot reports in a separate current-age query', () =
   assert.match(route, /\.eq\('source', 'discord-bot'\)/);
   assert.match(route, /\.in\('page_kind', \['magic', 'thievery', 'bot_event'\]\)/);
   assert.match(route, /\.gte\('created_at', ageStartedAt!\)/);
+});
+
+test('Aid bot parser extracts multiple resource transfers from one moneybag report', () => {
+  const line = ':moneybag: Evelyn [vyciou#] sent __3,938 gold coins and 22 soldiers__ to Affair with an Orc [rorz87]';
+  const rows = parseBotAidTransfers([
+    { id: 'vault-1', source: 'discord-bot', source_id: 'discord-aid-1', captured_at: '2026-10-27T10:05:35.523Z', raw_text: line },
+    { id: 'vault-2', source: 'discord-bot', source_id: 'discord-aid-1', captured_at: '2026-10-27T10:05:35.523Z', raw_text: line },
+  ]);
+  assert.equal(rows.length, 2);
+  assert.deepEqual(
+    { sender: rows[0].sender, recipient: rows[0].recipient, amount: rows[0].amount, resource: rows[0].resource, repeats: rows[0].occurrences },
+    { sender: 'Evelyn', recipient: 'Affair with an Orc', amount: 3938, resource: 'gold coins', repeats: 2 },
+  );
+  assert.deepEqual(
+    { amount: rows[1].amount, resource: rows[1].resource },
+    { amount: 22, resource: 'soldiers' },
+  );
+});
+
+test('duplicate bot lines collapse only within the same Discord message', () => {
+  const line = ':detective::broken_heart: Kurt kur# <<__rob the towers__ **| Plague Doctor (6:7)**>> __FAIL__ (-0 thieves)|10 sent (0.02)|0.4 (m.0.48)';
+  const rows = parseBotThieveryReports([
+    { id: 'vault-1', source: 'discord-bot', source_id: 'discord-same', captured_at: '2026-10-27T12:47:20.971Z', raw_text: line },
+    { id: 'vault-2', source: 'discord-bot', source_id: 'discord-same', captured_at: '2026-10-27T12:47:20.971Z', raw_text: line },
+    { id: 'vault-3', source: 'discord-bot', source_id: 'discord-different', captured_at: '2026-10-27T12:48:20.971Z', raw_text: line },
+  ]);
+  assert.equal(rows.length, 2);
+  assert.equal(rows.find(r => r.sourceId === 'discord-same').occurrences, 2);
+  assert.equal(rows.find(r => r.sourceId === 'discord-different').occurrences, 1);
+});
+
+test('vault-only historical bot records are clearly marked archived', () => {
+  const rows = parseBotMagicReports([{
+    id: 'vault-4', source: 'discord-bot', source_id: 'discord-old',
+    captured_at: '2026-10-27T12:54:24.241Z', archived: true,
+    raw_text: ':star2::green_heart: Aurequill the Radiant# <<__natures blessing__>> **20** | 9.6% guilds',
+  }]);
+  assert.equal(rows[0].archived, true);
 });
