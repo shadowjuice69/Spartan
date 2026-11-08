@@ -33,7 +33,7 @@ test('Discord bot_event flows pass integrity without a province projection', asy
 });
 
 
-const { mergeProjectionState } = require('../services/spartanQueueProcessor');
+const { mergeProjectionState, isStructuredGameIntelMessage } = require('../services/spartanQueueProcessor');
 
 test('legacy bot-event projection fields are discarded when a real page arrives', () => {
   const merged = mergeProjectionState(
@@ -84,4 +84,19 @@ test('legacy projection timestamp does not block a different page kind', () => {
   );
   assert.deepEqual(merged.data, { acres: 900, science: { economy: 10 } });
   assert.equal(merged.stale_page_capture, false);
+});
+
+test('self-spell bot messages are recognized as structured Magic Intel', () => {
+  assert.equal(isStructuredGameIntelMessage(':star2::green_heart: Golden Lotus simo# <<__minor protection__>> **16** | 35.6% guilds'), true);
+  assert.equal(isStructuredGameIntelMessage(':comet::broken_heart: Evelyn vyciou# <<__pitfalls__ **| A target (3:8)**>> __FAIL__ (-8 wizards)'), true);
+});
+
+test('moneybag bot transfers are recognized as structured Aid Intel', () => {
+  assert.equal(isStructuredGameIntelMessage(':moneybag: Sky [sk#] sent __12,220 gold coins__ to Affair with an Orc [rorz87]'), true);
+  assert.equal(isStructuredGameIntelMessage(':moneybag: Evelyn [vyciou#] sent __3,938 gold coins and 22 soldiers__ to Affair with an Orc [rorz87]'), true);
+});
+
+test('ordinary bot chat and status messages remain excluded from structured Intel', () => {
+  assert.equal(isStructuredGameIntelMessage('Updated aid list'), false);
+  assert.equal(isStructuredGameIntelMessage('15k off'), false);
 });
