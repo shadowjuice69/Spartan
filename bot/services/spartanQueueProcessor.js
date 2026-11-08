@@ -151,6 +151,8 @@ async function writeProvinceHistory(sb, flow, state, canonical, capture) {
 }
 function deriveIntelTarget(text) {
   const normalized = String(text || '').replace(/\s+/g, ' ').trim();
+  const aidTransfer = normalized.match(/:moneybag:\s*(.+?)\s+\[[^\]]+\]\s+sent\s+__(.+?)__\s+to\s+(.+?)\s+\[[^\]]+\]/i);
+  if (aidTransfer) return { slot: null, name: aidTransfer[3].trim(), kingdom: null };
   const patterns = [
     /(?:to|at|against|target(?:ed|ing)?(?:\s+province)?|arrive at)\s+(?:\*\*)?#?(\d+)\s+([^(*—:]+?)(?:\s*\*\*)?\s*\((\d+:\d+)\)/i,
     /(?:from|by)\s+(?:an?\s+)?(?:unknown\s+province|province)?\s*(?:from\s+)?([^(*—:]+?)\s*\((\d+:\d+)\)/i,
@@ -173,10 +175,11 @@ function deriveIntelIdentity(pageKind, text, flow) {
   const target = deriveIntelTarget(normalized);
   const operation = normalized.match(/<<__([^_]+?)__>>/i)?.[1]
     ?.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim() || '';
+  const aidResources = normalized.match(/sent\s+__(.+?)__\s+to\s+/i)?.[1] || '';
   const actor = normalized.match(/#(\d+)\s+([^—:]+?)(?:\s+—|:)/i);
   const identityType = ['thievery', 'news', 'aid', 'magic', 'attack'].includes(pageKind) && target ? 'target' : 'actor';
   const identity = identityType === 'target'
-    ? [target?.kingdom || '', target?.slot || '', target?.name || '', operation].join('|').toLowerCase()
+    ? [target?.kingdom || '', target?.slot || '', target?.name || '', operation || aidResources].join('|').toLowerCase()
     : [flow.kingdom_id || '', actor?.[1] || '', actor?.[2]?.trim() || '', operation || normalized.slice(0, 100)].join('|').toLowerCase();
   return identity.replace(/\s+/g, ' ').trim() || null;
 }
@@ -213,6 +216,9 @@ function isStructuredGameIntelMessage(value) {
     /\bYour forces arrive at .+?\(\d+:\d+\).{0,220}\b(?:taken|captured|recaptured|repelled)\b/i,
     // Spell/ritual reports need game-specific wording and a result, not a casual mention.
     /\bYour wizards gather .{0,180}\b(?:the spell succeeds|the spell fails)\b/i,
+    /^\s*:(?:star2|comet)::(?:green_heart|broken_heart):.+?<<__[^_]{2,80}__>>\s*(?:\*\*[\d,]+\*\*|__FAIL__)/im,
+    // Kingdom bot resource-transfer reports use a distinct moneybag format.
+    /^\s*:moneybag:\s*.+?\[[^\]]+\]\s+sent\s+__[^\n]{1,140}?__\s+to\s+.+?\[[^\]]+\]/im,
     /(?:—|-)\s*Ritual:\s*.+\bcast\s+\*\*\d+\/\d+\*\*/i,
     // Structured aid transfer messages.
     /^\s*#?\d+\s*-\s*.+?:\s*We have sent\s+[\d,]+\s+.+?\s+to\s+.+?\(\d+:\d+\)\./i,
@@ -329,10 +335,10 @@ async function syncBotIntelRecord(sb, flow, capture, state, options = {}) {
     pageKind = 'news';
     confidence = 0.74;
     reason = 'Content identifies attack/news';
-  } else if (channel.includes('aid') || /\b(aid|assistance|sent .* aid|received .* aid)\b/i.test(normalizedText)) {
+  } else if (/^\s*:moneybag:/im.test(text) || channel.includes('aid') || /\b(aid|assistance|sent .* aid|received .* aid)\b/i.test(normalizedText)) {
     pageKind = 'aid';
-    confidence = 0.74;
-    reason = 'Content identifies aid';
+    confidence = /^\s*:moneybag:/im.test(text) ? 0.95 : 0.74;
+    reason = /^\s*:moneybag:/im.test(text) ? 'Structured kingdom resource-transfer message' : 'Content identifies aid';
   } else if (channel.includes('dragon') || /\b(dragon|emerald|ruby|amethyst|topaz|sapphire)\b/i.test(normalizedText)) {
     pageKind = 'dragon';
     confidence = 0.74;
@@ -344,7 +350,7 @@ async function syncBotIntelRecord(sb, flow, capture, state, options = {}) {
   const targetKingdom = target?.kingdom || null;
   const visibility = targetKingdom
     ? (sourceKingdom && targetKingdom === sourceKingdom ? 'own' : 'enemy')
-    : 'own';
+    : (pageKind === 'aid' ? null : 'own');
   const intelType = 'province';
   const targetProvinceId = target
     ? [target.slot ? String(target.slot) : '', target.name || ''].filter(Boolean).join(' ').trim() || null
