@@ -17,6 +17,32 @@ const formatDuration = (ms: number) => {
 const localTime = (ms: number) => new Date(ms).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', second: '2-digit' })
 const typeLabel = (type: string | null) => String(type || 'attack').replace(/[_-]+/g, ' ').replace(/\b\w/g, x => x.toUpperCase())
 
+
+function dedupeAttackEvents(events: AttackEvent[]) {
+  const unique = new Map<string, AttackEvent>()
+  const specificity = (type: string | null) => {
+    const value = String(type || '').toLowerCase()
+    return !value || value === 'attack' ? 0 : 1
+  }
+  for (const event of events) {
+    const stamp = Date.parse(event.at)
+    const key = [
+      Number.isFinite(stamp) ? stamp : event.at,
+      event.direction,
+      String(event.attacker || '').trim().toLowerCase().replace(/\\s+/g, ' '),
+      String(event.defender || '').trim().toLowerCase().replace(/\\s+/g, ' '),
+      String(event.targetKingdom || '').trim(),
+      Math.abs(Number(event.acres) || 0),
+      Number(event.troops) || 0,
+    ].join('|')
+    const previous = unique.get(key)
+    // The same captured attack can be classified once as generic "attack"
+    // and again as "recapture". Keep one row, preferring the specific label.
+    if (!previous || specificity(event.type) > specificity(previous.type)) unique.set(key, event)
+  }
+  return [...unique.values()]
+}
+
 function baseTravelHours(event: AttackEvent, ownKingdom: string) {
   const targetKingdom = String(event.targetKingdom || '').trim()
   return { hours: targetKingdom && targetKingdom === ownKingdom ? 7 : 14, confidence: 'base' as const }
@@ -32,7 +58,7 @@ export default function ReturnTrackerPage() {
     const timer = setInterval(() => setNow(Date.now()), 1000)
     return () => clearInterval(timer)
   }, [])
-  const tracked = useMemo(() => events
+  const tracked = useMemo(() => dedupeAttackEvents(events)
     .filter(e => (e.direction === 'out' || e.direction === 'in') && Number.isFinite(Date.parse(e.at)) && (/attack|invad|ambush|plunder|conquest|massacre|learn|raze|pillag|recapture|traditional march/i.test(String(e.type || '')) || Math.abs(Number(e.acres) || 0) > 0))
     .map(event => {
       const base = baseTravelHours(event, ownKingdom)
