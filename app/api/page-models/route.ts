@@ -414,7 +414,7 @@ export async function GET(request: Request) {
     // after the recorded start of that age; if the age/reset marker is unavailable, fail closed.
     let currentAge: number | null = null
     let ageStartedAt: string | null = null
-    if (page === 'science') {
+    if (['science', 'province', 'military', 'war-room', 'magic', 'thievery', 'throne'].includes(page)) {
       const [ageSetting, latestAgeLog] = await Promise.all([
         db.from('bot_settings').select('value').eq('key', 'current_age').maybeSingle(),
         db.from('spartan_age_log').select('new_age,created_at').order('created_at', { ascending: false }).limit(1).maybeSingle(),
@@ -453,7 +453,7 @@ export async function GET(request: Request) {
         (r.source !== 'discord-bot' || isStructuredBotIntelText(r.raw_text))
       )
     }
-    if (page === 'science') {
+    if (['science', 'province', 'military', 'war-room', 'magic', 'thievery', 'throne'].includes(page)) {
       const startMs = ageStartedAt ? Date.parse(ageStartedAt) : NaN
       records = currentAge === null ? [] : records.filter((r) => {
         const capturedMs = Date.parse(when(r))
