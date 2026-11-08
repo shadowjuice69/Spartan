@@ -5,13 +5,14 @@ on:
     branches:
       - ops/run-event-history-dry-run
     paths:
+      - .github/workflows/one-time-event-history-dry-run.yml
       - scripts/backfill-structured-event-history.js
 
 permissions:
   contents: read
 
 jobs:
-  dry-run:
+  apply:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -50,7 +51,7 @@ jobs:
             hostname: parsed?.hostname || null,
           }, null, 2));
           NODE
-      - name: Run read-only structured event history dry run
+      - name: Run authorized structured event history backfill
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
@@ -58,7 +59,7 @@ jobs:
         run: |
           set -o pipefail
           node scripts/backfill-structured-event-history.js --apply | tee backfill-apply.json
-      - name: Save dry-run report
+      - name: Save apply report
         if: always()
         uses: actions/upload-artifact@v4
         with:
