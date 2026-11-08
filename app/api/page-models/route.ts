@@ -15,7 +15,7 @@ export const dynamic = 'force-dynamic'
 
 // Lean on purpose: only small columns, never the full page capture (raw_payload).
 // The old Intel query pulled ~18 MB per request and timed out.
-const COLUMNS = 'id,user_id,province_id,kingdom_id,visibility,page_kind,url,source,captured_at,created_at,age,expires_at,archived,archived_at,parsed_payload,raw_text'
+const COLUMNS = 'id,capture_id,source_id,user_id,province_id,kingdom_id,visibility,page_kind,url,source,captured_at,created_at,age,expires_at,archived,archived_at,parsed_payload,raw_text'
 const CACHE = new Map<string, { at: number; body: any }>()
 const TTL_MS = 30_000
 
@@ -36,7 +36,7 @@ const KINDS: Record<string, string[]> = {
 }
 
 type Rec = {
-  id: string; user_id?: string | null; province_id?: string | null; kingdom_id?: string | null; visibility?: string | null; page_kind: string; url: string; source: string | null; captured_at: string | null
+  id: string; capture_id?: string | null; source_id?: string | null; user_id?: string | null; province_id?: string | null; kingdom_id?: string | null; visibility?: string | null; page_kind: string; url: string; source: string | null; captured_at: string | null
   created_at: string; age?: number | string | null; expires_at?: string | null; archived?: boolean; archived_at?: string | null; parsed_payload: any; raw_text: string | null
 }
 
@@ -441,7 +441,11 @@ export async function GET(request: Request) {
     // 90 raw-text/parsed-payload records twice for that page.
     let records: Rec[] = []
     if (page !== 'intel') {
-      const recordsResult = await db.from('spartan_intel_records_with_archive').select(COLUMNS).in('page_kind', KINDS[page]).or(scope).order('created_at', { ascending: false }).limit(90)
+      let recordsQuery = db.from('spartan_intel_records_with_archive').select(COLUMNS).in('page_kind', KINDS[page])
+      // Discord bot reports are loaded separately for Magic/Thievery so a busy bot
+      // feed cannot crowd the actual Utopia page captures out of the 90-row window.
+      if (page === 'magic' || page === 'thievery') recordsQuery = recordsQuery.neq('source', 'discord-bot')
+      const recordsResult = await recordsQuery.or(scope).order('created_at', { ascending: false }).limit(90)
       if (recordsResult.error) fail(recordsResult.error)
       records = ((recordsResult.data || []) as Rec[]).filter(r =>
         !(sharedPages.has(page) && r.visibility === 'own' && r.user_id !== user.id && r.user_id !== account.id) &&
@@ -455,6 +459,26 @@ export async function GET(request: Request) {
         if (r.age != null && Number.isFinite(Number(r.age))) return Number(r.age) === currentAge && Number.isFinite(startMs) && Number.isFinite(capturedMs) && capturedMs >= startMs
         return Number.isFinite(startMs) && Number.isFinite(capturedMs) && capturedMs >= startMs
       })
+    }
+
+    // Bot reports have no Utopia URL, so the URL-based Magic/Thievery models need
+    // a separate, age-scoped read. Keep these out of the normal page-capture window.
+    if (page === 'magic' || page === 'thievery') {
+      const ageStartMs = ageStartedAt ? Date.parse(ageStartedAt) : NaN
+      if (Number.isFinite(ageStartMs)) {
+        const botIntelResult = await db.from('spartan_intel_records_with_archive').select(COLUMNS)
+          .eq('source', 'discord-bot')
+          .in('page_kind', ['magic', 'thievery', 'bot_event'])
+          .or(scope)
+          .gte('created_at', ageStartedAt!)
+          .order('created_at', { ascending: false })
+          .limit(500)
+        if (botIntelResult.error) fail(botIntelResult.error)
+        const botRows = ((botIntelResult.data || []) as Rec[]).filter(r =>
+          r.raw_text && Number.isFinite(Date.parse(when(r))) && Date.parse(when(r)) >= ageStartMs
+        )
+        records.push(...botRows)
+      }
     }
 
     // Magic, Thievery and Military also need the province's latest Throne counts for the
