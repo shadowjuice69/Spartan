@@ -35,6 +35,9 @@ export default function MagicPage() {
     { name: 'Wizards', color: C.cyan, format: compact, points: series.map(s => ({ x: s.at, y: s.wizards })) },
     { name: 'Mana %', color: C.amber, format: (v: number) => `${v}%`, points: series.map(s => ({ x: s.at, y: s.mana })) },
   ]
+  const rawWpaSeries = [
+    { name: 'Raw WPA', color: C.violet, format: (v: number) => v.toFixed(2), points: series.map(s => ({ x: s.at, y: s.rawWpa })) },
+  ]
 
   return (
     <Shell title="Mystic Circle" eyebrow="SPARTAN // MAGIC INTELLIGENCE" accent={C.violet}
@@ -47,7 +50,7 @@ export default function MagicPage() {
       {hasAny && (
         <>
           <Grid>
-            <Stat label="Wizards" value={h?.wizards} sub={h?.wpa != null ? `${h.wpa.toFixed(2)} WPA` : undefined} color={C.violet} delay={0} />
+            <Stat label="Wizards" value={h?.wizards} sub={h?.rawWpa != null ? `${h.rawWpa.toFixed(2)} raw WPA · modified unavailable${h.ratioAt ? ` · ${ago(h.ratioAt)}` : ''}` : 'Modified WPA needs current modifiers'} color={C.violet} delay={0} />
             <Stat label="Runes" value={runes} sub={h?.mana != null ? `${h.mana}% mana` : undefined} color={C.cyan} delay={1} />
             <Stat label="Active spells" value={m?.active ? active.length : null}
               sub={soonest ? `Next to expire: ${soonest.name} (${soonest.days}d)` : undefined}
@@ -123,6 +126,13 @@ export default function MagicPage() {
               </Panel>
               <Panel span={6} title="WIZARDS & MANA OVER TIME" delay={5}>
                 <LineChart series={wizardSeries} height={200} />
+              </Panel>
+            </Grid>
+          )}
+          {series.filter(s => s.rawWpa != null).length > 1 && (
+            <Grid>
+              <Panel span={12} title="RAW WPA OVER TIME" sub="Wizards ÷ Land · Spartan Utopia wiki → All Formulas → Magic. Modified WPA is not inferred without complete modifiers." delay={6}>
+                <LineChart series={rawWpaSeries} height={200} />
               </Panel>
             </Grid>
           )}

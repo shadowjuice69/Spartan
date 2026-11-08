@@ -1,6 +1,6 @@
 // Turns the Thievery captures (the Guild of Thieves page and operation result pages) into one model.
 // Pure functions: no React, no database. Works on raw_text only; nothing is invented.
-import { clean, toNum, pathOf } from './page-models'
+import { clean, toNum, pathOf, parseThrone } from './page-models'
 
 type Rec = { url: string | null; raw_text: string | null; captured_at: string | null; created_at: string }
 
@@ -70,6 +70,14 @@ export function buildThieveryModel(records: Rec[]) {
   const plain = pages.filter(r => !isOp(r))
 
   const latest = pages.find(r => parseThieveryHeader(r.raw_text || '')) || null
+  const throneRows = records.filter(r => r.raw_text && pathOf(r.url) === '/wol/game/throne').sort((a, b) => ts(b) - ts(a))
+  const throne = throneRows[0] || null
+  const throneData = throne ? parseThrone(throne.raw_text || '') : null
+  const acres = throneData?.acres ?? null
+  const thiefCount = throneData?.thieves ?? null
+  // Spartan Utopia wiki → All Formulas → Thievery: Raw TPA = Thieves / Land.
+  // Modified TPA is intentionally null until every required modifier is sourced.
+  const rawTpa = acres != null && acres > 0 && thiefCount != null ? thiefCount / acres : null
   const opsSrc = plain.find(r => parseThieveryOps(r.raw_text || '').length > 3) || null
   const targetSrc = plain.find(r => parseThieveryTargets(r.raw_text || '').provinces.length > 1) || null
   const noteSrc = opsSrc || plain[0] || null
@@ -82,17 +90,29 @@ export function buildThieveryModel(records: Rec[]) {
 
   const uniques = latest ? [...norm(latest.raw_text).matchAll(/^(.+?) - (Race|Personality) Passive Effect/gm)].map(m => ({ name: clean(m[1]), kind: m[2] })) : []
 
+  const pageHeader = latest ? parseThieveryHeader(latest.raw_text || '') : null
+  const throneIsNewer = Boolean(throne && (!latest || ts(throne) >= ts(latest)))
+  const header = (pageHeader || throneData) ? {
+    ...(pageHeader || {}),
+    thieves: thiefCount ?? pageHeader?.thieves,
+    tpa: rawTpa ?? pageHeader?.tpa ?? null,
+    rawTpa: rawTpa ?? pageHeader?.tpa ?? null,
+    modifiedTpa: null, acres,
+    stealth: throneIsNewer ? null : pageHeader?.stealth ?? null,
+    ratioSource: throne ? 'Throne capture · wiki raw TPA formula' : pageHeader ? 'Thievery capture' : null,
+    ratioAt: throne ? when(throne) : latest ? when(latest) : null,
+  } : null
   return {
-    capturedAt: latest ? when(latest) : null,
-    header: latest ? parseThieveryHeader(latest.raw_text || '') : null,
+    capturedAt: throneIsNewer ? when(throne!) : latest ? when(latest) : throne ? when(throne) : null,
+    header,
     uniques,
     ops: opsSrc ? { at: when(opsSrc), intel: ops.filter(isIntel), hostile: ops.filter(o => !isIntel(o)) } : null,
     unknown: noteSrc ? noteList(norm(noteSrc.raw_text), /^([^\n.]*?) (?:are|is) not known to our culture/m) : [],
     forbidden: noteSrc ? noteList(norm(noteSrc.raw_text), /^([^\n.]*?) operations? (?:are|is) forbidden for diplomatic reasons/m) : [],
     targets: targetSrc ? { at: when(targetSrc), ...parseThieveryTargets(targetSrc.raw_text || '') } : null,
     results,
-    series: pages.map(r => ({ r, h: parseThieveryHeader(r.raw_text || '') })).filter(x => x.h).slice(0, 60).reverse()
-      .map(x => ({ at: when(x.r), thieves: x.h!.thieves, tpa: x.h!.tpa, stealth: x.h!.stealth })),
+    series: [...pages.map(r => ({ r, h: parseThieveryHeader(r.raw_text || ''), t: null as ReturnType<typeof parseThrone> | null })), ...throneRows.slice(0, 40).map(r => ({ r, h: null, t: parseThrone(r.raw_text || '') }))].sort((a, b) => ts(a.r) - ts(b.r)).slice(-60)
+      .map(x => ({ at: when(x.r), thieves: x.h?.thieves ?? x.t?.thieves ?? null, tpa: x.t?.acres != null && x.t.acres > 0 && x.t.thieves != null ? x.t.thieves / x.t.acres : x.h?.tpa ?? null, rawTpa: x.t?.acres != null && x.t.acres > 0 && x.t.thieves != null ? x.t.thieves / x.t.acres : x.h?.tpa ?? null, stealth: x.h?.stealth ?? null })),
     captures: { pages: plain.length, ops: results.length },
   }
 }
