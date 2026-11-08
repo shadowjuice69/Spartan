@@ -532,8 +532,10 @@ export async function GET(request: Request) {
             // from any later calculated or estimated effectiveness values.
             r_tpa: parsed.ratios?.thievesPerAcre ?? (parsed.acres != null && parsed.acres > 0 && parsed.thieves != null ? parsed.thieves / parsed.acres : null),
             r_wpa: parsed.ratios?.wizardsPerAcre ?? (parsed.acres != null && parsed.acres > 0 && parsed.wizards != null ? parsed.wizards / parsed.acres : null),
-            off_spa: parsed.ratios?.offSpa ?? (parsed.acres != null && parsed.acres > 0 && offSpecs != null ? offSpecs / parsed.acres : null),
-            def_spa: parsed.ratios?.defSpa ?? (parsed.acres != null && parsed.acres > 0 && defSpecs != null ? defSpecs / parsed.acres : null),
+            off_spa: parsed.ratios?.offSpa ?? (parsed.acres != null && parsed.acres > 0 && parsed.offense != null ? parsed.offense / parsed.acres : null),
+            def_spa: parsed.ratios?.defSpa ?? (parsed.acres != null && parsed.acres > 0 && parsed.defense != null ? parsed.defense / parsed.acres : null),
+            off_specs_per_acre: parsed.acres != null && parsed.acres > 0 && offSpecs != null ? offSpecs / parsed.acres : null,
+            def_specs_per_acre: parsed.acres != null && parsed.acres > 0 && defSpecs != null ? defSpecs / parsed.acres : null,
             build_efficiency: parsed.buildingEfficiency,
             source: 'spartan_capture_vault',
           }
@@ -591,14 +593,14 @@ export async function GET(request: Request) {
       const parsedCurrent = latest?.raw_text ? parseMilitary(latest.raw_text) : null
       const current = parsedCurrent
         ? { ...parsedCurrent, offSpecs, defSpecs, elites,
-            offSpa: acresNow && offSpecs != null ? offSpecs / acresNow : null,
-            defSpa: acresNow && defSpecs != null ? defSpecs / acresNow : null }
+            offSpa: acresNow && throne?.offense != null ? throne.offense / acresNow : null,
+            defSpa: acresNow && throne?.defense != null ? throne.defense / acresNow : null }
         : throne ? {
             generals: null, wageRate: null, efficiency: null, nonPeasantPct: null,
             offEff: null, offPoints: throne.offense, defEff: null, defPoints: throne.defense,
             army: armyFromThrone, horses: throne.war_horses, offSpecs, defSpecs, elites,
-            offSpa: acresNow && offSpecs != null ? offSpecs / acresNow : null,
-            defSpa: acresNow && defSpecs != null ? defSpecs / acresNow : null,
+            offSpa: acresNow && throne.offense != null ? throne.offense / acresNow : null,
+            defSpa: acresNow && throne.defense != null ? throne.defense / acresNow : null,
           } : null
       body.model = {
         current,
