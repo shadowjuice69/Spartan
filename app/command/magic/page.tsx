@@ -105,6 +105,8 @@ export default function MagicPage() {
                   { key: 'target', label: 'TARGET', value: r => [r.targetProvince, r.targetKingdom ? `(${r.targetKingdom})` : null].filter(Boolean).join(' ') },
                   { key: 'outcome', label: 'RESULT', value: r => r.outcome, render: r => <Tag color={r.outcome === 'success' ? C.green : r.outcome === 'failed' ? C.red : C.mute}>{String(r.outcome).toUpperCase()}</Tag> },
                   { key: 'days', label: 'DAYS', value: r => r.durationDays ?? -1, render: r => r.durationDays == null ? '—' : `${r.durationDays}d`, align: 'right' },
+                  { key: 'capture', label: 'CAPTURE', value: r => r.archived ? 0 : 1, render: r => <Tag color={r.archived ? C.mute : C.green}>{r.archived ? 'HISTORICAL' : 'RECENT'}</Tag> },
+                  { key: 'repeats', label: 'REPEATS', value: r => r.occurrences || 1, render: r => (r.occurrences || 1) > 1 ? `×${r.occurrences}` : '—', align: 'right' },
                   { key: 'message', label: 'DISCORD MSG', value: r => r.sourceId, render: r => <span title={r.sourceId}>{String(r.sourceId || '').slice(-8) || '—'}</span> },
                 ]} rows={botResults} />
               </Panel>
