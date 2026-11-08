@@ -493,15 +493,19 @@ export async function GET(request: Request) {
         const vaultOnlyRows = (botVaultResult.data || [])
           .filter((r: any) => r.capture_id && !projectedCaptureIds.has(r.capture_id)
             && r.raw_text && Number.isFinite(Date.parse(r.captured_at)) && Date.parse(r.captured_at) >= ageStartMs)
-          .map((r: any) => ({
-            id: `vault:${r.id}`, capture_id: r.capture_id, source_id: r.source_id,
-            source: r.source, page_kind: r.page_kind, url: r.url || null,
-            user_id: r.user_id, province_id: r.province_id, kingdom_id: r.kingdom_id,
-            captured_at: r.captured_at, created_at: r.created_at || r.captured_at,
-            raw_text: r.raw_text, parsed_payload: r.parsed_payload || {},
-            source_vault_id: r.id, archived: true,
-            expires_at: new Date(Date.parse(r.captured_at) + 48 * 60 * 60 * 1000).toISOString(),
-          } as Rec))
+          .map((r: any) => {
+            const expiresAt = new Date(Date.parse(r.captured_at) + 48 * 60 * 60 * 1000).toISOString()
+            const archived = Date.parse(expiresAt) < Date.now()
+            return {
+              id: `vault:${r.id}`, capture_id: r.capture_id, source_id: r.source_id,
+              source: r.source, page_kind: r.page_kind, url: r.url || null,
+              user_id: r.user_id, province_id: r.province_id, kingdom_id: r.kingdom_id,
+              captured_at: r.captured_at, created_at: r.created_at || r.captured_at,
+              raw_text: r.raw_text, parsed_payload: r.parsed_payload || {},
+              source_vault_id: r.id, archived, expires_at: expiresAt,
+              archived_at: archived ? expiresAt : null,
+            } as Rec
+          })
         records.push(...botRows, ...vaultOnlyRows)
       }
     }
