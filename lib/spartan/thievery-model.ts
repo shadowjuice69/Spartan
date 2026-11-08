@@ -1,8 +1,9 @@
 // Turns the Thievery captures (the Guild of Thieves page and operation result pages) into one model.
 // Pure functions: no React, no database. Works on raw_text only; nothing is invented.
 import { clean, toNum, pathOf, parseThrone } from './page-models'
+const { parseBotThieveryReports } = require('./bot-intel-parsers.cjs')
 
-type Rec = { url: string | null; raw_text: string | null; captured_at: string | null; created_at: string }
+type Rec = { id?: string; source_id?: string | null; source?: string | null; url: string | null; raw_text: string | null; captured_at: string | null; created_at: string }
 
 const norm = (t: string | null | undefined) => String(t ?? '').replace(/\r/g, '')
 const when = (r: Rec) => r.captured_at || r.created_at
@@ -63,6 +64,7 @@ export function parseThieveryResult(url: string | null, text: string) {
 }
 
 export function buildThieveryModel(records: Rec[]) {
+  const botResults = parseBotThieveryReports(records)
   const pages = records
     .filter(r => r.raw_text && pathOf(r.url) === '/wol/game/thievery')
     .sort((a, b) => ts(b) - ts(a))
@@ -103,6 +105,7 @@ export function buildThieveryModel(records: Rec[]) {
     ratioAt: throne ? when(throne) : latest ? when(latest) : null,
   } : null
   return {
+    botResults,
     capturedAt: throneIsNewer ? when(throne!) : latest ? when(latest) : throne ? when(throne) : null,
     header,
     uniques,
