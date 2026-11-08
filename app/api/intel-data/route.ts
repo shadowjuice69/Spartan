@@ -3,6 +3,8 @@ import { createClient as createSupabaseAdmin } from '@supabase/supabase-js'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { describeRecord } from '@/lib/spartan/describe-record'
 
+const { parseBotAidTransfers } = require('../../../lib/spartan/bot-intel-parsers.cjs')
+
 export const dynamic = 'force-dynamic'
 
 function adminClient() {
@@ -49,18 +51,33 @@ function botEventBelongsToSection(row: any, section: string) {
   if (row.source !== 'discord-bot' || row.page_kind !== 'bot_event' || section === 'intel') return true
   const parsed = payload(row)
   const classified = String(parsed?.classification?.page_kind || '').toLowerCase()
+  const text = String(row.raw_text || '')
+  const magic = /:(?:star2|comet):.*?<<__[^_]{2,80}__.*?(?:\*\*[\d,]+\*\*|__FAIL__|spell succeeds|spell fails)/is.test(text)
+  const thievery = /<<__[^_]{2,80}__\s*\*\*\|\s*[^|]{1,120}\(\d+:\d+\)\*\*>>.{0,180}\bsent\b/is.test(text)
+  const aid = /:moneybag:\s*.+?\[[^\]]+\]\s+sent\s+__[^\n]{1,140}?__\s+to\s+.+?\[[^\]]+\]/is.test(text)
+    || /\bWe have sent\s+[\d,]+\s+.+?\s+to\s+.+?\(\d+:\d+\)/i.test(text)
+  const news = /NEW KDNEWS:|\battacked\s+__|\binvaded\s+\d+\s*-|\bambushed armies from\b/i.test(text)
   if (classified && classified !== 'bot_event') {
-    if (section === 'war-room') return ['attack', 'news', 'magic', 'thievery', 'aid', 'ritual', 'dragon'].includes(classified)
-    if (section === 'news') return ['news', 'attack'].includes(classified)
+    if (section === 'war-room') return ['attack', 'news', 'magic', 'thievery', 'aid', 'ritual', 'dragon'].includes(classified) || magic || thievery || aid || news
+    if (section === 'news') return ['news', 'attack'].includes(classified) || news
+    if (section === 'magic') return classified === 'magic' || magic
+    if (section === 'thievery') return classified === 'thievery' || thievery
+    if (section === 'aid') return classified === 'aid' || aid
     return classified === section
   }
-  const text = String(row.raw_text || '')
-  if (section === 'thievery') return /<<__[^_]{2,80}__\s*\*\*?\|[^|]{1,120}\(\d+:\d+\)\*\*?>>\s*\|.{0,180}\bsent\b/i.test(text)
-  if (section === 'magic') return /<<__[^_]{2,80}__\s*(?:\*\*?\|[^|]{1,120}\(\d+:\d+\)\*\*?>>)?\s*(?:\*\*)?\d+|\bspell succeeds\b|\bspell fails\b/i.test(text)
-  if (section === 'news') return /NEW KDNEWS:|\battacked\s+__|\binvaded\s+\d+\s*-|\bambushed armies from\b/i.test(text)
-  if (section === 'war-room') return /NEW KDNEWS:|\battacked\s+__|\binvaded\s+\d+\s*-|\bambushed armies from\b|<<__[^_]{2,80}__\s*\*\*?\|[^|]{1,120}\(\d+:\d+\)\*\*?>>\s*\|.{0,180}\bsent\b|We have sent\s+[\d,]+\s+.+?\s+to\s+.+?\(\d+:\d+\)/i.test(text)
-  if (section === 'aid') return /\bWe have sent\s+[\d,]+\s+.+?\s+to\s+.+?\(\d+:\d+\)/i.test(text)
+  if (section === 'thievery') return thievery
+  if (section === 'magic') return magic
+  if (section === 'news') return news
+  if (section === 'war-room') return news || magic || thievery || aid
+  if (section === 'aid') return aid
   return false
+}
+
+function isStructuredBotVaultRecord(row: any) {
+  const parsed = payload(row)
+  const metadata = parsed?.data?.metadata || {}
+  if (metadata.author_bot !== true && metadata.author_bot !== 'true') return false
+  return ['magic', 'thievery', 'aid', 'news', 'war-room'].some(section => botEventBelongsToSection(row, section))
 }
 
 function enrichBotPayload(row: any, parsed: any) {
@@ -103,6 +120,16 @@ function enrichBotPayload(row: any, parsed: any) {
   }
   const aid = text.match(/We have sent\s+([\d,]+)\s+([a-z ]+?)\s+to\s+(.+?)\s+\((\d+:\d+)\)/i)
   if (aid) events.push({ kind: 'aid', amount: Number(aid[1].replace(/,/g, '')), resource: aid[2].trim(), targetProvince: aid[3].trim(), targetKingdom: aid[4] })
+  const moneybagTransfers = parseBotAidTransfers([{
+    id: row.id, source: row.source, source_id: row.source_id || parsed?.data?.discord?.message_id,
+    captured_at: row.captured_at || row.created_at, raw_text: text,
+  }])
+  for (const transfer of moneybagTransfers) events.push({
+    kind: 'aid', amount: transfer.amount, resource: transfer.resource,
+    sender: transfer.sender, senderHandle: transfer.senderHandle,
+    targetProvince: transfer.recipient, targetHandle: transfer.recipientHandle,
+    outcome: 'sent', sourceId: transfer.sourceId,
+  })
 
   if (events.length) {
     data.events = events
@@ -113,7 +140,7 @@ function enrichBotPayload(row: any, parsed: any) {
     if (first.kind === 'thievery') data.operation = first.operation
     if (first.kind === 'magic') data.spellName = first.spellName
     if (first.kind === 'news') data.attacker = first.attacker
-    if (first.kind === 'aid') data.shipment = `${first.amount.toLocaleString()} ${first.resource} to ${first.targetProvince} (${first.targetKingdom})`
+    if (first.kind === 'aid') data.shipment = first.sender ? first.amount.toLocaleString() + ' ' + first.resource + ' from ' + first.sender + ' to ' + first.targetProvince : first.amount.toLocaleString() + ' ' + first.resource + ' to ' + first.targetProvince + ' (' + first.targetKingdom + ')'
   }
   root.data = data
   return root
@@ -197,10 +224,40 @@ export async function GET(request: Request) {
     }
     if (error) throw error
 
-    const rows = dedupeDiscordMessages((data || []).filter((row: any) =>
-      !(sharedSections.has(section) && row.visibility === 'own' && row.user_id !== user.id) &&
+    let rows = dedupeDiscordMessages((data || []).filter((row: any) =>
+      !(sharedSections.has(section) && row.visibility === 'own' && row.user_id !== user.id && row.user_id !== account.id) &&
       botEventBelongsToSection(row, section)
     ))
+
+    // Raw bot captures that predate their Intel projection remain valid evidence.
+    // Read them through without replaying or mutating the capture/processing pipeline.
+    if (!summary && ['intel', 'magic', 'thievery', 'aid', 'news', 'war-room'].includes(section)) {
+      const vaultResult = await db.from('spartan_capture_vault')
+        .select('id,capture_id,user_id,province_id,kingdom_id,captured_at,created_at,source,source_id,url,page_kind,raw_text,raw_payload,parsed_payload')
+        .eq('source', 'discord-bot').eq('page_kind', 'bot_event')
+        .eq('user_id', account.id).eq('kingdom_id', account.province_location)
+        .order('captured_at', { ascending: false }).limit(500)
+      if (vaultResult.error) throw vaultResult.error
+      const projectedCaptureIds = new Set((data || []).map((row: any) => row.capture_id).filter(Boolean))
+      const vaultOnlyRows = (vaultResult.data || [])
+        .filter((row: any) => row.capture_id && !projectedCaptureIds.has(row.capture_id)
+          && isStructuredBotVaultRecord(row)
+          && (section === 'intel' || botEventBelongsToSection(row, section)))
+        .map((row: any) => {
+          const expiresAt = new Date(Date.parse(row.captured_at) + 48 * 60 * 60 * 1000).toISOString()
+          const archived = Date.parse(expiresAt) < Date.now()
+          return {
+            ...row, id: 'vault:' + row.id, source_vault_id: row.id,
+            classification_source: 'vault-readthrough',
+            classification_reason: 'Raw Discord bot capture displayed read-only; no Intel projection exists',
+            classification_confidence: null, intel_type: 'province', visibility: null,
+            metrics: {}, retention_class: 'intel_48h', expires_at: expiresAt,
+            archived, archived_at: archived ? expiresAt : null,
+            projection_status: 'vault_only',
+          }
+        })
+      rows = dedupeDiscordMessages([...rows, ...vaultOnlyRows])
+    }
     const provinceIds = [...new Set(rows.map((row: any) => row.province_id).filter(Boolean))]
     const registryById = new Map<string, { name: string | null; kingdom: string | null; slot: number | null }>()
 
@@ -260,7 +317,8 @@ export async function GET(request: Request) {
         retention_class: row.retention_class,
         raw_text: row.raw_text,
         payload: parsed,
-        summary: describeRecord(row, parsed),
+        summary: row.projection_status === 'vault_only' ? 'Historical raw bot capture · read-only · no Intel projection' : describeRecord(row, parsed),
+        projection_status: row.projection_status || 'projected',
         raw_payload: row.raw_payload,
       }
     })
