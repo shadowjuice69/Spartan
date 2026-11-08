@@ -133,6 +133,9 @@ export function Shell(props: {
     return () => { live = false }
   }, [])
   useEffect(() => { const t = setInterval(() => { if (document.visibilityState === 'visible') tick(n => n + 1) }, 30000); return () => clearInterval(t) }, [])
+  const modelFreshness = Array.isArray(props.data?.model?.freshness) ? props.data.model.freshness : []
+  const staleCount = Number(props.data?.dataFreshness?.staleRecords ?? modelFreshness.filter((item: any) => item.stale).length ?? 0)
+  const archivedCount = Number(props.data?.dataFreshness?.archivedRecords ?? modelFreshness.filter((item: any) => item.archived).length ?? 0)
   const nav = (list: Array<[string, string]>) => list.map(([label, href]) => (
     <button key={label} className="sp-nav" data-on={href === path ? '1' : '0'} onClick={() => router.push(href)}>{label}</button>
   ))
@@ -165,6 +168,7 @@ export function Shell(props: {
         {props.error && (
           <div className="sp-err"><span><b>DATA CORE NOTICE</b> · {props.error}</span>{props.reload && <button className="sp-btn" onClick={props.reload}>Retry</button>}</div>
         )}
+        {staleCount > 0 && <div style={{marginBottom:14,padding:'11px 13px',border:'1px solid rgba(229,180,107,.3)',background:'rgba(229,180,107,.07)',borderRadius:9,color:'#e5b46b',fontSize:10,lineHeight:1.5}}><b>LAST-KNOWN DATA</b> · This page's data sample includes {staleCount} expired or archived records{archivedCount ? ` (${archivedCount} archived)` : ''}. Original capture times are preserved; verify freshness before acting on older intelligence.</div>}
         {props.children}
       </main>
     </div>
