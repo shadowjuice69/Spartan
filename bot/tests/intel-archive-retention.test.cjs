@@ -16,7 +16,7 @@ test('expired Intel is archived and retained during the bridge phase', () => {
   assert.doesNotMatch(migration.slice(functionAt), /delete from public\.spartan_intel_records/i, 'bridge phase keeps hot Intel intact')
   assert.match(migration, /expired_intel_retained/i)
   assert.match(migration, /on conflict \(source_table, source_id\) do nothing/i)
-  assert.match(migration, /a\.source_id = i\.id::text/i)
+  assert.match(migration, /current_row\.id::text = a\.source_id/i)
 })
 
 test('archive read view is private and prefers active hot rows', () => {
