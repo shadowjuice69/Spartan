@@ -40,3 +40,16 @@ test('bot parsers ignore unrelated messages and never infer game-page captures',
   assert.deepEqual(parseBotMagicReports(records), []);
   assert.deepEqual(parseBotThieveryReports(records), []);
 });
+
+const fs = require('node:fs');
+test('Aid is allowed through the dynamic Intel section route', () => {
+  const route = fs.readFileSync('app/command/[section]/page.tsx', 'utf8');
+  assert.match(route, /'aid'/);
+});
+test('Magic and Thievery load bot reports in a separate current-age query', () => {
+  const route = fs.readFileSync('app/api/page-models/route.ts', 'utf8');
+  assert.match(route, /botIntelResult/);
+  assert.match(route, /\.eq\('source', 'discord-bot'\)/);
+  assert.match(route, /\.in\('page_kind', \['magic', 'thievery', 'bot_event'\]\)/);
+  assert.match(route, /\.gte\('created_at', ageStartedAt!\)/);
+});
