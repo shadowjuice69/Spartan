@@ -3,6 +3,8 @@ import { createClient as createSupabaseAdmin } from '@supabase/supabase-js'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { describeRecord } from '@/lib/spartan/describe-record'
 
+const { parseBotMagicReports, parseBotThieveryReports, parseBotAidTransfers } = require('../../../lib/spartan/bot-intel-parsers.cjs')
+
 export const dynamic = 'force-dynamic'
 
 function adminClient() {
@@ -49,18 +51,35 @@ function botEventBelongsToSection(row: any, section: string) {
   if (row.source !== 'discord-bot' || row.page_kind !== 'bot_event' || section === 'intel') return true
   const parsed = payload(row)
   const classified = String(parsed?.classification?.page_kind || '').toLowerCase()
+  const text = String(row.raw_text || '')
+  const magic = /:(?:star2|comet):[\s\S]*?<<__[^_]{2,80}__[\s\S]*?(?:\*\*[\d,]+\*\*|__FAIL__|spell succeeds|spell fails)/i.test(text)
+  const thievery = /<<__[^_]{2,80}__\s*\*\*\|\s*[^|]{1,120}\(\d+:\d+\)\*\*>>[\s\S]{0,180}\bsent\b/i.test(text)
+  const aid = /:moneybag:\s*.+?\[[^\]]+\]\s+sent\s+__[^\n]{1,140}?__\s+to\s+.+?\[[^\]]+\]/i.test(text)
+    || /\bWe have sent\s+[\d,]+\s+.+?\s+to\s+.+?\(\d+:\d+\)/i.test(text)
+  const news = /NEW KDNEWS:|\battacked\s+__|\binvaded\s+\d+\s*-|\bambushed armies from\b/i.test(text)
+  const ritual = /(?:—|-)\s*Ritual:\s*.+\bcast\s+\*\*\d+\/\d+\*\*/i.test(text)
+  const dragon = /(?:dragon_face:|🐉)\s*__DRAGON__|\bDragon at us\s*[—-]/i.test(text)
   if (classified && classified !== 'bot_event') {
-    if (section === 'war-room') return ['attack', 'news', 'magic', 'thievery', 'aid', 'ritual', 'dragon'].includes(classified)
-    if (section === 'news') return ['news', 'attack'].includes(classified)
+    if (section === 'war-room') return ['attack', 'news', 'magic', 'thievery', 'aid', 'ritual', 'dragon'].includes(classified) || magic || thievery || aid || news || ritual || dragon
+    if (section === 'news') return ['news', 'attack'].includes(classified) || news
+    if (section === 'magic') return ['magic', 'ritual', 'dragon', 'council_spells'].includes(classified) || magic || ritual || dragon
+    if (section === 'thievery') return classified === 'thievery' || thievery
+    if (section === 'aid') return classified === 'aid' || aid
     return classified === section
   }
-  const text = String(row.raw_text || '')
-  if (section === 'thievery') return /<<__[^_]{2,80}__\s*\*\*?\|[^|]{1,120}\(\d+:\d+\)\*\*?>>\s*\|.{0,180}\bsent\b/i.test(text)
-  if (section === 'magic') return /<<__[^_]{2,80}__\s*(?:\*\*?\|[^|]{1,120}\(\d+:\d+\)\*\*?>>)?\s*(?:\*\*)?\d+|\bspell succeeds\b|\bspell fails\b/i.test(text)
-  if (section === 'news') return /NEW KDNEWS:|\battacked\s+__|\binvaded\s+\d+\s*-|\bambushed armies from\b/i.test(text)
-  if (section === 'war-room') return /NEW KDNEWS:|\battacked\s+__|\binvaded\s+\d+\s*-|\bambushed armies from\b|<<__[^_]{2,80}__\s*\*\*?\|[^|]{1,120}\(\d+:\d+\)\*\*?>>\s*\|.{0,180}\bsent\b|We have sent\s+[\d,]+\s+.+?\s+to\s+.+?\(\d+:\d+\)/i.test(text)
-  if (section === 'aid') return /\bWe have sent\s+[\d,]+\s+.+?\s+to\s+.+?\(\d+:\d+\)/i.test(text)
+  if (section === 'thievery') return thievery
+  if (section === 'magic') return magic || ritual || dragon
+  if (section === 'news') return news
+  if (section === 'war-room') return news || magic || thievery || aid || ritual || dragon
+  if (section === 'aid') return aid
   return false
+}
+
+function isStructuredBotVaultRecord(row: any) {
+  const parsed = payload(row)
+  const metadata = parsed?.data?.metadata || {}
+  if (metadata.author_bot !== true && metadata.author_bot !== 'true') return false
+  return ['magic', 'thievery', 'aid', 'news', 'war-room'].some(section => botEventBelongsToSection(row, section))
 }
 
 function enrichBotPayload(row: any, parsed: any) {
@@ -69,40 +88,33 @@ function enrichBotPayload(row: any, parsed: any) {
   const data = root.data && typeof root.data === 'object' ? { ...root.data } : {}
   const text = String(row.raw_text || data.content || '')
   const events: any[] = []
-  const thievery = /<<__([^_]{2,80})__\s*\*\*?\|\s*(.+?)\s*\((\d+:\d+)\)\*\*?>>\s*\|\s*([\d,]+)\s*sent\s*\(([\d.]+)\)/gi
-  for (const match of text.matchAll(thievery)) {
-    const lineStart = text.slice(0, match.index || 0).split(/\r?\n/).length - 1
-    const line = text.split(/\r?\n/)[lineStart] || ''
-    const failed = /__FAIL__/i.test(line)
-    events.push({
-      kind: 'thievery', operation: match[1].replace(/_/g, ' ').trim(),
-      targetProvince: match[2].trim(), targetKingdom: match[3],
-      thievesSent: Number(match[4].replace(/,/g, '')), tpa: Number(match[5]),
-      outcome: failed ? 'failed' : /success/i.test(line) ? 'success' : 'unknown',
-    })
+  const botRecord = {
+    id: row.id, source: row.source, source_id: row.source_id || parsed?.data?.discord?.message_id,
+    captured_at: row.captured_at || row.created_at, raw_text: text,
+    source_vault_id: row.source_vault_id, archived: row.archived === true, expires_at: row.expires_at,
   }
-  const magic = /<<__([^_]{2,80})__(?:\s*\*\*?\|\s*(.+?)\s*\((\d+:\d+)\)\*\*?>>)?([^\n]*)/gi
-  for (const match of text.matchAll(magic)) {
-    const tail = String(match[4] || '')
-    const duration = tail.match(/^\s*\*{0,2}([\d,]+)\*{0,2}\s*\|/)
-    if (!duration && !/\bFAIL\b|spell fails|spell succeeds/i.test(tail)) continue
-    events.push({
-      kind: 'magic', spellName: match[1].replace(/_/g, ' ').trim(),
-      targetProvince: match[2]?.trim() || null, targetKingdom: match[3] || null,
-      duration: duration ? Number(duration[1].replace(/,/g, '')) : null,
-      outcome: /\bFAIL\b|spell fails/i.test(tail) ? 'failed' : duration || /spell succeeds/i.test(tail) ? 'success' : 'unknown',
-    })
-  }
-  const kdnews = /(?:NEW KDNEWS:\s*)?(\d+\s*-\s*.+?)\s*\((\d+:\d+)\)\s+(?:invaded|attacked and pillaged|ambushed armies from)\s+(.+?)\s*\((\d+:\d+)\)(?:\s+and captured\s+([\d,]+) acres|\s+and took\s+([\d,]+) acres)?/gi
-  for (const match of text.matchAll(kdnews)) {
-    events.push({
-      kind: 'news', attacker: match[1].replace(/^\d+\s*-\s*/, '').trim(), attackerKingdom: match[2],
-      targetProvince: match[3].replace(/^the lands of\s+/i, '').replace(/^\d+\s*-\s*/, '').trim(), targetKingdom: match[4],
-      acresCaptured: Number(String(match[5] || match[6] || '0').replace(/,/g, '')),
-    })
-  }
+  for (const report of parseBotThieveryReports([botRecord])) events.push({
+    kind: 'thievery', operation: report.op, actor: report.actor,
+    targetProvince: report.province, targetKingdom: report.kingdom,
+    thievesSent: report.thievesSent, tpa: report.ownTpa,
+    targetTpa: report.targetTpa, targetModifiedTpa: report.targetModifiedTpa,
+    thievesLost: report.thievesLost, outcome: report.outcome,
+    sourceId: report.sourceId, occurrences: report.occurrences,
+  })
+  for (const report of parseBotMagicReports([botRecord])) events.push({
+    kind: 'magic', spellName: report.spell, caster: report.caster,
+    targetProvince: report.targetProvince, targetKingdom: report.targetKingdom,
+    duration: report.durationDays, wizardsLost: report.wizardsLost,
+    outcome: report.outcome, sourceId: report.sourceId, occurrences: report.occurrences,
+  })
   const aid = text.match(/We have sent\s+([\d,]+)\s+([a-z ]+?)\s+to\s+(.+?)\s+\((\d+:\d+)\)/i)
   if (aid) events.push({ kind: 'aid', amount: Number(aid[1].replace(/,/g, '')), resource: aid[2].trim(), targetProvince: aid[3].trim(), targetKingdom: aid[4] })
+  for (const transfer of parseBotAidTransfers([botRecord])) events.push({
+    kind: 'aid', amount: transfer.amount, resource: transfer.resource,
+    sender: transfer.sender, senderHandle: transfer.senderHandle,
+    targetProvince: transfer.recipient, targetHandle: transfer.recipientHandle,
+    outcome: 'sent', sourceId: transfer.sourceId, occurrences: transfer.occurrences,
+  })
 
   if (events.length) {
     data.events = events
@@ -113,7 +125,7 @@ function enrichBotPayload(row: any, parsed: any) {
     if (first.kind === 'thievery') data.operation = first.operation
     if (first.kind === 'magic') data.spellName = first.spellName
     if (first.kind === 'news') data.attacker = first.attacker
-    if (first.kind === 'aid') data.shipment = `${first.amount.toLocaleString()} ${first.resource} to ${first.targetProvince} (${first.targetKingdom})`
+    if (first.kind === 'aid') data.shipment = first.sender ? first.amount.toLocaleString() + ' ' + first.resource + ' from ' + first.sender + ' to ' + first.targetProvince : first.amount.toLocaleString() + ' ' + first.resource + ' to ' + first.targetProvince + (first.targetKingdom ? ' (' + first.targetKingdom + ')' : '')
   }
   root.data = data
   return root
@@ -197,10 +209,46 @@ export async function GET(request: Request) {
     }
     if (error) throw error
 
-    const rows = dedupeDiscordMessages((data || []).filter((row: any) =>
-      !(sharedSections.has(section) && row.visibility === 'own' && row.user_id !== user.id) &&
+    let rows = dedupeDiscordMessages((data || []).filter((row: any) =>
+      !(sharedSections.has(section) && row.visibility === 'own' && row.user_id !== user.id && row.user_id !== account.id) &&
       botEventBelongsToSection(row, section)
     ))
+
+    // Raw bot captures that predate their Intel projection remain valid evidence.
+    // Read them through without replaying or mutating the capture/processing pipeline.
+    if (!summary && ['intel', 'magic', 'thievery', 'aid', 'news', 'war-room'].includes(section)) {
+      let vaultQuery = db.from('spartan_capture_vault')
+        .select('id,capture_id,user_id,province_id,kingdom_id,captured_at,created_at,source,source_id,url,page_kind,raw_text,raw_payload,parsed_payload')
+        .eq('source', 'discord-bot').eq('page_kind', 'bot_event')
+        .eq('user_id', account.id).eq('kingdom_id', account.province_location)
+        .eq('parsed_payload->data->metadata->>author_bot', 'true')
+      if (section === 'magic') vaultQuery = vaultQuery.or('raw_text.like.%:star2:%,raw_text.like.%:comet:%,raw_text.like.%Ritual:%,raw_text.like.%__DRAGON__%')
+      else if (section === 'thievery') vaultQuery = vaultQuery.like('raw_text', '%:detective:%')
+      else if (section === 'aid') vaultQuery = vaultQuery.or('raw_text.like.%:moneybag:%,raw_text.ilike.%We have sent%')
+      else if (section === 'news') vaultQuery = vaultQuery.or('raw_text.ilike.%NEW KDNEWS:%,raw_text.ilike.%attacked%,raw_text.ilike.%invaded%')
+      else if (section === 'war-room') vaultQuery = vaultQuery.or('raw_text.like.%:star2:%,raw_text.like.%:comet:%,raw_text.like.%:detective:%,raw_text.like.%:moneybag:%,raw_text.ilike.%NEW KDNEWS:%,raw_text.ilike.%Ritual:%,raw_text.ilike.%Dragon at us%,raw_text.like.%:dragon_face:%')
+      const vaultResult = await vaultQuery.order('captured_at', { ascending: false }).limit(500)
+      if (vaultResult.error) throw vaultResult.error
+      const projectedCaptureIds = new Set((data || []).map((row: any) => row.capture_id).filter(Boolean))
+      const vaultOnlyRows = (vaultResult.data || [])
+        .filter((row: any) => row.capture_id && !projectedCaptureIds.has(row.capture_id)
+          && isStructuredBotVaultRecord(row)
+          && (section === 'intel' || botEventBelongsToSection(row, section)))
+        .map((row: any) => {
+          const expiresAt = new Date(Date.parse(row.captured_at) + 48 * 60 * 60 * 1000).toISOString()
+          const archived = Date.parse(expiresAt) < Date.now()
+          return {
+            ...row, id: 'vault:' + row.id, source_vault_id: row.id, page_kind: section === 'intel' ? 'bot_event' : section,
+            classification_source: 'vault-readthrough',
+            classification_reason: 'Raw Discord bot capture displayed read-only; no Intel projection exists',
+            classification_confidence: null, intel_type: 'province', visibility: null,
+            metrics: {}, retention_class: 'intel_48h', expires_at: expiresAt,
+            archived, archived_at: archived ? expiresAt : null,
+            projection_status: 'vault_only',
+          }
+        })
+      rows = dedupeDiscordMessages([...rows, ...vaultOnlyRows])
+    }
     const provinceIds = [...new Set(rows.map((row: any) => row.province_id).filter(Boolean))]
     const registryById = new Map<string, { name: string | null; kingdom: string | null; slot: number | null }>()
 
@@ -260,7 +308,8 @@ export async function GET(request: Request) {
         retention_class: row.retention_class,
         raw_text: row.raw_text,
         payload: parsed,
-        summary: describeRecord(row, parsed),
+        summary: row.projection_status === 'vault_only' ? 'VAULT ONLY · ' + describeRecord(row, parsed) : describeRecord(row, parsed),
+        projection_status: row.projection_status || 'projected',
         raw_payload: row.raw_payload,
       }
     })

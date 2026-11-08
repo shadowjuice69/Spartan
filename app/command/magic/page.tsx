@@ -17,6 +17,7 @@ export default function MagicPage() {
   const ritual = m?.ritual
   const project = m?.ritualProject
   const series: any[] = m?.series || []
+  const botResults: any[] = m?.botResults || []
   const uniques: any[] = m?.uniques || []
   const unknown: string[] = m?.unknown || []
   const effects: any[] = m?.ritualEffects || []
@@ -27,7 +28,7 @@ export default function MagicPage() {
   const byDays = [...active].sort((a, b) => a.days - b.days)
   const expiring = active.filter(s => s.days <= 2)
   const soonest = byDays[0] || null
-  const hasAny = Boolean(h || active.length || ritual || project)
+  const hasAny = Boolean(h || active.length || ritual || project || botResults.length)
   const lineSeries = [
     { name: 'Runes', color: C.violet, format: compact, points: series.map(s => ({ x: s.at, y: s.runes })) },
   ]
@@ -93,6 +94,24 @@ export default function MagicPage() {
               ) : <Empty title="No ritual capture yet" hint="Open the Ritual page in Utopia with the Spartan scraper running." />}
             </Panel>
           </Grid>
+
+          {botResults.length > 0 && (
+            <Grid>
+              <Panel span={12} title="DISCORD BOT SPELL REPORTS" sub="Kingdom spell results with original Discord message provenance" delay={2}>
+                <DataTable<any> initialSort="at" maxHeight={360} columns={[
+                  { key: 'at', label: 'WHEN', value: r => Date.parse(r.at) || 0, render: r => ago(r.at) },
+                  { key: 'caster', label: 'CASTER', value: r => r.caster },
+                  { key: 'spell', label: 'SPELL', value: r => r.spell },
+                  { key: 'target', label: 'TARGET', value: r => [r.targetProvince, r.targetKingdom ? `(${r.targetKingdom})` : null].filter(Boolean).join(' ') },
+                  { key: 'outcome', label: 'RESULT', value: r => r.outcome, render: r => <Tag color={r.outcome === 'success' ? C.green : r.outcome === 'failed' ? C.red : C.mute}>{String(r.outcome).toUpperCase()}</Tag> },
+                  { key: 'days', label: 'DAYS', value: r => r.durationDays ?? -1, render: r => r.durationDays == null ? '—' : `${r.durationDays}d`, align: 'right' },
+                  { key: 'capture', label: 'CAPTURE', value: r => r.archived ? 0 : 1, render: r => <Tag color={r.archived ? C.mute : C.green}>{r.archived ? 'HISTORICAL' : 'RECENT'}</Tag> },
+                  { key: 'repeats', label: 'REPEATS', value: r => r.occurrences || 1, render: r => (r.occurrences || 1) > 1 ? `×${r.occurrences}` : '—', align: 'right' },
+                  { key: 'message', label: 'DISCORD MSG', value: r => r.sourceId, render: r => <span title={r.sourceId}>{String(r.sourceId || '').slice(-8) || '—'}</span> },
+                ]} rows={botResults} />
+              </Panel>
+            </Grid>
+          )}
 
           <Grid>
             <Panel span={7} title="NOT ACTIVE · COULD CAST" delay={3}

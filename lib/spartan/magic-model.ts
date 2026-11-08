@@ -1,7 +1,8 @@
 // Magic model
 import { clean, toNum, pathOf, parseThrone } from './page-models'
+const { parseBotMagicReports } = require('./bot-intel-parsers.cjs')
 
-type Rec = { url: string | null; raw_text: string | null; captured_at: string | null; created_at: string }
+type Rec = { id?: string; source_id?: string | null; source?: string | null; url: string | null; raw_text: string | null; captured_at: string | null; created_at: string }
 
 const norm = (t: string | null | undefined) => String(t ?? '').replace(/\r/g, '')
 const when = (r: Rec) => r.captured_at || r.created_at
@@ -67,6 +68,7 @@ export function parseRitualTable(text: string) {
 }
 
 export function buildMagicModel(records: Rec[]) {
+  const botResults = parseBotMagicReports(records)
   const at = (path: string) => records.filter(r => r.raw_text && pathOf(r.url) === path).sort((a, b) => ts(b) - ts(a))
   const ench = at('/wol/game/enchantment'), council = at('/wol/game/council_spells'), wiz = [...ench, ...at('/wol/game/sorcery'), ...at('/wol/game/wizards')].sort((a, b) => ts(b) - ts(a))
   const throneRows = at('/wol/game/throne')
@@ -95,5 +97,5 @@ export function buildMagicModel(records: Rec[]) {
   const active = throneIsNewer
     ? { at: when(throne!), spells: (throneData?.spells || []).map(s => ({ ...s, effect: '' })) }
     : activeSrc ? { at: when(activeSrc), spells: parseActiveSpells(activeSrc.raw_text || '') } : null
-  return { capturedAt: throneIsNewer ? when(throne!) : wiz[0] ? when(wiz[0]) : throne ? when(throne) : null, header, active, castable: castSrc ? parseCastable(castSrc.raw_text || '') : [], castableAt: castSrc ? when(castSrc) : null, unknown: castSrc ? parseUnknownSpells(castSrc.raw_text || '') : [], uniques: uniqSrc ? parseUniques(uniqSrc.raw_text || '') : [], ritual: statusR ? { ...parseRitualStatus(statusR.raw_text || ''), at: when(statusR) } : null, ritualProject: castR ? { ...parseRitualCast(castR.raw_text || ''), at: when(castR) } : null, ritualEffects: parseRitualTable(tableSrc), series: [...ench.slice(0, 40).map(r => ({ r, h: parseMagicHeader(r.raw_text || ''), t: null as ReturnType<typeof parseThrone> | null })), ...throneRows.slice(0, 40).map(r => ({ r, h: null, t: parseThrone(r.raw_text || '') }))].sort((a, b) => ts(a.r) - ts(b.r)).slice(-60).map(x => ({ at: when(x.r), runes: x.h?.runes ?? x.t?.runes ?? null, wizards: x.h?.wizards ?? x.t?.wizards ?? null, mana: x.h?.mana ?? null, rawWpa: x.t?.acres != null && x.t.acres > 0 && x.t.wizards != null ? x.t.wizards / x.t.acres : x.h?.wpa ?? null })), captures: { enchantment: ench.length, council: council.length } }
+  return { botResults, capturedAt: throneIsNewer ? when(throne!) : wiz[0] ? when(wiz[0]) : throne ? when(throne) : null, header, active, castable: castSrc ? parseCastable(castSrc.raw_text || '') : [], castableAt: castSrc ? when(castSrc) : null, unknown: castSrc ? parseUnknownSpells(castSrc.raw_text || '') : [], uniques: uniqSrc ? parseUniques(uniqSrc.raw_text || '') : [], ritual: statusR ? { ...parseRitualStatus(statusR.raw_text || ''), at: when(statusR) } : null, ritualProject: castR ? { ...parseRitualCast(castR.raw_text || ''), at: when(castR) } : null, ritualEffects: parseRitualTable(tableSrc), series: [...ench.slice(0, 40).map(r => ({ r, h: parseMagicHeader(r.raw_text || ''), t: null as ReturnType<typeof parseThrone> | null })), ...throneRows.slice(0, 40).map(r => ({ r, h: null, t: parseThrone(r.raw_text || '') }))].sort((a, b) => ts(a.r) - ts(b.r)).slice(-60).map(x => ({ at: when(x.r), runes: x.h?.runes ?? x.t?.runes ?? null, wizards: x.h?.wizards ?? x.t?.wizards ?? null, mana: x.h?.mana ?? null, rawWpa: x.t?.acres != null && x.t.acres > 0 && x.t.wizards != null ? x.t.wizards / x.t.acres : x.h?.wpa ?? null })), captures: { enchantment: ench.length, council: council.length } }
 }

@@ -151,6 +151,8 @@ async function writeProvinceHistory(sb, flow, state, canonical, capture) {
 }
 function deriveIntelTarget(text) {
   const normalized = String(text || '').replace(/\s+/g, ' ').trim();
+  const aidTransfer = normalized.match(/:moneybag:\s*(.+?)\s+\[[^\]]+\]\s+sent\s+__(.+?)__\s+to\s+(.+?)\s+\[[^\]]+\]/i);
+  if (aidTransfer) return { slot: null, name: aidTransfer[3].trim(), kingdom: null };
   const patterns = [
     /(?:to|at|against|target(?:ed|ing)?(?:\s+province)?|arrive at)\s+(?:\*\*)?#?(\d+)\s+([^(*—:]+?)(?:\s*\*\*)?\s*\((\d+:\d+)\)/i,
     /(?:from|by)\s+(?:an?\s+)?(?:unknown\s+province|province)?\s*(?:from\s+)?([^(*—:]+?)\s*\((\d+:\d+)\)/i,
@@ -173,10 +175,11 @@ function deriveIntelIdentity(pageKind, text, flow) {
   const target = deriveIntelTarget(normalized);
   const operation = normalized.match(/<<__([^_]+?)__>>/i)?.[1]
     ?.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim() || '';
+  const aidResources = normalized.match(/sent\s+__(.+?)__\s+to\s+/i)?.[1] || '';
   const actor = normalized.match(/#(\d+)\s+([^—:]+?)(?:\s+—|:)/i);
   const identityType = ['thievery', 'news', 'aid', 'magic', 'attack'].includes(pageKind) && target ? 'target' : 'actor';
   const identity = identityType === 'target'
-    ? [target?.kingdom || '', target?.slot || '', target?.name || '', operation].join('|').toLowerCase()
+    ? [target?.kingdom || '', target?.slot || '', target?.name || '', operation || aidResources].join('|').toLowerCase()
     : [flow.kingdom_id || '', actor?.[1] || '', actor?.[2]?.trim() || '', operation || normalized.slice(0, 100)].join('|').toLowerCase();
   return identity.replace(/\s+/g, ' ').trim() || null;
 }
@@ -194,6 +197,12 @@ async function removePreviousIntelProjection(sb, pageKind, kingdomId, intelKey, 
   return Array.isArray(data) ? data.length : 0;
 }
 
+function extractBotOperationMarkers(value) {
+  return [...String(value || '').matchAll(/<<__([^_]+?)__(?:\s*\*\*\|\s*[^|]{1,120}\(\d+:\d+\)\*\*)?>>/gi)]
+    .map(match => match[1])
+    .filter(Boolean);
+}
+
 function isStructuredGameIntelMessage(value) {
   const text = String(value || '').replace(/\u00a0/g, ' ').trim();
   if (!text) return false;
@@ -204,7 +213,7 @@ function isStructuredGameIntelMessage(value) {
     // Utopia bot's structured attack results with land and unit losses.
     /(?:^|\n)\s*(?::[a-z0-9_]+:\s*)?.{1,100}\[\*\*.+?\*\*\]\s+attacked\s+__.+?__\s+\(\d+:\d+\)\s*\|\s*(?:captured|recaptured):\s*\*\*?[\d,]+/i,
     // Structured Magic/Thievery results: explicit operation marker, target KD, and sent/stat fields.
-    /<<__[^_]{2,80}__\s*(?:\*\*)?\|[^|]{1,100}\(\d+:\d+\)(?:\*\*)?>>\s*\|.{0,180}\b(?:sent|success|fail|failed|resist|immune)\b/i,
+    /<<__[^_]{2,80}__\s*(?:\*\*)?\|[^|]{1,100}\(\d+:\d+\)(?:\*\*)?>>\s*(?:\*\*[\d,]+\*\*)?\s*\|.{0,180}\b(?:sent|success|fail|failed|resist|immune)\b/i,
     // New Kingdom News feed events.
     /\bNEW KDNEWS:\s*.+\(\d+:\d+\).*\b(?:invaded|captured|ambushed|pillaged|looted|attempted an invasion)\b/i,
     // Explicit Province/Kingdom Reporter attack and loss lines.
@@ -213,6 +222,9 @@ function isStructuredGameIntelMessage(value) {
     /\bYour forces arrive at .+?\(\d+:\d+\).{0,220}\b(?:taken|captured|recaptured|repelled)\b/i,
     // Spell/ritual reports need game-specific wording and a result, not a casual mention.
     /\bYour wizards gather .{0,180}\b(?:the spell succeeds|the spell fails)\b/i,
+    /^\s*:(?:star2|comet)::(?:green_heart|broken_heart):.+?<<__[^_]{2,80}__(?:\s*\*\*\|\s*[^|]{1,100}\(\d+:\d+\)\*\*)?>>\s*(?:\*\*[\d,]+\*\*|__FAIL__)/im,
+    // Kingdom bot resource-transfer reports use a distinct moneybag format.
+    /^\s*:moneybag:\s*.+?\[[^\]]+\]\s+sent\s+__[^\n]{1,140}?__\s+to\s+.+?\[[^\]]+\]/im,
     /(?:—|-)\s*Ritual:\s*.+\bcast\s+\*\*\d+\/\d+\*\*/i,
     // Structured aid transfer messages.
     /^\s*#?\d+\s*-\s*.+?:\s*We have sent\s+[\d,]+\s+.+?\s+to\s+.+?\(\d+:\d+\)\./i,
@@ -285,8 +297,8 @@ async function syncBotIntelRecord(sb, flow, capture, state, options = {}) {
   // Utopia's Discord feed puts the operation in <<__...__>>. Prefer that
   // structured marker; fall back to a compact content signature for feeds
   // that omit the marker.
-  const operationMarkers = [...text.matchAll(/<<__([^_]+?)__>>/gi)]
-    .map(match => normalizeOperation(match[1]))
+  const operationMarkers = extractBotOperationMarkers(text)
+    .map(normalizeOperation)
     .filter(Boolean);
 
   const normalizedText = normalizeOperation(text);
@@ -329,10 +341,10 @@ async function syncBotIntelRecord(sb, flow, capture, state, options = {}) {
     pageKind = 'news';
     confidence = 0.74;
     reason = 'Content identifies attack/news';
-  } else if (channel.includes('aid') || /\b(aid|assistance|sent .* aid|received .* aid)\b/i.test(normalizedText)) {
+  } else if (/^\s*:moneybag:/im.test(text) || channel.includes('aid') || /\b(aid|assistance|sent .* aid|received .* aid)\b/i.test(normalizedText)) {
     pageKind = 'aid';
-    confidence = 0.74;
-    reason = 'Content identifies aid';
+    confidence = /^\s*:moneybag:/im.test(text) ? 0.95 : 0.74;
+    reason = /^\s*:moneybag:/im.test(text) ? 'Structured kingdom resource-transfer message' : 'Content identifies aid';
   } else if (channel.includes('dragon') || /\b(dragon|emerald|ruby|amethyst|topaz|sapphire)\b/i.test(normalizedText)) {
     pageKind = 'dragon';
     confidence = 0.74;
@@ -421,8 +433,7 @@ async function backfillMissingBotIntel(sb) {
   const { data: heads, error: captureError } = await sb.from('spartan_capture_vault')
     .select('id,capture_id')
     .eq('source', 'discord-bot')
-    .like('raw_text', '%<<__%')
-    .like('raw_text', '%__>>%')
+    .or('raw_text.like.%<<__%,raw_text.like.%:moneybag:%')
     .eq('parsed_payload->data->metadata->>author_bot', 'true')
     // Bot intel expires 48h after capture and is purged daily, so only recover captures still inside that window.
     .gte('captured_at', new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString())
@@ -748,4 +759,4 @@ async function runBacklogSteward() {
 }
 function start() { if (timer || startupBackfillRunning) return; if (process.env.SPARTAN_PROCESSOR_ENABLED === 'false') { logger.info('[SPARTAN PROCESSOR] disabled by SPARTAN_PROCESSOR_ENABLED=false'); return; } stewardSystem.start(); logger.info(`[SPARTAN PROCESSOR] starting worker=${WORKER_ID} interval=${INTERVAL_MS}ms batch=${BATCH_SIZE}`); const sb = supabaseService.getClient(); startupBackfillRunning = true; backfillMissingBotIntel(sb).catch(error => logger.error(`[SPARTAN INTEL BACKFILL] failed: ${error.stack || error.message}`)).finally(() => { startupBackfillRunning = false; processBatch(); timer = setInterval(processBatch, INTERVAL_MS); backlogStewardTimer = setInterval(runBacklogSteward, BACKLOG_STEWARD_INTERVAL_MS); logger.info(`[SPARTAN BACKLOG STEWARD] scheduled interval=${BACKLOG_STEWARD_INTERVAL_MS}ms`); }); }
 function stop() { if (timer) clearInterval(timer); if (backlogStewardTimer) clearInterval(backlogStewardTimer); timer = null; backlogStewardTimer = null; }
-module.exports = { start, stop, processBatch, processOne, runBacklogSteward, isStructuredGameIntelMessage, mergeProjectionState };
+module.exports = { start, stop, processBatch, processOne, runBacklogSteward, isStructuredGameIntelMessage, extractBotOperationMarkers, mergeProjectionState };
