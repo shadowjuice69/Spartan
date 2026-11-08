@@ -483,15 +483,20 @@ export async function GET(request: Request) {
         // before their flow/projection existed. Read those as historical evidence;
         // never replay them or let them update current province state.
         const projectedCaptureIds = new Set(botRows.map(r => r.capture_id).filter(Boolean))
-        const botVaultResult = await db.from('spartan_capture_vault')
+        let botVaultQuery = db.from('spartan_capture_vault')
           .select('id,capture_id,source_id,user_id,province_id,kingdom_id,source,page_kind,url,captured_at,created_at,raw_text,parsed_payload')
           .eq('source', 'discord-bot').eq('page_kind', 'bot_event')
           .eq('user_id', account.id).eq('kingdom_id', account.province_location)
+          .eq('parsed_payload->data->metadata->>author_bot', 'true')
           .gte('captured_at', ageStartedAt!)
-          .order('captured_at', { ascending: false }).limit(500)
+        botVaultQuery = page === 'magic'
+          ? botVaultQuery.or('raw_text.like.%:star2:%,raw_text.like.%:comet:%')
+          : botVaultQuery.like('raw_text', '%:detective:%')
+        const botVaultResult = await botVaultQuery.order('captured_at', { ascending: false }).limit(500)
         if (botVaultResult.error) fail(botVaultResult.error)
         const vaultOnlyRows = (botVaultResult.data || [])
           .filter((r: any) => r.capture_id && !projectedCaptureIds.has(r.capture_id)
+            && (r.parsed_payload?.data?.metadata?.author_bot === true || r.parsed_payload?.data?.metadata?.author_bot === 'true')
             && r.raw_text && Number.isFinite(Date.parse(r.captured_at)) && Date.parse(r.captured_at) >= ageStartMs)
           .map((r: any) => {
             const expiresAt = new Date(Date.parse(r.captured_at) + 48 * 60 * 60 * 1000).toISOString()
