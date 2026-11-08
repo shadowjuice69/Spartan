@@ -113,7 +113,7 @@ export function Styles() { return <style dangerouslySetInnerHTML={{ __html: CSS 
 
 
 
-const NAV_OWNER: Array<[string, string]> = [['Owner Console', '/owner/accounts'], ['Age Reset', '/owner/age-reset']]
+const NAV_OWNER: Array<[string, string]> = [['Owner Console', '/owner/accounts'], ['Age Reset', '/owner/age-reset'], ['System Health', '/command/system-health'], ['Data Coverage', '/command/data-coverage']]
 
 export function Shell(props: {
   title: string; eyebrow: string; subtitle: string; accent: string
