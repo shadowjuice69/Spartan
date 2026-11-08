@@ -348,10 +348,9 @@ async function syncBotIntelRecord(sb, flow, capture, state, options = {}) {
   const target = deriveIntelTarget(text);
   const sourceKingdom = String(flow.kingdom_id || '').trim() || null;
   const targetKingdom = target?.kingdom || null;
-  // Without a target kingdom, the report's ownership cannot be inferred safely.
   const visibility = targetKingdom
     ? (sourceKingdom && targetKingdom === sourceKingdom ? 'own' : 'enemy')
-    : null;
+    : 'own';
   const intelType = 'province';
   const targetProvinceId = target
     ? [target.slot ? String(target.slot) : '', target.name || ''].filter(Boolean).join(' ').trim() || null
