@@ -39,6 +39,14 @@ const verticals: Record<string, Vertical> = {
     accent: "#ffbd66",
     metrics: [["Operation",["operation","op","operationName"]],["Province",["attacker","province","province_name"]],["Target",["target","targetProvince"]],["Result",["result","success","outcome"]],["Thieves",["thievesSent","thieves"]],["Losses",["thievesLost"]]],
   },
+  aid: {
+    title: "AID INTELLIGENCE",
+    eyebrow: "SPARTAN // KINGDOM SUPPORT",
+    description: "Aid balances, available resources, shipment notices and incoming-aid settings.",
+    kinds: ["aid"],
+    accent: "#67d7e8",
+    metrics: [["Trade balance",["trade_balance"]],["Trade status",["trade_status"]],["Received-aid tax",["tax_rate"]],["Food available",["food_available"]],["Gold available",["gold_available"]],["Runes available",["runes_available"]],["Soldiers available",["soldiers_available"]],["Explorable acres",["explorable_acres"]],["Latest shipment",["shipment"]],["Incoming aid",["incoming_aid"]]],
+  },
   science: {
     title: "SCIENCE INTELLIGENCE",
     eyebrow: "SPARTAN // SCIENCE LAB",
@@ -271,8 +279,41 @@ function graphicFor(section:string,records:any[],accent:string) {
   return null
 }
 
+function recordPayload(row:any) {
+  const payload = unwrapPayload(row?.payload ?? row?.parsed_payload)
+  if (row?.page_kind !== "aid") return payload
+  const text = String(row?.raw_text || payload?.data_simple || "")
+  const valueAfter = (label:string) => {
+    const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, "\\function summary(row:any, vertical:Vertical) {")
+    const match = text.match(new RegExp(escaped + "\\s*(?:\\t|\\n)+\\s*([^\\n\\t]+)", "i"))
+    return match ? match[1].trim() : null
+  }
+  const numberAfter = (label:string) => {
+    const value = valueAfter(label)
+    if (!value) return null
+    const parsed = Number(value.replace(/,/g, "").replace(/[^0-9-]/g, ""))
+    return Number.isFinite(parsed) ? parsed : null
+  }
+  const status = text.match(/Trade Balance Status\\s*(?:\\t|\\n)+\\s*([^\\n]+)/i)
+  const sent = text.match(/We have sent ([\\d,]+)\\s+([a-z ]+?)\\s+to\\s+(.+?)\\s+\\((\\d+:\\d+)\\)/i)
+  const incoming = text.match(/Incoming aid from other provinces is currently\\s+([^\\.\\n]+)/i)
+  return {
+    ...payload,
+    trade_balance: numberAfter("Current trade balance"),
+    trade_status: status?.[1]?.trim() || null,
+    tax_rate: valueAfter("Tax rate on received goods"),
+    food_available: numberAfter("Food"),
+    gold_available: numberAfter("Gold"),
+    runes_available: numberAfter("Runes"),
+    soldiers_available: numberAfter("Soldiers"),
+    explorable_acres: numberAfter("Explorable Land"),
+    shipment: sent ? sent[1] + " " + sent[2].trim() + " to " + sent[3].trim() + " (" + sent[4] + ")" : null,
+    incoming_aid: incoming?.[1]?.trim() || null,
+  }
+}
+
 function summary(row:any, vertical:Vertical) {
-  const p=unwrapPayload(row?.payload ?? row?.parsed_payload)
+  const p=recordPayload(row)
   const values = vertical.metrics.map(([label,keys]) => [label,valueAt(p,keys)] as const).filter(([,v])=>v!==null)
   if (values.length) return values.slice(0,4).map(([k,v])=>`${k}: ${scalar(v)}`).join(" · ")
   return row?.classification_reason || "Captured intelligence record"
@@ -313,7 +354,7 @@ export default function IntelVerticalPage() {
 
   const records=data?.records||[]
   const counts=data?.counts||{}
-  const latest=unwrapPayload(records[0]?.payload ?? records[0]?.parsed_payload)
+  const latest=records[0] ? recordPayload(records[0]) : {}
   const current=useMemo(()=>vertical.metrics.map(([label,keys])=>({label,value:valueAt(latest,keys)})).filter(x=>x.value!==null),[latest,vertical])
   const sourceCounts=useMemo(()=>{
     const m=new Map<string,number>()
@@ -341,8 +382,8 @@ export default function IntelVerticalPage() {
   const compareA=records.find((row:any,index:number)=>recordKey(row,index)===compareLeft)||null
   const compareB=records.find((row:any,index:number)=>recordKey(row,index)===compareRight)||null
   const compareRows=useMemo(()=>vertical.metrics.map(([label,keys])=>{
-    const left=valueAt(unwrapPayload(compareA?.payload??compareA?.parsed_payload),keys)
-    const right=valueAt(unwrapPayload(compareB?.payload??compareB?.parsed_payload),keys)
+    const left=valueAt(compareA ? recordPayload(compareA) : null,keys)
+    const right=valueAt(compareB ? recordPayload(compareB) : null,keys)
     const a=numValue(left),b=numValue(right)
     return {label,left,right,delta:a!==null&&b!==null?b-a:null}
   }).filter(row=>row.left!==null||row.right!==null),[compareA,compareB,vertical])
