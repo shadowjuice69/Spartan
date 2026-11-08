@@ -514,8 +514,8 @@ export async function GET(request: Request) {
             // from any later calculated or estimated effectiveness values.
             r_tpa: parsed.ratios?.thievesPerAcre ?? null,
             r_wpa: parsed.ratios?.wizardsPerAcre ?? null,
-            off_spa: parsed.ratios?.offSpa ?? (parsed.acres > 0 && parsed.offSpecs != null ? parsed.offSpecs / parsed.acres : null),
-            def_spa: parsed.ratios?.defSpa ?? (parsed.acres > 0 && parsed.defSpecs != null ? parsed.defSpecs / parsed.acres : null),
+            off_spa: parsed.ratios?.offSpa ?? (parsed.acres != null && parsed.acres > 0 && parsed.offSpecs != null ? parsed.offSpecs / parsed.acres : null),
+            def_spa: parsed.ratios?.defSpa ?? (parsed.acres != null && parsed.acres > 0 && parsed.defSpecs != null ? parsed.defSpecs / parsed.acres : null),
             build_efficiency: parsed.buildingEfficiency,
             source: 'spartan_capture_vault',
           }
