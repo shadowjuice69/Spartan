@@ -51,10 +51,11 @@ function botEventBelongsToSection(row: any, section: string) {
   const classified = String(parsed?.classification?.page_kind || '').toLowerCase()
   if (classified && classified !== 'bot_event') return classified === section
   const text = String(row.raw_text || '')
-  if (section === 'thievery') return /<<__[^_]{2,80}__\\s*\\*\\*?\\|[^|]{1,120}\\(\\d+:\\d+\\)\\*\\*?>>\\s*\\|.{0,180}\\bsent\\b/i.test(text)
-  if (section === 'magic') return /<<__[^_]{2,80}__\\s*(?:\\*\\*?\\|[^|]{1,120}\\(\\d+:\\d+\\)\\*\\*?>>)?\\s*(?:\\*\\*)?\\d+|\\bspell succeeds\\b|\\bspell fails\\b/i.test(text)
-  if (section === 'news' || section === 'war-room') return /NEW KDNEWS:|\\battacked\\s+__|\\binvaded\\s+\\d+\\s*-|\\bambushed armies from\\b/i.test(text)
-  if (section === 'aid') return /\\bWe have sent\\s+[\\d,]+\\s+.+?\\s+to\\s+.+?\\(\\d+:\\d+\\)/i.test(text)
+  if (section === 'thievery') return /<<__[^_]{2,80}__\s*\*\*?\|[^|]{1,120}\(\d+:\d+\)\*\*?>>\s*\|.{0,180}\bsent\b/i.test(text)
+  if (section === 'magic') return /<<__[^_]{2,80}__\s*(?:\*\*?\|[^|]{1,120}\(\d+:\d+\)\*\*?>>)?\s*(?:\*\*)?\d+|\bspell succeeds\b|\bspell fails\b/i.test(text)
+  if (section === 'news') return /NEW KDNEWS:|\battacked\s+__|\binvaded\s+\d+\s*-|\bambushed armies from\b/i.test(text)
+  if (section === 'war-room') return /NEW KDNEWS:|\battacked\s+__|\binvaded\s+\d+\s*-|\bambushed armies from\b|<<__[^_]{2,80}__\s*\*\*?\|[^|]{1,120}\(\d+:\d+\)\*\*?>>\s*\|.{0,180}\bsent\b|We have sent\s+[\d,]+\s+.+?\s+to\s+.+?\(\d+:\d+\)/i.test(text)
+  if (section === 'aid') return /\bWe have sent\s+[\d,]+\s+.+?\s+to\s+.+?\(\d+:\d+\)/i.test(text)
   return false
 }
 
@@ -64,10 +65,10 @@ function enrichBotPayload(row: any, parsed: any) {
   const data = root.data && typeof root.data === 'object' ? { ...root.data } : {}
   const text = String(row.raw_text || data.content || '')
   const events: any[] = []
-  const thievery = /<<__([^_]{2,80})__\\s*\\*\\*?\\|\\s*(.+?)\\s*\\((\\d+:\\d+)\\)\\*\\*?>>\\s*\\|\\s*([\\d,]+)\\s*sent\\s*\\(([\\d.]+)\\)/gi
+  const thievery = /<<__([^_]{2,80})__\s*\*\*?\|\s*(.+?)\s*\((\d+:\d+)\)\*\*?>>\s*\|\s*([\d,]+)\s*sent\s*\(([\d.]+)\)/gi
   for (const match of text.matchAll(thievery)) {
-    const lineStart = text.slice(0, match.index || 0).split(/\\r?\\n/).length - 1
-    const line = text.split(/\\r?\\n/)[lineStart] || ''
+    const lineStart = text.slice(0, match.index || 0).split(/\r?\n/).length - 1
+    const line = text.split(/\r?\n/)[lineStart] || ''
     const failed = /__FAIL__/i.test(line)
     events.push({
       kind: 'thievery', operation: match[1].replace(/_/g, ' ').trim(),
@@ -76,27 +77,27 @@ function enrichBotPayload(row: any, parsed: any) {
       outcome: failed ? 'failed' : /success/i.test(line) ? 'success' : 'unknown',
     })
   }
-  const magic = /<<__([^_]{2,80})__(?:\\s*\\*\\*?\\|\\s*(.+?)\\s*\\((\\d+:\\d+)\\)\\*\\*?>>)?([^\\n]*)/gi
+  const magic = /<<__([^_]{2,80})__(?:\s*\*\*?\|\s*(.+?)\s*\((\d+:\d+)\)\*\*?>>)?([^\n]*)/gi
   for (const match of text.matchAll(magic)) {
     const tail = String(match[4] || '')
-    const duration = tail.match(/\\*{0,2}([\\d,]+)\\*{0,2}/)
-    if (!duration && !/\\bFAIL\\b|spell fails|spell succeeds/i.test(tail)) continue
+    const duration = tail.match(/\*{0,2}([\d,]+)\*{0,2}/)
+    if (!duration && !/\bFAIL\b|spell fails|spell succeeds/i.test(tail)) continue
     events.push({
       kind: 'magic', spellName: match[1].replace(/_/g, ' ').trim(),
       targetProvince: match[2]?.trim() || null, targetKingdom: match[3] || null,
       duration: duration ? Number(duration[1].replace(/,/g, '')) : null,
-      outcome: /\\bFAIL\\b|spell fails/i.test(tail) ? 'failed' : duration || /spell succeeds/i.test(tail) ? 'success' : 'unknown',
+      outcome: /\bFAIL\b|spell fails/i.test(tail) ? 'failed' : duration || /spell succeeds/i.test(tail) ? 'success' : 'unknown',
     })
   }
-  const kdnews = /(?:NEW KDNEWS:\\s*)?(\\d+\\s*-\\s*.+?)\\s*\\((\\d+:\\d+)\\)\\s+(?:invaded|attacked and pillaged|ambushed armies from)\\s+(.+?)\\s*\\((\\d+:\\d+)\\)(?:\\s+and captured\\s+([\\d,]+) acres|\\s+and took\\s+([\\d,]+) acres)?/gi
+  const kdnews = /(?:NEW KDNEWS:\s*)?(\d+\s*-\s*.+?)\s*\((\d+:\d+)\)\s+(?:invaded|attacked and pillaged|ambushed armies from)\s+(.+?)\s*\((\d+:\d+)\)(?:\s+and captured\s+([\d,]+) acres|\s+and took\s+([\d,]+) acres)?/gi
   for (const match of text.matchAll(kdnews)) {
     events.push({
-      kind: 'news', attacker: match[1].replace(/^\\d+\\s*-\\s*/, '').trim(), attackerKingdom: match[2],
-      targetProvince: match[3].replace(/^\\d+\\s*-\\s*/, '').trim(), targetKingdom: match[4],
+      kind: 'news', attacker: match[1].replace(/^\d+\s*-\s*/, '').trim(), attackerKingdom: match[2],
+      targetProvince: match[3].replace(/^\d+\s*-\s*/, '').trim(), targetKingdom: match[4],
       acresCaptured: Number(String(match[5] || match[6] || '0').replace(/,/g, '')),
     })
   }
-  const aid = text.match(/We have sent\\s+([\\d,]+)\\s+([a-z ]+?)\\s+to\\s+(.+?)\\s+\\((\\d+:\\d+)\\)/i)
+  const aid = text.match(/We have sent\s+([\d,]+)\s+([a-z ]+?)\s+to\s+(.+?)\s+\((\d+:\d+)\)/i)
   if (aid) events.push({ kind: 'aid', amount: Number(aid[1].replace(/,/g, '')), resource: aid[2].trim(), targetProvince: aid[3].trim(), targetKingdom: aid[4] })
 
   if (events.length) {
