@@ -57,6 +57,8 @@ function botEventBelongsToSection(row: any, section: string) {
   const aid = /:moneybag:\s*.+?\[[^\]]+\]\s+sent\s+__[^\n]{1,140}?__\s+to\s+.+?\[[^\]]+\]/is.test(text)
     || /\bWe have sent\s+[\d,]+\s+.+?\s+to\s+.+?\(\d+:\d+\)/i.test(text)
   const news = /NEW KDNEWS:|\battacked\s+__|\binvaded\s+\d+\s*-|\bambushed armies from\b/i.test(text)
+  const ritual = /(?:—|-)\\s*Ritual:\\s*.+\\bcast\\s+\\*\\*\\d+\\/\\d+\\*\\*/i.test(text)
+  const dragon = /(?:dragon_face:|🐉)\\s*__DRAGON__|\\bDragon at us\\s*[—-]/i.test(text)
   if (classified && classified !== 'bot_event') {
     if (section === 'war-room') return ['attack', 'news', 'magic', 'thievery', 'aid', 'ritual', 'dragon'].includes(classified) || magic || thievery || aid || news || ritual || dragon
     if (section === 'news') return ['news', 'attack'].includes(classified) || news
@@ -66,7 +68,7 @@ function botEventBelongsToSection(row: any, section: string) {
     return classified === section
   }
   if (section === 'thievery') return thievery
-  if (section === 'magic') return magic
+  if (section === 'magic') return magic || ritual || dragon
   if (section === 'news') return news
   if (section === 'war-room') return news || magic || thievery || aid || ritual || dragon
   if (section === 'aid') return aid
