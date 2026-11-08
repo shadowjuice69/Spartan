@@ -9,9 +9,9 @@ const fs = require('node:fs')
 const source = fs.readFileSync('app/command/returns/page.tsx', 'utf8')
 test('return tracker collapses same-timestamp cross-label duplicates by attack identity', () => {
   assert.match(source, /function dedupeAttackEvents/)
-  assert.match(source, /Number\\.isFinite\\(stamp\\) \\? stamp : event\\.at/)
-  assert.match(source, /specificity\\(event\\.type\\) > specificity\\(previous\\.type\\)/)
-  assert.match(source, /dedupeAttackEvents\\(events\\)/)
+  assert.ok(source.includes('Number.isFinite(stamp) ? stamp : event.at'))
+  assert.ok(source.includes('specificity(event.type) > specificity(previous.type)'))
+  assert.ok(source.includes('dedupeAttackEvents(events)'))
 })
 test('return tracker keeps separate same-target attacks when timestamps differ', () => {
   const signature = (event) => [Date.parse(event.at), event.direction, event.attacker, event.defender, event.targetKingdom, Math.abs(event.acres), event.troops || 0].join('|')
