@@ -5,7 +5,7 @@ The authenticated dashboard at `/command/data-coverage` is a read-only inventory
 ## Sources and ownership
 
 - `spartan_capture_vault` is queried by the linked Spartan account ID. The inventory scans at most the newest 1,500 captures.
-- `spartan_intel_records` is counted by the same account ID.
+- `spartan_intel_records_with_archive` is counted by the same account ID, combining active Intel with archived records while preserving the original record identity.
 - `spartan_province_history` and `spartan_event_history` are counted and sampled by the authenticated user ID, matching the dashboard page-model ownership convention.
 - `spartan_data_flow` rows are included only when their capture IDs belong to the newest 200 captures in the authenticated account's sample. The flow table itself has no user ID column, so it is never queried as a global feed for this page.
 - `spartan_province_registry` is filtered to the authenticated user ID and linked account ID. Normalized event rows resolve their province ID through this canonical registry; missing mappings remain null rather than reusing the Spartan account ID.
