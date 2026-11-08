@@ -5,7 +5,7 @@ The authenticated dashboard at `/command/data-coverage` is a read-only inventory
 ## Sources and ownership
 
 - `spartan_capture_vault` is queried by the linked Spartan account ID. The inventory scans at most the newest 1,500 captures.
-- `spartan_intel_records` is counted by the same account ID.
+- `spartan_intel_records_with_archive` is counted by the same account ID, combining active Intel with archived records while preserving the original record identity.
 - `spartan_province_history` and `spartan_event_history` are counted and sampled by the authenticated user ID, matching the dashboard page-model ownership convention.
 - `spartan_data_flow` rows are included only when their capture IDs belong to the newest 200 captures in the authenticated account's sample. The flow table itself has no user ID column, so it is never queried as a global feed for this page.
 - `spartan_province_registry` is filtered to the authenticated user ID and linked account ID. Normalized event rows resolve their province ID through this canonical registry; missing mappings remain null rather than reusing the Spartan account ID.
@@ -33,3 +33,14 @@ The Command Center, News, and War Room read normalized event history for the aut
 ## Province history display
 
 The Province, Military, and War Room page models combine stored `spartan_province_history` rows with current-age Throne captures retained in `spartan_capture_vault`. The retained captures are parsed at read-time into chart snapshots; this does not write to the vault, history table, or capture pipeline. Both stored history and retained captures are bounded to the current age start when an age-log marker is available.
+
+## Intel retention and archive bridge
+
+- Expired `spartan_intel_records` rows are copied in full to the private `spartan_operational_archive` table. During the bridge phase, the daily cleanup archives expired Intel but deliberately keeps the hot rows so the currently deployed application continues to work.
+- The cleanup function is scheduled daily by `pg_cron` at 09:00 UTC. The archive write is idempotent on (`source_table`, `source_id`). A separate retirement migration will remove expired hot rows only after archive-aware page reads have been deployed and verified.
+- Application reads use `spartan_intel_records_with_archive`, a service-role-only view that returns active rows plus archived rows not present in the hot table. Active rows win if a row exists in both places.
+
+- Aid captures are available in the dedicated `/command/aid` vertical, which extracts trade balance, resource availability, aid shipment notices, and incoming-aid settings from retained page text without changing capture ingestion.
+- The view exposes `archived` and `archived_at` metadata. Intel Vertical labels expired or archived records as **last known**, and Data Coverage reports archived and expired counts separately.
+- Archive data is a recovery bridge, not a claim that old intel is current. Page models preserve the original `captured_at` timestamp; consumers must display its age and never present archived data as live.
+- Do not delete expired hot Intel, archived Intel, or retire the archive view until page-level reads have been verified against the archive and the replacement structured history is complete.
