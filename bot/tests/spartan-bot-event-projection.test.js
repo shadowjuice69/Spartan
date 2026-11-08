@@ -91,6 +91,10 @@ test('self-spell bot messages are recognized as structured Magic Intel', () => {
   assert.equal(isStructuredGameIntelMessage(':comet::broken_heart: Evelyn vyciou# <<__pitfalls__ **| A target (3:8)**>> __FAIL__ (-8 wizards)'), true);
 });
 
+test('Thievery results with a duration/count field before thieves sent are recognized', () => {
+  assert.equal(isStructuredGameIntelMessage(':detective::green_heart: Ding-dong shrugste# <<__rob the vaults__ **| switch (6:1)**>> **13233**|400 sent (0.46)|2.78 (m.3.57)|rNW 0.92'), true);
+});
+
 test('moneybag bot transfers are recognized as structured Aid Intel', () => {
   assert.equal(isStructuredGameIntelMessage(':moneybag: Sky [sk#] sent __12,220 gold coins__ to Affair with an Orc [rorz87]'), true);
   assert.equal(isStructuredGameIntelMessage(':moneybag: Evelyn [vyciou#] sent __3,938 gold coins and 22 soldiers__ to Affair with an Orc [rorz87]'), true);
