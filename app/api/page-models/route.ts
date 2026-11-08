@@ -434,12 +434,6 @@ export async function GET(request: Request) {
           || (loggedAge === currentAge ? latestAgeLog.data?.created_at : null)
           || null
       }
-    } else if (['province', 'military', 'war-room'].includes(page)) {
-      // Retained throne captures are age-scoped; never mix a prior age into the live history chart.
-      const ageLog = await db.from('spartan_age_log')
-        .select('created_at').order('created_at', { ascending: false }).limit(1).maybeSingle()
-      if (ageLog.error) fail(ageLog.error)
-      ageStartedAt = ageLog.data?.created_at || null
     }
 
     // The Intel grid has its own compact grid query below. Avoid fetching the same
@@ -462,7 +456,7 @@ export async function GET(request: Request) {
       })
     }
 
-    // Magic and Thievery also need the province's latest Throne counts for the
+    // Magic, Thievery and Military also need the province's latest Throne counts for the
     // wiki-defined raw per-acre ratios. Fetch a bounded, separate series so
     // thousands of Throne captures cannot crowd out spell/operation captures
     // from the normal 90-record page query.
