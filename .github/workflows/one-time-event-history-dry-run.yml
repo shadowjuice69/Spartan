@@ -37,6 +37,24 @@ jobs:
         run: |
           test -n "$SUPABASE_URL" || { echo "Missing GitHub Actions secret NEXT_PUBLIC_SUPABASE_URL"; exit 1; }
           test -n "$SUPABASE_SERVICE_ROLE_KEY$SUPABASE_SECRET_KEY" || { echo "Missing GitHub Actions secret SUPABASE_SERVICE_ROLE_KEY or SUPABASE_SECRET_KEY"; exit 1; }
+      - name: Diagnose Supabase URL format without exposing it
+        env:
+          SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+        run: |
+          node - <<'NODE'
+          const raw = process.env.SUPABASE_URL || '';
+          const value = raw.trim();
+          let parsed;
+          try { parsed = new URL(value); } catch {}
+          console.log(JSON.stringify({
+            present: Boolean(raw),
+            length: raw.length,
+            leadingOrTrailingWhitespace: raw !== value,
+            startsWithHttps: value.startsWith('https://'),
+            validUrl: Boolean(parsed && ['http:', 'https:'].includes(parsed.protocol)),
+            hostname: parsed?.hostname || null,
+          }, null, 2));
+          NODE
       - name: Run read-only structured event history dry run
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
