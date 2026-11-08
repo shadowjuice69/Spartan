@@ -216,7 +216,7 @@ function isStructuredGameIntelMessage(value) {
     /\bYour forces arrive at .+?\(\d+:\d+\).{0,220}\b(?:taken|captured|recaptured|repelled)\b/i,
     // Spell/ritual reports need game-specific wording and a result, not a casual mention.
     /\bYour wizards gather .{0,180}\b(?:the spell succeeds|the spell fails)\b/i,
-    /^\s*:(?:star2|comet)::(?:green_heart|broken_heart):.+?<<__[^_]{2,80}__>>\s*(?:\*\*[\d,]+\*\*|__FAIL__)/im,
+    /^\s*:(?:star2|comet)::(?:green_heart|broken_heart):.+?<<__[^_]{2,80}__(?:\s*\*\*\|\s*[^|]{1,100}\(\d+:\d+\)\*\*)?>>\s*(?:\*\*[\d,]+\*\*|__FAIL__)/im,
     // Kingdom bot resource-transfer reports use a distinct moneybag format.
     /^\s*:moneybag:\s*.+?\[[^\]]+\]\s+sent\s+__[^\n]{1,140}?__\s+to\s+.+?\[[^\]]+\]/im,
     /(?:—|-)\s*Ritual:\s*.+\bcast\s+\*\*\d+\/\d+\*\*/i,
