@@ -527,9 +527,9 @@ export async function GET(request: Request) {
             prisoners: parsed.prisoners,
             offense: parsed.offense,
             defense: parsed.defense,
-            // Throne reports the raw per-acre TPA/WPA and, where available,
-            // the specialist offense/defense ratios. Keep reported values distinct
-            // from any later calculated or estimated effectiveness values.
+            // Throne reports troop counts and home combat points. Derive raw TPA/WPA
+            // and OSPA/DSPA (reported offense/defense points per acre) separately;
+            // keep specialist counts distinct from combat-strength ratios.
             r_tpa: parsed.ratios?.thievesPerAcre ?? (parsed.acres != null && parsed.acres > 0 && parsed.thieves != null ? parsed.thieves / parsed.acres : null),
             r_wpa: parsed.ratios?.wizardsPerAcre ?? (parsed.acres != null && parsed.acres > 0 && parsed.wizards != null ? parsed.wizards / parsed.acres : null),
             off_spa: parsed.ratios?.offSpa ?? (parsed.acres != null && parsed.acres > 0 && parsed.offense != null ? parsed.offense / parsed.acres : null),
