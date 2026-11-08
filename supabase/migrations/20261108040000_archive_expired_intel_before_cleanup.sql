@@ -60,16 +60,14 @@ begin
   on conflict (source_table, source_id) do nothing;
   get diagnostics v_intel_archived = row_count;
 
-  delete from public.spartan_intel_records i
+  -- Bridge phase: keep expired rows in the hot table so the currently
+  -- deployed application continues to work until the archive-aware reader
+  -- is deployed and verified. A later, separate retirement migration may
+  -- remove these rows after that verification.
+  select count(*) into v_intel
+    from public.spartan_intel_records i
    where i.expires_at is not null
-     and i.expires_at < now()
-     and exists (
-       select 1
-         from public.spartan_operational_archive a
-        where a.source_table = 'spartan_intel_records'
-          and a.source_id = i.id::text
-     );
-  get diagnostics v_intel = row_count;
+     and i.expires_at < now();
 
   delete from public.spartan_steward_events
    where created_at < now() - interval '7 days';
@@ -139,7 +137,7 @@ begin
   get diagnostics v_flows = row_count;
 
   return jsonb_build_object(
-    'expired_intel', v_intel,
+    'expired_intel_retained', v_intel,
     'newly_archived_intel', v_intel_archived,
     'steward_events', v_events,
     'steward_runs', v_runs,
