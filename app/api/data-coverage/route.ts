@@ -50,11 +50,13 @@ export async function GET() {
     if (accountError) throw accountError
     if (!account) return NextResponse.json({ error: 'No linked Spartan account.' }, { status: 403 })
 
-    const [vaultResult, intelCount, historyCount, eventCount, historyRowsResult, eventRowsResult, registryResult] = await Promise.all([
+    const [vaultResult, intelCount, archivedIntelCount, expiredIntelCount, historyCount, eventCount, historyRowsResult, eventRowsResult, registryResult] = await Promise.all([
       db.from('spartan_capture_vault')
         .select('capture_id,source,page_kind,captured_at,parsed_payload,raw_payload')
         .eq('user_id', account.id).order('captured_at', { ascending: false }).limit(1500),
-      db.from('spartan_intel_records').select('id', { count: 'exact', head: true }).eq('user_id', account.id),
+      db.from('spartan_intel_records_with_archive').select('id', { count: 'exact', head: true }).eq('user_id', account.id),
+      db.from('spartan_intel_records_with_archive').select('id', { count: 'exact', head: true }).eq('user_id', account.id).eq('archived', true),
+      db.from('spartan_intel_records_with_archive').select('id', { count: 'exact', head: true }).eq('user_id', account.id).lt('expires_at', new Date().toISOString()),
       db.from('spartan_province_history').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
       db.from('spartan_event_history').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
       db.from('spartan_province_history').select('acres,networth,population,peons,soldiers,off_specs,def_specs,elites,thieves,wizards,generals,prisoners,war_horses,offense,defense,defense_home,o_tpa,d_tpa,o_wpa,d_wpa,build_efficiency,wages').eq('user_id', user.id).order('observed_at', { ascending: false }).limit(250),
@@ -63,6 +65,8 @@ export async function GET() {
     ])
     if (vaultResult.error) throw vaultResult.error
     if (intelCount.error) throw intelCount.error
+    if (archivedIntelCount.error) throw archivedIntelCount.error
+    if (expiredIntelCount.error) throw expiredIntelCount.error
     if (historyCount.error) throw historyCount.error
     if (eventCount.error) throw eventCount.error
     if (historyRowsResult.error) throw historyRowsResult.error
@@ -129,6 +133,7 @@ export async function GET() {
       account: { province: account.province_name, kingdom: account.province_location },
       totals: {
         captures: captures.length, captureLimit: 1500, intelRecords: intelCount.count || 0,
+        archivedIntelRecords: archivedIntelCount.count || 0, expiredIntelRecords: expiredIntelCount.count || 0,
         provinceHistory: historyCount.count || 0, eventHistory: eventCount.count || 0,
         registryProvinces: registryResult.data?.length || 0,
       },
