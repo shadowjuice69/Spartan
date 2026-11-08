@@ -43,7 +43,7 @@ export default function ThieveryPage() {
       {hasAny && (
         <>
           <Grid>
-            <Stat label="Thieves" value={h?.thieves} sub={h?.tpa != null ? `${h.tpa} per acre` : undefined} color={C.amber} delay={0} />
+            <Stat label="Thieves" value={h?.thieves} sub={h?.rawTpa != null ? `${h.rawTpa.toFixed(2)} raw · modified unavailable` : 'Modified TPA needs current modifiers'} color={C.amber} delay={0} />
             <Stat label="Stealth" value={h?.stealth} format={v => `${v}%`} color={h?.stealth != null && h.stealth < 70 ? C.red : C.cyan} delay={1} />
             <Stat label="Operations captured" value={results.length} sub={results.length ? `${wins} succeeded${fails ? ` · ${fails} failed` : ''}` : undefined} color={C.green} delay={2} />
             <Stat label="Thieves lost" value={lost} sub="Across captured operations" color={lost ? C.red : C.lime} delay={3} />
