@@ -43,6 +43,7 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
         run: |
+          set -o pipefail
           node scripts/backfill-structured-event-history.js --dry-run | tee backfill-dry-run.json
       - name: Save dry-run report
         if: always()
