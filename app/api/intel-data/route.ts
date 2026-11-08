@@ -3,7 +3,7 @@ import { createClient as createSupabaseAdmin } from '@supabase/supabase-js'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { describeRecord } from '@/lib/spartan/describe-record'
 
-const { parseBotAidTransfers } = require('../../../lib/spartan/bot-intel-parsers.cjs')
+const { parseBotMagicReports, parseBotThieveryReports, parseBotAidTransfers } = require('../../../lib/spartan/bot-intel-parsers.cjs')
 
 export const dynamic = 'force-dynamic'
 
@@ -86,49 +86,32 @@ function enrichBotPayload(row: any, parsed: any) {
   const data = root.data && typeof root.data === 'object' ? { ...root.data } : {}
   const text = String(row.raw_text || data.content || '')
   const events: any[] = []
-  const thievery = /<<__([^_]{2,80})__\s*\*\*?\|\s*(.+?)\s*\((\d+:\d+)\)\*\*?>>\s*\|\s*([\d,]+)\s*sent\s*\(([\d.]+)\)/gi
-  for (const match of text.matchAll(thievery)) {
-    const lineStart = text.slice(0, match.index || 0).split(/\r?\n/).length - 1
-    const line = text.split(/\r?\n/)[lineStart] || ''
-    const failed = /__FAIL__/i.test(line)
-    events.push({
-      kind: 'thievery', operation: match[1].replace(/_/g, ' ').trim(),
-      targetProvince: match[2].trim(), targetKingdom: match[3],
-      thievesSent: Number(match[4].replace(/,/g, '')), tpa: Number(match[5]),
-      outcome: failed ? 'failed' : /success/i.test(line) ? 'success' : 'unknown',
-    })
-  }
-  const magic = /<<__([^_]{2,80})__(?:\s*\*\*?\|\s*(.+?)\s*\((\d+:\d+)\)\*\*?>>)?([^\n]*)/gi
-  for (const match of text.matchAll(magic)) {
-    const tail = String(match[4] || '')
-    const duration = tail.match(/^\s*\*{0,2}([\d,]+)\*{0,2}\s*\|/)
-    if (!duration && !/\bFAIL\b|spell fails|spell succeeds/i.test(tail)) continue
-    events.push({
-      kind: 'magic', spellName: match[1].replace(/_/g, ' ').trim(),
-      targetProvince: match[2]?.trim() || null, targetKingdom: match[3] || null,
-      duration: duration ? Number(duration[1].replace(/,/g, '')) : null,
-      outcome: /\bFAIL\b|spell fails/i.test(tail) ? 'failed' : duration || /spell succeeds/i.test(tail) ? 'success' : 'unknown',
-    })
-  }
-  const kdnews = /(?:NEW KDNEWS:\s*)?(\d+\s*-\s*.+?)\s*\((\d+:\d+)\)\s+(?:invaded|attacked and pillaged|ambushed armies from)\s+(.+?)\s*\((\d+:\d+)\)(?:\s+and captured\s+([\d,]+) acres|\s+and took\s+([\d,]+) acres)?/gi
-  for (const match of text.matchAll(kdnews)) {
-    events.push({
-      kind: 'news', attacker: match[1].replace(/^\d+\s*-\s*/, '').trim(), attackerKingdom: match[2],
-      targetProvince: match[3].replace(/^the lands of\s+/i, '').replace(/^\d+\s*-\s*/, '').trim(), targetKingdom: match[4],
-      acresCaptured: Number(String(match[5] || match[6] || '0').replace(/,/g, '')),
-    })
-  }
-  const aid = text.match(/We have sent\s+([\d,]+)\s+([a-z ]+?)\s+to\s+(.+?)\s+\((\d+:\d+)\)/i)
-  if (aid) events.push({ kind: 'aid', amount: Number(aid[1].replace(/,/g, '')), resource: aid[2].trim(), targetProvince: aid[3].trim(), targetKingdom: aid[4] })
-  const moneybagTransfers = parseBotAidTransfers([{
+  const botRecord = {
     id: row.id, source: row.source, source_id: row.source_id || parsed?.data?.discord?.message_id,
     captured_at: row.captured_at || row.created_at, raw_text: text,
-  }])
-  for (const transfer of moneybagTransfers) events.push({
+    source_vault_id: row.source_vault_id, archived: row.archived === true, expires_at: row.expires_at,
+  }
+  for (const report of parseBotThieveryReports([botRecord])) events.push({
+    kind: 'thievery', operation: report.op, actor: report.actor,
+    targetProvince: report.province, targetKingdom: report.kingdom,
+    thievesSent: report.thievesSent, tpa: report.ownTpa,
+    targetTpa: report.targetTpa, targetModifiedTpa: report.targetModifiedTpa,
+    thievesLost: report.thievesLost, outcome: report.outcome,
+    sourceId: report.sourceId, occurrences: report.occurrences,
+  })
+  for (const report of parseBotMagicReports([botRecord])) events.push({
+    kind: 'magic', spellName: report.spell, caster: report.caster,
+    targetProvince: report.targetProvince, targetKingdom: report.targetKingdom,
+    duration: report.durationDays, wizardsLost: report.wizardsLost,
+    outcome: report.outcome, sourceId: report.sourceId, occurrences: report.occurrences,
+  })
+  const aid = text.match(/We have sent\s+([\d,]+)\s+([a-z ]+?)\s+to\s+(.+?)\s+\((\d+:\d+)\)/i)
+  if (aid) events.push({ kind: 'aid', amount: Number(aid[1].replace(/,/g, '')), resource: aid[2].trim(), targetProvince: aid[3].trim(), targetKingdom: aid[4] })
+  for (const transfer of parseBotAidTransfers([botRecord])) events.push({
     kind: 'aid', amount: transfer.amount, resource: transfer.resource,
     sender: transfer.sender, senderHandle: transfer.senderHandle,
     targetProvince: transfer.recipient, targetHandle: transfer.recipientHandle,
-    outcome: 'sent', sourceId: transfer.sourceId,
+    outcome: 'sent', sourceId: transfer.sourceId, occurrences: transfer.occurrences,
   })
 
   if (events.length) {
@@ -140,7 +123,7 @@ function enrichBotPayload(row: any, parsed: any) {
     if (first.kind === 'thievery') data.operation = first.operation
     if (first.kind === 'magic') data.spellName = first.spellName
     if (first.kind === 'news') data.attacker = first.attacker
-    if (first.kind === 'aid') data.shipment = first.sender ? first.amount.toLocaleString() + ' ' + first.resource + ' from ' + first.sender + ' to ' + first.targetProvince : first.amount.toLocaleString() + ' ' + first.resource + ' to ' + first.targetProvince + ' (' + first.targetKingdom + ')'
+    if (first.kind === 'aid') data.shipment = first.sender ? first.amount.toLocaleString() + ' ' + first.resource + ' from ' + first.sender + ' to ' + first.targetProvince : first.amount.toLocaleString() + ' ' + first.resource + ' to ' + first.targetProvince + (first.targetKingdom ? ' (' + first.targetKingdom + ')' : '')
   }
   root.data = data
   return root
@@ -247,7 +230,7 @@ export async function GET(request: Request) {
           const expiresAt = new Date(Date.parse(row.captured_at) + 48 * 60 * 60 * 1000).toISOString()
           const archived = Date.parse(expiresAt) < Date.now()
           return {
-            ...row, id: 'vault:' + row.id, source_vault_id: row.id,
+            ...row, id: 'vault:' + row.id, source_vault_id: row.id, page_kind: section === 'intel' ? 'bot_event' : section,
             classification_source: 'vault-readthrough',
             classification_reason: 'Raw Discord bot capture displayed read-only; no Intel projection exists',
             classification_confidence: null, intel_type: 'province', visibility: null,
