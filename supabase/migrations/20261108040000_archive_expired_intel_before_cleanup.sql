@@ -1,4 +1,4 @@
--- Preserve expired Intel before retention removes it from the hot table.
+-- Preserve expired Intel while the application transitions to archive-aware reads.
 -- The archive is private (service_role only); the read view is also service_role only.
 
 -- One-time, additive backfill. Re-running is safe and never deletes a hot row.
@@ -34,8 +34,8 @@ revoke all on public.spartan_intel_records_with_archive from public, anon, authe
 grant select on public.spartan_intel_records_with_archive to service_role;
 
 -- Keep the existing cleanup schedule and all other retention behavior.
--- The only behavior change is that expired Intel is copied to the private archive
--- before it is deleted from the hot table.
+-- During this bridge phase, expired Intel is copied to the private archive and
+-- retained in the hot table so the currently deployed application stays functional.
 create or replace function public.spartan_retention_cleanup()
 returns jsonb
 language plpgsql
