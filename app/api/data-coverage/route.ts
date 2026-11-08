@@ -91,9 +91,9 @@ export async function GET() {
       const keys = keysIn(parsed)
       keysIn(row.metrics, keys)
       const rawText = String(row.raw_text || parsed?.data_simple || '')
-      for (const line of rawText.split(/\\r?\\n/)) {
-        const cells = line.split(/\\t+/).map((value: string) => value.trim())
-        if (cells.length > 1 && cells[0] && cells[0].length <= 48) keys.add(cells[0].toLowerCase().replace(/\\s+/g, '_'))
+      for (const line of rawText.split(/\r?\n/)) {
+        const cells = line.split(/\t+/).map((value: string) => value.trim())
+        if (cells.length > 1 && cells[0] && cells[0].length <= 48) keys.add(cells[0].toLowerCase().replace(/\s+/g, '_'))
       }
       keys.forEach(key => current.fields.add(key))
       intelByKind.set(kind, current)
