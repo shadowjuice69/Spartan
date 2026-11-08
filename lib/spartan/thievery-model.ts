@@ -93,7 +93,7 @@ export function buildThieveryModel(records: Rec[]) {
   const pageHeader = latest ? parseThieveryHeader(latest.raw_text || '') : null
   const throneIsNewer = Boolean(throne && (!latest || ts(throne) >= ts(latest)))
   const header = (pageHeader || throneData) ? {
-    ...pageHeader,
+    ...(pageHeader || {}),
     thieves: thiefCount ?? pageHeader?.thieves,
     tpa: rawTpa ?? pageHeader?.tpa ?? null,
     rawTpa: rawTpa ?? pageHeader?.tpa ?? null,
