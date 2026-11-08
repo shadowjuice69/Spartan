@@ -466,7 +466,7 @@ export async function GET(request: Request) {
     // wiki-defined raw per-acre ratios. Fetch a bounded, separate series so
     // thousands of Throne captures cannot crowd out spell/operation captures
     // from the normal 90-record page query.
-    if (page === 'magic' || page === 'thievery') {
+    if (['magic', 'thievery', 'military'].includes(page)) {
       const throneResult = await db.from('spartan_intel_records').select(COLUMNS)
         .eq('page_kind', 'throne').ilike('url', '%/wol/game/throne%').or(scope)
         .order('created_at', { ascending: false }).limit(40)
@@ -563,11 +563,21 @@ export async function GET(request: Request) {
       const councils = allByPath(records, '/wol/game/council_military')
       const latest = councils[0] || null
       const train = latestByPath(records, '/wol/game/train_army')
+      const throneRec = allByPath(records, '/wol/game/throne')[0] || null
+      const throne = throneRec?.raw_text ? parseThrone(throneRec.raw_text) : null
+      // Throne reports the province's current home Off./Def. Points. Use those
+      // as a read-only fallback when no Council → Military page has been captured;
+      // do not invent ME/OME/DME or army-role breakdowns.
+      const current = latest?.raw_text ? parseMilitary(latest.raw_text) : throne ? {
+        generals: null, wageRate: null, efficiency: null, nonPeasantPct: null,
+        offEff: null, offPoints: throne.offense, defEff: null, defPoints: throne.defense,
+        army: [], horses: throne.war_horses,
+      } : null
       body.model = {
-        current: latest?.raw_text ? parseMilitary(latest.raw_text) : null,
-        capturedAt: latest ? when(latest) : null,
-        acres: toNum(latest?.parsed_payload?.acres) ?? toNum(train?.parsed_payload?.acres),
-        networth: toNum(latest?.parsed_payload?.networth) ?? toNum(train?.parsed_payload?.networth),
+        current,
+        capturedAt: latest ? when(latest) : throneRec ? when(throneRec) : null,
+        acres: toNum(latest?.parsed_payload?.acres) ?? toNum(train?.parsed_payload?.acres) ?? throne?.acres,
+        networth: toNum(latest?.parsed_payload?.networth) ?? toNum(train?.parsed_payload?.networth) ?? throne?.networth,
         training: train ? { ...train.parsed_payload, capturedAt: when(train) } : null,
         series: councils.slice().reverse().map(r => {
           const m = parseMilitary(r.raw_text || '')
@@ -581,10 +591,11 @@ export async function GET(request: Request) {
       const councils = allByPath(records, '/wol/game/council_science')
       const latest = councils[0] || null
       const sciencePage = latestByPath(records, '/wol/game/science')
-      body.scienceStatus = { currentAge, hasCurrentAgeData: Boolean(latest), message: latest ? null : 'No current-age science data' }
+      const source = latest || sciencePage
+      body.scienceStatus = { currentAge, hasCurrentAgeData: Boolean(source), message: source ? null : 'No current-age science data' }
       body.model = {
-        current: latest?.raw_text ? parseScience(latest.raw_text) : null,
-        capturedAt: latest ? when(latest) : null,
+        current: source?.raw_text ? parseScience(source.raw_text) : null,
+        capturedAt: source ? when(source) : null,
         nextScientist: sciencePage?.parsed_payload?.category_for_next_scientist || null,
         series: councils.slice().reverse().map(r => {
           const s = parseScience(r.raw_text || '')
