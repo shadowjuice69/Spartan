@@ -284,9 +284,16 @@ function recordPayload(row:any) {
   if (row?.page_kind !== "aid") return payload
   const text = String(row?.raw_text || payload?.data_simple || "")
   const valueAfter = (label:string) => {
-    const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, "\\function summary(row:any, vertical:Vertical) {")
-    const match = text.match(new RegExp(escaped + "\\s*(?:\\t|\\n)+\\s*([^\\n\\t]+)", "i"))
-    return match ? match[1].trim() : null
+    const lines = text.split(/\r?\n/)
+    const index = lines.findIndex(line => line.trim().split(/\t+/)[0].trim().toLowerCase() === label.toLowerCase())
+    if (index < 0) return null
+    const sameLine = lines[index].split(/\t+/).slice(1).join(" ").trim()
+    if (sameLine) return sameLine
+    for (let i = index + 1; i < Math.min(index + 4, lines.length); i++) {
+      const value = lines[i].trim()
+      if (value) return value
+    }
+    return null
   }
   const numberAfter = (label:string) => {
     const value = valueAfter(label)
@@ -294,13 +301,13 @@ function recordPayload(row:any) {
     const parsed = Number(value.replace(/,/g, "").replace(/[^0-9-]/g, ""))
     return Number.isFinite(parsed) ? parsed : null
   }
-  const status = text.match(/Trade Balance Status\\s*(?:\\t|\\n)+\\s*([^\\n]+)/i)
-  const sent = text.match(/We have sent ([\\d,]+)\\s+([a-z ]+?)\\s+to\\s+(.+?)\\s+\\((\\d+:\\d+)\\)/i)
-  const incoming = text.match(/Incoming aid from other provinces is currently\\s+([^\\.\\n]+)/i)
+  const status = valueAfter("Trade Balance Status")
+  const sent = text.match(/We have sent ([0-9,]+)\s+([a-z ]+?)\s+to\s+(.+?)\s+\(([0-9]+:[0-9]+)\)/i)
+  const incoming = text.match(/Incoming aid from other provinces is currently\s+([^\.\n]+)/i)
   return {
     ...payload,
     trade_balance: numberAfter("Current trade balance"),
-    trade_status: status?.[1]?.trim() || null,
+    trade_status: status?.trim() || null,
     tax_rate: valueAfter("Tax rate on received goods"),
     food_available: numberAfter("Food"),
     gold_available: numberAfter("Gold"),
