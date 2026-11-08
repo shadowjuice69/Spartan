@@ -467,9 +467,10 @@ export async function GET(request: Request) {
     // thousands of Throne captures cannot crowd out spell/operation captures
     // from the normal 90-record page query.
     if (['magic', 'thievery', 'military'].includes(page)) {
-      const throneResult = await db.from('spartan_intel_records').select(COLUMNS)
+      const throneQuery = db.from('spartan_intel_records').select(COLUMNS)
         .eq('page_kind', 'throne').ilike('url', '%/wol/game/throne%').or(scope)
-        .order('created_at', { ascending: false }).limit(40)
+      const scopedThroneQuery = ageStartedAt ? throneQuery.gte('captured_at', ageStartedAt) : throneQuery
+      const throneResult = await scopedThroneQuery.order('created_at', { ascending: false }).limit(40)
       if (throneResult.error) fail(throneResult.error)
       const throneRows = ((throneResult.data || []) as Rec[])
         .filter(r => r.raw_text && pathOf(r.url) === '/wol/game/throne')
