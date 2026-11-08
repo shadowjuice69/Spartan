@@ -50,7 +50,7 @@ export default function MagicPage() {
       {hasAny && (
         <>
           <Grid>
-            <Stat label="Wizards" value={h?.wizards} sub={h?.rawWpa != null ? `${h.rawWpa.toFixed(2)} raw · modified unavailable` : 'Modified WPA needs current modifiers'} color={C.violet} delay={0} />
+            <Stat label="Wizards" value={h?.wizards} sub={h?.rawWpa != null ? `${h.rawWpa.toFixed(2)} raw WPA · modified unavailable${h.ratioAt ? ` · ${ago(h.ratioAt)}` : ''}` : 'Modified WPA needs current modifiers'} color={C.violet} delay={0} />
             <Stat label="Runes" value={runes} sub={h?.mana != null ? `${h.mana}% mana` : undefined} color={C.cyan} delay={1} />
             <Stat label="Active spells" value={m?.active ? active.length : null}
               sub={soonest ? `Next to expire: ${soonest.name} (${soonest.days}d)` : undefined}
