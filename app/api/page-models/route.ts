@@ -603,7 +603,7 @@ export async function GET(request: Request) {
       const parsedCurrent = latest?.raw_text ? parseMilitary(latest.raw_text) : null
       const throneIsNewer = Boolean(throne && throneRec && (!latest || Date.parse(when(throneRec)) >= Date.parse(when(latest))))
       const throneCurrent = throne ? {
-        generals: null, wageRate: null, efficiency: null, nonPeasantPct: null,
+        source: 'throne', generals: null, wageRate: null, efficiency: null, nonPeasantPct: null,
         offEff: null, offPoints: throne.offense, defEff: null, defPoints: throne.defense,
         army: armyFromThrone, horses: throne.war_horses, offSpecs, defSpecs, elites,
         offSpa: acresNow && throne.offense != null ? throne.offense / acresNow : null,
