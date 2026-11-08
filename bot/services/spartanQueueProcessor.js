@@ -207,7 +207,7 @@ function isStructuredGameIntelMessage(value) {
     // Utopia bot's structured attack results with land and unit losses.
     /(?:^|\n)\s*(?::[a-z0-9_]+:\s*)?.{1,100}\[\*\*.+?\*\*\]\s+attacked\s+__.+?__\s+\(\d+:\d+\)\s*\|\s*(?:captured|recaptured):\s*\*\*?[\d,]+/i,
     // Structured Magic/Thievery results: explicit operation marker, target KD, and sent/stat fields.
-    /<<__[^_]{2,80}__\s*(?:\*\*)?\|[^|]{1,100}\(\d+:\d+\)(?:\*\*)?>>\s*\|.{0,180}\b(?:sent|success|fail|failed|resist|immune)\b/i,
+    /<<__[^_]{2,80}__\s*(?:\*\*)?\|[^|]{1,100}\(\d+:\d+\)(?:\*\*)?>>\s*(?:\*\*[\d,]+\*\*)?\s*\|.{0,180}\b(?:sent|success|fail|failed|resist|immune)\b/i,
     // New Kingdom News feed events.
     /\bNEW KDNEWS:\s*.+\(\d+:\d+\).*\b(?:invaded|captured|ambushed|pillaged|looted|attempted an invasion)\b/i,
     // Explicit Province/Kingdom Reporter attack and loss lines.
