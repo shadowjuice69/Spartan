@@ -320,7 +320,7 @@ async function buildCommandModel(db: any, userId: string, account: { id: string;
     grab('buildings', KINDS.buildings, '%/wol/game/council_internal%', '/wol/game/council_internal'),
     latestOf(db, KINDS.kingdom, '%/wol/game/kingdom_details%', '/wol/game/kingdom_details', kingdomScope, 8).then(rows => rows || []),
     db.from('spartan_province_history')
-      .select('observed_at,acres,networth,population,peons,soldiers,off_specs,def_specs,elites,thieves,wizards,generals,war_horses,offense,defense,defense_home,build_efficiency,wages')
+      .select('observed_at,acres,networth,population,peons,soldiers,off_specs,def_specs,elites,thieves,wizards,generals,war_horses,offense,defense,defense_home,build_efficiency,wages,r_tpa,o_tpa,d_tpa,r_wpa,o_wpa,d_wpa')
       .eq('user_id', userId).order('observed_at', { ascending: true }).limit(240),
     db.from('spartan_event_history')
       .select('occurred_at,event_type,source,attacker,defender,target_kingdom,acres_change,troops_lost,thieves_lost,wizards_lost,gold_change,food_change,runes_change')
@@ -509,6 +509,13 @@ export async function GET(request: Request) {
             prisoners: parsed.prisoners,
             offense: parsed.offense,
             defense: parsed.defense,
+            // Throne reports the raw per-acre TPA/WPA and, where available,
+            // the specialist offense/defense ratios. Keep reported values distinct
+            // from any later calculated or estimated effectiveness values.
+            r_tpa: parsed.ratios?.thievesPerAcre ?? null,
+            r_wpa: parsed.ratios?.wizardsPerAcre ?? null,
+            off_spa: parsed.ratios?.offSpa ?? (parsed.acres > 0 && parsed.offSpecs != null ? parsed.offSpecs / parsed.acres : null),
+            def_spa: parsed.ratios?.defSpa ?? (parsed.acres > 0 && parsed.defSpecs != null ? parsed.defSpecs / parsed.acres : null),
             build_efficiency: parsed.buildingEfficiency,
             source: 'spartan_capture_vault',
           }
