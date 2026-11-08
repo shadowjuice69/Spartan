@@ -24,7 +24,7 @@ test('Thievery bot parser extracts operation, target, sent count, ratios and out
   const records = [{
     id: 'intel-2', source: 'discord-bot', source_id: 'discord-200',
     captured_at: '2026-11-08T22:28:21.811Z',
-    raw_text: ':detective::green_heart: Golden Lotus of Prosperity simo#  <<__spy on throne__ **| Bam (1:3)**>>|106 sent (0.14)|2.79 (m.3.49)|rNW 0.8\\n:detective::broken_heart: Chapter One mez#  <<__bribe generals__ **| Ayoko na mag Utopia (3:11)**>> __FAIL__|118 sent (0.19)|3.77 (m.4.46)|rNW 1.03',
+    raw_text: ':detective::green_heart: Golden Lotus of Prosperity simo#  <<__spy on throne__ **| Bam (1:3)**>> **13233**|106 sent (0.14)|2.79 (m.3.49)|rNW 0.8\\n:detective::broken_heart: Chapter One mez#  <<__bribe generals__ **| Ayoko na mag Utopia (3:11)**>> __FAIL__|118 sent (0.19)|3.77 (m.4.46)|rNW 1.03',
   }];
   const rows = parseBotThieveryReports(records);
   assert.equal(rows.length, 2);
