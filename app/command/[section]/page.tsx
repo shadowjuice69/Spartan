@@ -4,6 +4,7 @@ import IntelVerticalPage from '@/components/spartan/IntelVerticalPage'
 const intelSections = new Set([
   'intel',
   'magic',
+  'aid',
   'thievery',
   'science',
   'buildings',
