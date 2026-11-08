@@ -226,7 +226,7 @@ export async function GET(request: Request) {
       else if (section === 'thievery') vaultQuery = vaultQuery.like('raw_text', '%:detective:%')
       else if (section === 'aid') vaultQuery = vaultQuery.or('raw_text.like.%:moneybag:%,raw_text.ilike.%We have sent%')
       else if (section === 'news') vaultQuery = vaultQuery.or('raw_text.ilike.%NEW KDNEWS:%,raw_text.ilike.%attacked%,raw_text.ilike.%invaded%')
-      else if (section === 'war-room') vaultQuery = vaultQuery.or('raw_text.like.%:star2:%,raw_text.like.%:comet:%,raw_text.like.%:detective:%,raw_text.like.%:moneybag:%,raw_text.ilike.%NEW KDNEWS:%')
+      else if (section === 'war-room') vaultQuery = vaultQuery.or('raw_text.like.%:star2:%,raw_text.like.%:comet:%,raw_text.like.%:detective:%,raw_text.like.%:moneybag:%,raw_text.ilike.%NEW KDNEWS:%,raw_text.ilike.%Ritual:%,raw_text.ilike.%Dragon at us%,raw_text.like.%:dragon_face:%')
       const vaultResult = await vaultQuery.order('captured_at', { ascending: false }).limit(500)
       if (vaultResult.error) throw vaultResult.error
       const projectedCaptureIds = new Set((data || []).map((row: any) => row.capture_id).filter(Boolean))
