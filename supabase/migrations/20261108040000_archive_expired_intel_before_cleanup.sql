@@ -137,6 +137,7 @@ begin
   get diagnostics v_flows = row_count;
 
   return jsonb_build_object(
+    'expired_intel', v_intel,
     'expired_intel_retained', v_intel,
     'newly_archived_intel', v_intel_archived,
     'steward_events', v_events,
