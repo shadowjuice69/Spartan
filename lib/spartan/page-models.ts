@@ -190,10 +190,11 @@ export function parseTrainingUnits(text: string) {
     const defense = toNum(m[3]) ?? 0
     const owned = toNum(m[4]) ?? 0
     const training = toNum(m[5]) ?? 0
+    const supportUnit = /^(?:soldiers?|thieves?|wizards?|war horses?|horses?|merc(?:enaries)?|prisoners?)$/i.test(name)
     const role = offense > 0 && defense === 0 ? 'Offensive specs'
       : offense === 0 && defense > 0 ? 'Defensive specs'
       : offense > 0 && defense > 0 ? 'Elites' : 'Other'
-    if (role !== 'Other') rows.push({ name, offense, defense, owned, training, role })
+    if (!supportUnit && role !== 'Other') rows.push({ name, offense, defense, owned, training, role })
   }
   return rows
 }
