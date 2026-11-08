@@ -51,7 +51,7 @@ export default function MilitaryPage() {
             <Stat label="OSPA" value={latestHistory?.off_spa} format={v => Number(v).toFixed(2)} sub="Offensive specialists per acre" color={C.red} delay={0} />
             <Stat label="DSPA" value={latestHistory?.def_spa} format={v => Number(v).toFixed(2)} sub="Defensive specialists per acre" color={C.cyan} delay={1} />
             <Stat label="Specialists" value={(latestHistory?.off_specs ?? 0) + (latestHistory?.def_specs ?? 0) || null} sub="Offensive + defensive specialist count" color={C.violet} delay={2} />
-            <Stat label="Snapshot" value={latestHistory?.observed_at ? ago(latestHistory.observed_at) : '—'} sub="Latest retained Throne snapshot" color={C.lime} delay={3} />
+            <Stat label="Snapshot" value={null} text={latestHistory?.observed_at ? ago(latestHistory.observed_at) : '—'} sub="Latest retained Throne snapshot" color={C.lime} delay={3} />
           </Grid>
 
           <Grid>
