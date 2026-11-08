@@ -197,6 +197,12 @@ async function removePreviousIntelProjection(sb, pageKind, kingdomId, intelKey, 
   return Array.isArray(data) ? data.length : 0;
 }
 
+function extractBotOperationMarkers(value) {
+  return [...String(value || '').matchAll(/<<__([^_]+?)__(?:\\s*\\*\\*\\|\\s*[^|]{1,120}\\(\\d+:\\d+\\)\\*\\*)?>>/gi)]
+    .map(match => match[1])
+    .filter(Boolean);
+}
+
 function isStructuredGameIntelMessage(value) {
   const text = String(value || '').replace(/\u00a0/g, ' ').trim();
   if (!text) return false;
@@ -291,8 +297,8 @@ async function syncBotIntelRecord(sb, flow, capture, state, options = {}) {
   // Utopia's Discord feed puts the operation in <<__...__>>. Prefer that
   // structured marker; fall back to a compact content signature for feeds
   // that omit the marker.
-  const operationMarkers = [...text.matchAll(/<<__([^_]+?)__>>/gi)]
-    .map(match => normalizeOperation(match[1]))
+  const operationMarkers = extractBotOperationMarkers(text)
+    .map(normalizeOperation)
     .filter(Boolean);
 
   const normalizedText = normalizeOperation(text);
