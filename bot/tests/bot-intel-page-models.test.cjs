@@ -108,3 +108,9 @@ test('Magic and Thievery pages can read historical vault-only bot captures witho
   assert.match(route, /vaultOnlyRows/);
   assert.match(route, /source_vault_id: r\.id/);
 });
+
+test('bot backfill recognizes moneybag transfers but keeps the 48-hour recovery window', () => {
+  const processor = fs.readFileSync('bot/services/spartanQueueProcessor.js', 'utf8');
+  assert.match(processor, /raw_text\.like\.%:moneybag:%/);
+  assert.match(processor, /48 \* 60 \* 60 \* 1000/);
+});
