@@ -217,11 +217,17 @@ export async function GET(request: Request) {
     // Raw bot captures that predate their Intel projection remain valid evidence.
     // Read them through without replaying or mutating the capture/processing pipeline.
     if (!summary && ['intel', 'magic', 'thievery', 'aid', 'news', 'war-room'].includes(section)) {
-      const vaultResult = await db.from('spartan_capture_vault')
+      let vaultQuery = db.from('spartan_capture_vault')
         .select('id,capture_id,user_id,province_id,kingdom_id,captured_at,created_at,source,source_id,url,page_kind,raw_text,raw_payload,parsed_payload')
         .eq('source', 'discord-bot').eq('page_kind', 'bot_event')
         .eq('user_id', account.id).eq('kingdom_id', account.province_location)
-        .order('captured_at', { ascending: false }).limit(500)
+        .eq('parsed_payload->data->metadata->>author_bot', 'true')
+      if (section === 'magic') vaultQuery = vaultQuery.or('raw_text.like.%:star2:%,raw_text.like.%:comet:%,raw_text.like.%Ritual:%,raw_text.like.%__DRAGON__%')
+      else if (section === 'thievery') vaultQuery = vaultQuery.like('raw_text', '%:detective:%')
+      else if (section === 'aid') vaultQuery = vaultQuery.or('raw_text.like.%:moneybag:%,raw_text.ilike.%We have sent%')
+      else if (section === 'news') vaultQuery = vaultQuery.or('raw_text.ilike.%NEW KDNEWS:%,raw_text.ilike.%attacked%,raw_text.ilike.%invaded%')
+      else if (section === 'war-room') vaultQuery = vaultQuery.or('raw_text.like.%:star2:%,raw_text.like.%:comet:%,raw_text.like.%:detective:%,raw_text.like.%:moneybag:%,raw_text.ilike.%NEW KDNEWS:%')
+      const vaultResult = await vaultQuery.order('captured_at', { ascending: false }).limit(500)
       if (vaultResult.error) throw vaultResult.error
       const projectedCaptureIds = new Set((data || []).map((row: any) => row.capture_id).filter(Boolean))
       const vaultOnlyRows = (vaultResult.data || [])
