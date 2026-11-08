@@ -591,7 +591,7 @@ export async function GET(request: Request) {
       // Throne reports current home Off./Def. Points. Training-page unit stats
       // classify raw specialist counts; no modified ME/OME/DME is inferred.
       const parsedCurrent = latest?.raw_text ? parseMilitary(latest.raw_text) : null
-      const throneIsNewer = Boolean(throne && throneRec && (!latest || Date.parse(when(throneRec)) >= Date.parse(when(latest)))
+      const throneIsNewer = Boolean(throne && throneRec && (!latest || Date.parse(when(throneRec)) >= Date.parse(when(latest))))
       const throneCurrent = throne ? {
         generals: null, wageRate: null, efficiency: null, nonPeasantPct: null,
         offEff: null, offPoints: throne.offense, defEff: null, defPoints: throne.defense,
