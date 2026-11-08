@@ -57,7 +57,7 @@ export async function GET() {
         .eq('user_id', account.id).order('captured_at', { ascending: false }).limit(1500),
       db.from('spartan_intel_records_with_archive').select('page_kind,source,captured_at,expires_at,archived,parsed_payload,raw_payload,raw_text,metrics').eq('user_id', account.id).order('captured_at', { ascending: false }).limit(1500),
       db.from('spartan_intel_records_with_archive').select('id', { count: 'exact', head: true }).eq('user_id', account.id),
-      db.from('spartan_intel_records_with_archive').select('id', { count: 'exact', head: true }).eq('user_id', account.id).eq('archived', true),
+      db.from('spartan_operational_archive').select('source_id', { count: 'exact', head: true }).eq('source_table', 'spartan_intel_records').eq('record->>user_id', account.id),
       db.from('spartan_intel_records_with_archive').select('id', { count: 'exact', head: true }).eq('user_id', account.id).lt('expires_at', new Date().toISOString()),
       db.from('spartan_province_history').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
       db.from('spartan_event_history').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
