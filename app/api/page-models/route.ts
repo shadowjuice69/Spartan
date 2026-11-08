@@ -36,7 +36,7 @@ const KINDS: Record<string, string[]> = {
 }
 
 type Rec = {
-  id: string; capture_id?: string | null; source_id?: string | null; user_id?: string | null; province_id?: string | null; kingdom_id?: string | null; visibility?: string | null; page_kind: string; url: string; source: string | null; captured_at: string | null
+  id: string; capture_id?: string | null; source_id?: string | null; user_id?: string | null; province_id?: string | null; kingdom_id?: string | null; visibility?: string | null; page_kind: string; url: string | null; source: string | null; captured_at: string | null
   created_at: string; age?: number | string | null; expires_at?: string | null; archived?: boolean; archived_at?: string | null; parsed_payload: any; raw_text: string | null
 }
 
