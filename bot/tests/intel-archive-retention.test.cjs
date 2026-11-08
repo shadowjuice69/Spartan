@@ -13,7 +13,7 @@ test('expired Intel is archived and retained during the bridge phase', () => {
   const archiveAt = migration.indexOf("insert into public.spartan_operational_archive (source_table, source_id, archived_at, record)", functionAt)
   assert.ok(functionAt >= 0, 'retention function exists')
   assert.ok(archiveAt > functionAt, 'function archives Intel')
-  assert.doesNotMatch(migration.slice(functionAt), /delete from public\\.spartan_intel_records/i, 'bridge phase keeps hot Intel intact')
+  assert.doesNotMatch(migration.slice(functionAt), /delete from public\.spartan_intel_records/i, 'bridge phase keeps hot Intel intact')
   assert.match(migration, /expired_intel_retained/i)
   assert.match(migration, /on conflict \(source_table, source_id\) do nothing/i)
   assert.match(migration, /a\.source_id = i\.id::text/i)
