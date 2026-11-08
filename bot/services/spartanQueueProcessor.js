@@ -427,8 +427,7 @@ async function backfillMissingBotIntel(sb) {
   const { data: heads, error: captureError } = await sb.from('spartan_capture_vault')
     .select('id,capture_id')
     .eq('source', 'discord-bot')
-    .like('raw_text', '%<<__%')
-    .like('raw_text', '%__>>%')
+    .or('raw_text.like.%<<__%,raw_text.like.%:moneybag:%')
     .eq('parsed_payload->data->metadata->>author_bot', 'true')
     // Bot intel expires 48h after capture and is purged daily, so only recover captures still inside that window.
     .gte('captured_at', new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString())
