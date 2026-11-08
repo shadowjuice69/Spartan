@@ -1,5 +1,5 @@
 // Magic model
-import { clean, toNum, pathOf } from './page-models'
+import { clean, toNum, pathOf, parseThrone } from './page-models'
 
 type Rec = { url: string | null; raw_text: string | null; captured_at: string | null; created_at: string }
 
@@ -69,8 +69,17 @@ export function parseRitualTable(text: string) {
 export function buildMagicModel(records: Rec[]) {
   const at = (path: string) => records.filter(r => r.raw_text && pathOf(r.url) === path).sort((a, b) => ts(b) - ts(a))
   const ench = at('/wol/game/enchantment'), council = at('/wol/game/council_spells'), wiz = [...ench, ...at('/wol/game/sorcery'), ...at('/wol/game/wizards')].sort((a, b) => ts(b) - ts(a))
+  const throne = at('/wol/game/throne')[0] || null
+  const throneData = throne ? parseThrone(throne.raw_text || '') : null
+  const acres = throneData?.acres ?? null
+  const wizardCount = throneData?.wizards ?? null
+  // Spartan Utopia wiki → All Formulas → Magic: Raw WPA = Wizards / Land.
+  // Modified WPA is intentionally null until every required modifier is sourced.
+  const rawWpa = acres != null && acres > 0 && wizardCount != null ? wizardCount / acres : null
   const statusR = at('/wol/game/status_ritual')[0] || null, castR = at('/wol/game/cast_ritual')[0] || null
   const activeSrc = [ench[0], council[0]].filter((r): r is Rec => !!r).sort((a, b) => ts(b) - ts(a))[0] || null
   const castSrc = ench.find(r => parseCastable(r.raw_text || '').length > 0) || null, uniqSrc = ench[0] || null, ritualSrc = statusR || castR, tableSrc = ritualSrc ? (ritualSrc.raw_text || '') : ''
-  return { capturedAt: wiz[0] ? when(wiz[0]) : null, header: wiz[0] ? parseMagicHeader(wiz[0].raw_text || '') : null, active: activeSrc ? { at: when(activeSrc), spells: parseActiveSpells(activeSrc.raw_text || '') } : null, castable: castSrc ? parseCastable(castSrc.raw_text || '') : [], castableAt: castSrc ? when(castSrc) : null, unknown: castSrc ? parseUnknownSpells(castSrc.raw_text || '') : [], uniques: uniqSrc ? parseUniques(uniqSrc.raw_text || '') : [], ritual: statusR ? { ...parseRitualStatus(statusR.raw_text || ''), at: when(statusR) } : null, ritualProject: castR ? { ...parseRitualCast(castR.raw_text || ''), at: when(castR) } : null, ritualEffects: parseRitualTable(tableSrc), series: ench.slice(0, 40).reverse().map(r => { const h = parseMagicHeader(r.raw_text || ''); return { at: when(r), runes: h.runes, wizards: h.wizards, mana: h.mana } }), captures: { enchantment: ench.length, council: council.length } }
+  const pageHeader = wiz[0] ? parseMagicHeader(wiz[0].raw_text || '') : null
+  const header = (pageHeader || throneData) ? { ...pageHeader, wizards: pageHeader?.wizards ?? wizardCount, rawWpa: rawWpa ?? pageHeader?.wpa ?? null, wpa: rawWpa ?? pageHeader?.wpa ?? null, modifiedWpa: null, acres, ratioSource: throne ? 'Throne capture · wiki raw WPA formula' : pageHeader ? 'Enchantment capture' : null, ratioAt: throne ? when(throne) : wiz[0] ? when(wiz[0]) : null } : null
+  return { capturedAt: wiz[0] ? when(wiz[0]) : throne ? when(throne) : null, header, active: activeSrc ? { at: when(activeSrc), spells: parseActiveSpells(activeSrc.raw_text || '') } : null, castable: castSrc ? parseCastable(castSrc.raw_text || '') : [], castableAt: castSrc ? when(castSrc) : null, unknown: castSrc ? parseUnknownSpells(castSrc.raw_text || '') : [], uniques: uniqSrc ? parseUniques(uniqSrc.raw_text || '') : [], ritual: statusR ? { ...parseRitualStatus(statusR.raw_text || ''), at: when(statusR) } : null, ritualProject: castR ? { ...parseRitualCast(castR.raw_text || ''), at: when(castR) } : null, ritualEffects: parseRitualTable(tableSrc), series: ench.slice(0, 40).reverse().map(r => { const h = parseMagicHeader(r.raw_text || ''); return { at: when(r), runes: h.runes, wizards: h.wizards, mana: h.mana } }), captures: { enchantment: ench.length, council: council.length } }
 }
