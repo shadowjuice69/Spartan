@@ -469,10 +469,12 @@ export async function GET(request: Request) {
     // Age scoping prevents old-age captures from leaking into the current chart.
     let history: any[] = []
     if (['province', 'military', 'war-room'].includes(page)) {
+      const historyQuery = db.from('spartan_province_history')
+        .select('observed_at,acres,networth,population,peons,soldiers,off_specs,def_specs,elites,thieves,wizards,generals,war_horses,offense,defense,defense_home,build_efficiency,wages')
+        .eq('user_id', user.id)
+      const scopedHistoryQuery = ageStartedAt ? historyQuery.gte('observed_at', ageStartedAt) : historyQuery
       const [historyResult, throneCaptureResult] = await Promise.all([
-        db.from('spartan_province_history')
-          .select('observed_at,acres,networth,population,peons,soldiers,off_specs,def_specs,elites,thieves,wizards,generals,war_horses,offense,defense,defense_home,build_efficiency,wages')
-          .eq('user_id', user.id)
+        scopedHistoryQuery
           .order('observed_at', { ascending: page !== 'war-room' })
           .limit(page === 'war-room' ? 1 : 300),
         ageStartedAt
