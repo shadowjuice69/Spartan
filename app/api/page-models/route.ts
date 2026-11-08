@@ -38,7 +38,7 @@ const KINDS: Record<string, string[]> = {
 }
 
 type Rec = {
-  id: string; capture_id?: string | null; source_id?: string | null; user_id?: string | null; province_id?: string | null; kingdom_id?: string | null; visibility?: string | null; page_kind: string; url: string | null; source: string | null; captured_at: string | null
+  id: string; capture_id?: string | null; source_vault_id?: string | number | null; source_id?: string | null; user_id?: string | null; province_id?: string | null; kingdom_id?: string | null; visibility?: string | null; page_kind: string; url: string | null; source: string | null; captured_at: string | null
   created_at: string; age?: number | string | null; expires_at?: string | null; archived?: boolean; archived_at?: string | null; parsed_payload: any; raw_text: string | null
 }
 
@@ -479,7 +479,30 @@ export async function GET(request: Request) {
         const botRows = ((botIntelResult.data || []) as Rec[]).filter(r =>
           r.raw_text && Number.isFinite(Date.parse(when(r))) && Date.parse(when(r)) >= ageStartMs
         )
-        records.push(...botRows)
+        // A small number of older bot messages were safely saved in the raw vault
+        // before their flow/projection existed. Read those as historical evidence;
+        // never replay them or let them update current province state.
+        const projectedCaptureIds = new Set(botRows.map(r => r.capture_id).filter(Boolean))
+        const botVaultResult = await db.from('spartan_capture_vault')
+          .select('id,capture_id,source_id,user_id,province_id,kingdom_id,source,page_kind,url,captured_at,created_at,raw_text,parsed_payload')
+          .eq('source', 'discord-bot').eq('page_kind', 'bot_event')
+          .eq('user_id', account.id).eq('kingdom_id', account.province_location)
+          .gte('captured_at', ageStartedAt!)
+          .order('captured_at', { ascending: false }).limit(500)
+        if (botVaultResult.error) fail(botVaultResult.error)
+        const vaultOnlyRows = (botVaultResult.data || [])
+          .filter((r: any) => r.capture_id && !projectedCaptureIds.has(r.capture_id)
+            && r.raw_text && Number.isFinite(Date.parse(r.captured_at)) && Date.parse(r.captured_at) >= ageStartMs)
+          .map((r: any) => ({
+            id: `vault:${r.id}`, capture_id: r.capture_id, source_id: r.source_id,
+            source: r.source, page_kind: r.page_kind, url: r.url || null,
+            user_id: r.user_id, province_id: r.province_id, kingdom_id: r.kingdom_id,
+            captured_at: r.captured_at, created_at: r.created_at || r.captured_at,
+            raw_text: r.raw_text, parsed_payload: r.parsed_payload || {},
+            source_vault_id: r.id, archived: true,
+            expires_at: new Date(Date.parse(r.captured_at) + 48 * 60 * 60 * 1000).toISOString(),
+          } as Rec))
+        records.push(...botRows, ...vaultOnlyRows)
       }
     }
 
