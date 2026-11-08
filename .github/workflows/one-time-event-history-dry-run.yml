@@ -1,4 +1,4 @@
-name: One-time Spartan event history apply
+name: One-time Spartan event history dry run
 
 on:
   push:
@@ -7,12 +7,17 @@ on:
     paths:
       - .github/workflows/one-time-event-history-dry-run.yml
       - scripts/backfill-structured-event-history.js
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/one-time-event-history-dry-run.yml
 
 permissions:
   contents: read
 
 jobs:
-  apply:
+  dry-run:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -51,20 +56,20 @@ jobs:
             hostname: parsed?.hostname || null,
           }, null, 2));
           NODE
-      - name: Run authorized structured event history backfill
+      - name: Run read-only structured event history dry run
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
         run: |
           set -o pipefail
-          node scripts/backfill-structured-event-history.js --apply | tee backfill-apply.json
-      - name: Save apply report
+          node scripts/backfill-structured-event-history.js --dry-run | tee backfill-dry-run.json
+      - name: Save dry-run report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: spartan-event-history-apply
-          path: backfill-apply.json
+          name: spartan-event-history-dry-run
+          path: backfill-dry-run.json
           if-no-files-found: ignore
           retention-days: 3
 
