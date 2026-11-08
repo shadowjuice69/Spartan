@@ -58,9 +58,9 @@ function botEventBelongsToSection(row: any, section: string) {
     || /\bWe have sent\s+[\d,]+\s+.+?\s+to\s+.+?\(\d+:\d+\)/i.test(text)
   const news = /NEW KDNEWS:|\battacked\s+__|\binvaded\s+\d+\s*-|\bambushed armies from\b/i.test(text)
   if (classified && classified !== 'bot_event') {
-    if (section === 'war-room') return ['attack', 'news', 'magic', 'thievery', 'aid', 'ritual', 'dragon'].includes(classified) || magic || thievery || aid || news
+    if (section === 'war-room') return ['attack', 'news', 'magic', 'thievery', 'aid', 'ritual', 'dragon'].includes(classified) || magic || thievery || aid || news || ritual || dragon
     if (section === 'news') return ['news', 'attack'].includes(classified) || news
-    if (section === 'magic') return classified === 'magic' || magic
+    if (section === 'magic') return ['magic', 'ritual', 'dragon', 'council_spells'].includes(classified) || magic || ritual || dragon
     if (section === 'thievery') return classified === 'thievery' || thievery
     if (section === 'aid') return classified === 'aid' || aid
     return classified === section
@@ -68,7 +68,7 @@ function botEventBelongsToSection(row: any, section: string) {
   if (section === 'thievery') return thievery
   if (section === 'magic') return magic
   if (section === 'news') return news
-  if (section === 'war-room') return news || magic || thievery || aid
+  if (section === 'war-room') return news || magic || thievery || aid || ritual || dragon
   if (section === 'aid') return aid
   return false
 }
@@ -300,7 +300,7 @@ export async function GET(request: Request) {
         retention_class: row.retention_class,
         raw_text: row.raw_text,
         payload: parsed,
-        summary: row.projection_status === 'vault_only' ? 'Historical raw bot capture · read-only · no Intel projection' : describeRecord(row, parsed),
+        summary: row.projection_status === 'vault_only' ? 'VAULT ONLY · ' + describeRecord(row, parsed) : describeRecord(row, parsed),
         projection_status: row.projection_status || 'projected',
         raw_payload: row.raw_payload,
       }
