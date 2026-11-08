@@ -314,7 +314,7 @@ function recordPayload(row:any) {
     runes_available: numberAfter("Runes"),
     soldiers_available: numberAfter("Soldiers"),
     explorable_acres: numberAfter("Explorable Land"),
-    shipment: sent ? sent[1] + " " + sent[2].trim() + " to " + sent[3].trim() + " (" + sent[4] + ")" : null,
+    shipment: sent ? sent[1] + " " + sent[2].trim() + " to " + sent[3].trim() + " (" + sent[4] + ")" : payload.shipment || null,
     incoming_aid: incoming?.[1]?.trim() || null,
   }
 }
