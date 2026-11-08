@@ -16,7 +16,8 @@ export default function MilitaryPage() {
   const latestHistory = history.length ? history[history.length - 1] : null
   const acres = m?.acres ?? (latestHistory ? latestHistory.acres : null)
   const army: any[] = cur?.army || []
-  const troops = army.reduce((s, u) => s + u.home + u.away, 0)
+  const troopCount = (u: any) => Number(u.home || 0) + Number(u.away || 0)
+  const troops = army.reduce((s, u) => s + troopCount(u), 0)
   const opa = cur?.offPoints != null && acres ? cur.offPoints / acres : null
   const dpa = cur?.defPoints != null && acres ? cur.defPoints / acres : null
   const total = (cur?.offPoints || 0) + (cur?.defPoints || 0)
@@ -43,7 +44,7 @@ export default function MilitaryPage() {
           <Grid>
             <Stat label="Offense at home" value={cur.offPoints} sub={opa != null ? `${opa.toFixed(1)} OPA` : undefined} color={C.red} delay={0} />
             <Stat label="Defense at home" value={cur.defPoints} sub={dpa != null ? `${dpa.toFixed(1)} DPA` : undefined} color={C.cyan} delay={1} />
-            <Stat label="Total troops" value={troops} sub={`${cur.generals ?? '—'} generals`} color={C.lime} delay={2} />
+            <Stat label={cur.source === 'throne' ? "Known troops at home" : "Total troops"} value={troops} sub={cur.source === 'throne' ? "Away composition unavailable from Throne" : `${cur.generals ?? '—'} generals`} color={C.lime} delay={2} />
             <Stat label="Acres" value={acres} sub={m.networth ? `${compact(m.networth)} networth` : undefined} color={C.violet} delay={3} />
           </Grid>
 
@@ -77,13 +78,13 @@ export default function MilitaryPage() {
           </Grid>
 
           <Grid>
-            <Panel span={7} title="ARMY COMPOSITION" sub="Troops at home and away, by unit" delay={2}>
+            <Panel span={7} title={cur.source === 'throne' ? "THRONE UNIT COUNTS" : "ARMY COMPOSITION"} sub={cur.source === 'throne' ? "Home counts from Throne; away unit composition is unknown" : "Troops at home and away, by unit"} delay={2}>
               {army.length ? (
-                <HBars items={army.map((u, i) => ({ label: `${u.name} · ${u.role}`, value: u.home + u.away, color: UNIT_COLORS[i % 4], text: `${fmt(u.home)}${u.away ? ` (+${fmt(u.away)} away)` : ''}` }))} />
+                <HBars items={army.map((u, i) => ({ label: `${u.name} · ${u.role}`, value: troopCount(u), color: UNIT_COLORS[i % 4], text: `${fmt(u.home)}${u.away != null && u.away ? ` (+${fmt(u.away)} away)` : ''}` }))} />
               ) : <Empty title="No unit data" hint="The Military council page lists your units once captured." />}
             </Panel>
-            <Panel span={5} title="TROOP SHARE" delay={3}>
-              <Donut slices={army.map((u, i) => ({ label: u.name, value: u.home + u.away, color: UNIT_COLORS[i % 4] }))} centerBottom="Troops" />
+            <Panel span={5} title={cur.source === 'throne' ? "HOME TROOP SHARE" : "TROOP SHARE"} delay={3}>
+              <Donut slices={army.map((u, i) => ({ label: u.name, value: troopCount(u), color: UNIT_COLORS[i % 4] }))} centerBottom="Troops" />
             </Panel>
           </Grid>
 
@@ -99,9 +100,9 @@ export default function MilitaryPage() {
                 { key: 'role', label: 'ROLE', value: r => r.role },
                 { key: 'name', label: 'UNIT', value: r => r.name },
                 { key: 'home', label: 'HOME', value: r => r.home, render: r => fmt(r.home), align: 'right' },
-                { key: 'away', label: 'AWAY', value: r => r.away, render: r => fmt(r.away), align: 'right' },
-                { key: 'total', label: 'TOTAL', value: r => r.home + r.away, render: r => fmt(r.home + r.away), align: 'right' },
-                { key: 'share', label: 'SHARE', value: r => (troops ? (r.home + r.away) / troops : 0), render: r => pct(troops ? ((r.home + r.away) / troops) * 100 : null), align: 'right' },
+                { key: 'away', label: 'AWAY', value: r => r.away, render: r => r.away == null ? '—' : fmt(r.away), align: 'right' },
+                { key: 'total', label: 'TOTAL', value: r => r.away == null ? null : r.home + r.away, render: r => r.away == null ? '—' : fmt(r.home + r.away), align: 'right' },
+                { key: 'share', label: 'SHARE', value: r => (troops ? troopCount(r) / troops : 0), render: r => pct(troops ? (troopCount(r) / troops) * 100 : null), align: 'right' },
               ]} rows={army} />
             </Panel>
           </Grid>
