@@ -167,7 +167,6 @@ export async function GET(request: Request) {
         game_year: row.game_year,
         game_tick: row.game_tick,
         retention_class: row.retention_class,
-        expires_at: row.expires_at,
         raw_text: row.raw_text,
         payload: parsed,
         summary: describeRecord(row, parsed),
