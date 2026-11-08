@@ -91,9 +91,19 @@ export function buildThieveryModel(records: Rec[]) {
   const uniques = latest ? [...norm(latest.raw_text).matchAll(/^(.+?) - (Race|Personality) Passive Effect/gm)].map(m => ({ name: clean(m[1]), kind: m[2] })) : []
 
   const pageHeader = latest ? parseThieveryHeader(latest.raw_text || '') : null
-  const header = (pageHeader || throneData) ? { ...pageHeader, thieves: pageHeader?.thieves ?? thiefCount, tpa: rawTpa ?? pageHeader?.tpa ?? null, rawTpa: rawTpa ?? pageHeader?.tpa ?? null, modifiedTpa: null, acres, ratioSource: throne ? 'Throne capture · wiki raw TPA formula' : pageHeader ? 'Thievery capture' : null, ratioAt: throne ? when(throne) : latest ? when(latest) : null } : null
+  const throneIsNewer = Boolean(throne && (!latest || ts(throne) >= ts(latest)))
+  const header = (pageHeader || throneData) ? {
+    ...pageHeader,
+    thieves: thiefCount ?? pageHeader?.thieves,
+    tpa: rawTpa ?? pageHeader?.tpa ?? null,
+    rawTpa: rawTpa ?? pageHeader?.tpa ?? null,
+    modifiedTpa: null, acres,
+    stealth: throneIsNewer ? null : pageHeader?.stealth ?? null,
+    ratioSource: throne ? 'Throne capture · wiki raw TPA formula' : pageHeader ? 'Thievery capture' : null,
+    ratioAt: throne ? when(throne) : latest ? when(latest) : null,
+  } : null
   return {
-    capturedAt: latest ? when(latest) : throne ? when(throne) : null,
+    capturedAt: throneIsNewer ? when(throne!) : latest ? when(latest) : throne ? when(throne) : null,
     header,
     uniques,
     ops: opsSrc ? { at: when(opsSrc), intel: ops.filter(isIntel), hostile: ops.filter(o => !isIntel(o)) } : null,
