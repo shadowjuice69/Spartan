@@ -176,6 +176,28 @@ export function parseMilitary(text: string) {
   }
 }
 
+/**
+ * Reads the unit names and base Off/Def values from the Training page.
+ * The wiki's Age 117 race unit table supplies the mechanics; the game capture
+ * supplies each province's actual unit names and their Off/Def classification.
+ */
+export function parseTrainingUnits(text: string) {
+  const rows: Array<{ name: string; offense: number; defense: number; owned: number; training: number; role: string }> = []
+  const re = /([A-Za-z][A-Za-z' ]*?)[\s\uFFFD]*\((\d+)\/(\d+)\)[\s\uFFFD]+([\d,]+)[\s\uFFFD]+([\d,]+)/g
+  for (const m of String(text || '').matchAll(re)) {
+    const name = clean(m[1])
+    const offense = toNum(m[2]) ?? 0
+    const defense = toNum(m[3]) ?? 0
+    const owned = toNum(m[4]) ?? 0
+    const training = toNum(m[5]) ?? 0
+    const role = offense > 0 && defense === 0 ? 'Offensive specs'
+      : offense === 0 && defense > 0 ? 'Defensive specs'
+      : offense > 0 && defense > 0 ? 'Elites' : 'Other'
+    if (role !== 'Other') rows.push({ name, offense, defense, owned, training, role })
+  }
+  return rows
+}
+
 /* -------------------------------------------------------------------- state */
 
 const TREND_LABELS = ['Our Income', 'Military Wages', 'Draft Costs', 'Net Change', 'Peasants', 'Food Grown', 'Food Needed', 'Food Decayed', 'Runes Produced', 'Runes Decayed']
