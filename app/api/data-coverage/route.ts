@@ -9,6 +9,7 @@ const DISPLAY_DESTINATIONS: Record<string, string[]> = {
   science: ['Science', 'Science Summary', 'Province History', 'Intel Vertical / Science'],
   som: ['Military', 'War Room', 'Return Tracker', 'Province History'],
   magic: ['Magic', 'War Room', 'Intel Vertical / Magic'],
+  aid: ['Aid', 'Intel Vertical / Aid', 'News', 'War Room'],
   thievery: ['Thievery', 'War Room', 'Intel Vertical / Thievery'],
   news: ['News', 'War Room', 'Event History'],
   attack: ['News', 'War Room', 'Enemy Intel', 'Event History'],
