@@ -33,7 +33,7 @@ test('Discord bot_event flows pass integrity without a province projection', asy
 });
 
 
-const { mergeProjectionState, isStructuredGameIntelMessage } = require('../services/spartanQueueProcessor');
+const { mergeProjectionState, isStructuredGameIntelMessage, extractBotOperationMarkers } = require('../services/spartanQueueProcessor');
 
 test('legacy bot-event projection fields are discarded when a real page arrives', () => {
   const merged = mergeProjectionState(
@@ -103,4 +103,8 @@ test('moneybag bot transfers are recognized as structured Aid Intel', () => {
 test('ordinary bot chat and status messages remain excluded from structured Intel', () => {
   assert.equal(isStructuredGameIntelMessage('Updated aid list'), false);
   assert.equal(isStructuredGameIntelMessage('15k off'), false);
+});
+
+test('operation markers include target-qualified Magic and Thievery reports', () => {
+  assert.deepEqual(extractBotOperationMarkers(':detective::green_heart: Ding-dong shrugste# <<__rob the vaults__ **| switch (6:1)**>> **13233**|400 sent (0.46)\\n:comet::broken_heart: Evelyn vyciou# <<__pitfalls__ **| A target (3:8)**>> __FAIL__ (-8 wizards)'), ['rob the vaults', 'pitfalls']);
 });
