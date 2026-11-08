@@ -320,7 +320,7 @@ async function buildCommandModel(db: any, userId: string, account: { id: string;
     grab('buildings', KINDS.buildings, '%/wol/game/council_internal%', '/wol/game/council_internal'),
     latestOf(db, KINDS.kingdom, '%/wol/game/kingdom_details%', '/wol/game/kingdom_details', kingdomScope, 8).then(rows => rows || []),
     db.from('spartan_province_history')
-      .select('observed_at,acres,networth,population,peons,soldiers,off_specs,def_specs,elites,thieves,wizards,generals,war_horses,offense,defense,defense_home,build_efficiency,wages')
+      .select('observed_at,acres,networth,population,peons,soldiers,off_specs,def_specs,elites,thieves,wizards,generals,war_horses,offense,defense,defense_home,build_efficiency,wages,r_tpa,o_tpa,d_tpa,r_wpa,o_wpa,d_wpa')
       .eq('user_id', userId).order('observed_at', { ascending: true }).limit(240),
     db.from('spartan_event_history')
       .select('occurred_at,event_type,source,attacker,defender,target_kingdom,acres_change,troops_lost,thieves_lost,wizards_lost,gold_change,food_change,runes_change')
@@ -434,6 +434,12 @@ export async function GET(request: Request) {
           || (loggedAge === currentAge ? latestAgeLog.data?.created_at : null)
           || null
       }
+    } else if (['province', 'military', 'war-room'].includes(page)) {
+      // Retained throne captures are age-scoped; never mix a prior age into the live history chart.
+      const ageLog = await db.from('spartan_age_log')
+        .select('created_at').order('created_at', { ascending: false }).limit(1).maybeSingle()
+      if (ageLog.error) fail(ageLog.error)
+      ageStartedAt = ageLog.data?.created_at || null
     }
 
     // The Intel grid has its own compact grid query below. Avoid fetching the same
@@ -456,19 +462,81 @@ export async function GET(request: Request) {
       })
     }
 
-    // Time series of the province's own numbers (one row per throne visit).
-    // Only pages that render province-history charts need the full series.
-    // War Room needs only the latest acreage snapshot; other pages should not
-    // repeatedly transfer 240 rows they never display.
+    // Time series of the province's own numbers. UtopiaIntel receipts are retained
+    // in the capture vault but do not create spartan_province_history rows, so derive
+    // missing snapshots from those saved Throne captures at read-time. This is a
+    // display-only bridge: it does not change the capture or processing pipeline.
+    // Age scoping prevents old-age captures from leaking into the current chart.
     let history: any[] = []
     if (['province', 'military', 'war-room'].includes(page)) {
-      const historyResult = await db
-        .from('spartan_province_history')
+      const historyQuery = db.from('spartan_province_history')
         .select('observed_at,acres,networth,population,peons,soldiers,off_specs,def_specs,elites,thieves,wizards,generals,war_horses,offense,defense,defense_home,build_efficiency,wages')
         .eq('user_id', user.id)
-        .order('observed_at', { ascending: page !== 'war-room' })
-        .limit(page === 'war-room' ? 1 : 240)
-      history = historyResult.error ? [] : historyResult.data || []
+      const scopedHistoryQuery = ageStartedAt ? historyQuery.gte('observed_at', ageStartedAt) : historyQuery
+      const [historyResult, throneCaptureResult] = await Promise.all([
+        scopedHistoryQuery
+          .order('observed_at', { ascending: page !== 'war-room' })
+          .limit(page === 'war-room' ? 1 : 300),
+        ageStartedAt
+          ? db.from('spartan_capture_vault')
+              .select('captured_at,raw_text,parsed_payload')
+              .eq('user_id', account.id)
+              .eq('province_id', account.id)
+              .eq('kingdom_id', account.province_location)
+              .eq('page_kind', 'throne')
+              .gte('captured_at', ageStartedAt)
+              .order('captured_at', { ascending: false })
+              .limit(300)
+          : Promise.resolve({ data: [], error: null }),
+      ])
+      const storedHistory = historyResult.error ? [] : historyResult.data || []
+      const derivedHistory: any[] = (throneCaptureResult.error ? [] : throneCaptureResult.data || [])
+        .map((capture: any) => {
+          const parsed = parseThrone(String(capture.raw_text || capture.parsed_payload?.data_simple || ''))
+          if (parsed.acres == null && parsed.networth == null) return null
+          return {
+            observed_at: capture.captured_at,
+            acres: parsed.acres,
+            networth: parsed.networth,
+            peons: parsed.peons,
+            soldiers: parsed.soldiers,
+            off_specs: parsed.offSpecs,
+            def_specs: parsed.defSpecs,
+            elites: parsed.elites,
+            thieves: parsed.thieves,
+            wizards: parsed.wizards,
+            war_horses: parsed.war_horses,
+            prisoners: parsed.prisoners,
+            offense: parsed.offense,
+            defense: parsed.defense,
+            // Throne reports the raw per-acre TPA/WPA and, where available,
+            // the specialist offense/defense ratios. Keep reported values distinct
+            // from any later calculated or estimated effectiveness values.
+            r_tpa: parsed.ratios?.thievesPerAcre ?? null,
+            r_wpa: parsed.ratios?.wizardsPerAcre ?? null,
+            off_spa: parsed.ratios?.offSpa ?? (parsed.acres != null && parsed.acres > 0 && parsed.offSpecs != null ? parsed.offSpecs / parsed.acres : null),
+            def_spa: parsed.ratios?.defSpa ?? (parsed.acres != null && parsed.acres > 0 && parsed.defSpecs != null ? parsed.defSpecs / parsed.acres : null),
+            build_efficiency: parsed.buildingEfficiency,
+            source: 'spartan_capture_vault',
+          }
+        })
+        .filter((row: any) => row && row.observed_at)
+      const byTimestamp = new Map<string, any>()
+      for (const row of storedHistory) byTimestamp.set(String(row.observed_at), { ...row })
+      for (const snapshot of derivedHistory) {
+        const key = String(snapshot.observed_at)
+        const existing = byTimestamp.get(key)
+        if (!existing) {
+          byTimestamp.set(key, snapshot)
+          continue
+        }
+        for (const [field, value] of Object.entries(snapshot)) {
+          if (existing[field] == null && value != null) existing[field] = value
+        }
+      }
+      const mergedHistory = [...byTimestamp.values()]
+        .sort((a, b) => Date.parse(a.observed_at) - Date.parse(b.observed_at))
+      history = page === 'war-room' ? mergedHistory.slice(-1) : mergedHistory.slice(-300)
     }
 
     const body: any = {

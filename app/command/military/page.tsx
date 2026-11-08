@@ -13,7 +13,8 @@ export default function MilitaryPage() {
   const m = data?.model
   const cur = m?.current
   const history: any[] = data?.history || []
-  const acres = m?.acres ?? (history.length ? history[history.length - 1].acres : null)
+  const latestHistory = history.length ? history[history.length - 1] : null
+  const acres = m?.acres ?? (latestHistory ? latestHistory.acres : null)
   const army: any[] = cur?.army || []
   const troops = army.reduce((s, u) => s + u.home + u.away, 0)
   const opa = cur?.offPoints != null && acres ? cur.offPoints / acres : null
@@ -44,6 +45,13 @@ export default function MilitaryPage() {
             <Stat label="Defense at home" value={cur.defPoints} sub={dpa != null ? `${dpa.toFixed(1)} DPA` : undefined} color={C.cyan} delay={1} />
             <Stat label="Total troops" value={troops} sub={`${cur.generals ?? '—'} generals`} color={C.lime} delay={2} />
             <Stat label="Acres" value={acres} sub={m.networth ? `${compact(m.networth)} networth` : undefined} color={C.violet} delay={3} />
+          </Grid>
+
+          <Grid>
+            <Stat label="OSPA" value={latestHistory?.off_spa} format={v => Number(v).toFixed(2)} sub="Offensive specialists per acre" color={C.red} delay={0} />
+            <Stat label="DSPA" value={latestHistory?.def_spa} format={v => Number(v).toFixed(2)} sub="Defensive specialists per acre" color={C.cyan} delay={1} />
+            <Stat label="Specialists" value={(latestHistory?.off_specs ?? 0) + (latestHistory?.def_specs ?? 0) || null} sub="Offensive + defensive specialist count" color={C.violet} delay={2} />
+            <Stat label="Snapshot" value={null} text={latestHistory?.observed_at ? ago(latestHistory.observed_at) : '—'} sub="Latest retained Throne snapshot" color={C.lime} delay={3} />
           </Grid>
 
           <Grid>
