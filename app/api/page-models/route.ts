@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import {
   parseBuildings, parseScience, parseMilitary, parseState, parseThrone, parseKingdomDetails,
-  parseGridRows, pathOf, toNum,
+  parseGridRows, pathOf, toNum, parseTrainingUnits,
 } from '@/lib/spartan/page-models'
 import { mergeNews, findGameDate, realTimeOf, sideOf, dayIndex, party as parseNewsParty } from '@/lib/spartan/kingdom-news'
 import { parseThroneText } from '@/lib/spartan/throne-text'
@@ -414,7 +414,7 @@ export async function GET(request: Request) {
     // after the recorded start of that age; if the age/reset marker is unavailable, fail closed.
     let currentAge: number | null = null
     let ageStartedAt: string | null = null
-    if (page === 'science') {
+    if (['science', 'province', 'military', 'war-room', 'magic', 'thievery', 'throne'].includes(page)) {
       const [ageSetting, latestAgeLog] = await Promise.all([
         db.from('bot_settings').select('value').eq('key', 'current_age').maybeSingle(),
         db.from('spartan_age_log').select('new_age,created_at').order('created_at', { ascending: false }).limit(1).maybeSingle(),
@@ -434,12 +434,6 @@ export async function GET(request: Request) {
           || (loggedAge === currentAge ? latestAgeLog.data?.created_at : null)
           || null
       }
-    } else if (['province', 'military', 'war-room'].includes(page)) {
-      // Retained throne captures are age-scoped; never mix a prior age into the live history chart.
-      const ageLog = await db.from('spartan_age_log')
-        .select('created_at').order('created_at', { ascending: false }).limit(1).maybeSingle()
-      if (ageLog.error) fail(ageLog.error)
-      ageStartedAt = ageLog.data?.created_at || null
     }
 
     // The Intel grid has its own compact grid query below. Avoid fetching the same
@@ -453,13 +447,28 @@ export async function GET(request: Request) {
         (r.source !== 'discord-bot' || isStructuredBotIntelText(r.raw_text))
       )
     }
-    if (page === 'science') {
+    if (['science', 'province', 'military', 'war-room', 'magic', 'thievery', 'throne'].includes(page)) {
       const startMs = ageStartedAt ? Date.parse(ageStartedAt) : NaN
       records = currentAge === null ? [] : records.filter((r) => {
         const capturedMs = Date.parse(when(r))
         if (r.age != null && Number.isFinite(Number(r.age))) return Number(r.age) === currentAge && Number.isFinite(startMs) && Number.isFinite(capturedMs) && capturedMs >= startMs
         return Number.isFinite(startMs) && Number.isFinite(capturedMs) && capturedMs >= startMs
       })
+    }
+
+    // Magic, Thievery and Military also need the province's latest Throne counts for the
+    // wiki-defined raw per-acre ratios. Fetch a bounded, separate series so
+    // thousands of Throne captures cannot crowd out spell/operation captures
+    // from the normal 90-record page query.
+    if (['magic', 'thievery', 'military'].includes(page)) {
+      const throneQuery = db.from('spartan_intel_records').select(COLUMNS)
+        .eq('page_kind', 'throne').ilike('url', '%/wol/game/throne%').or(scope)
+      const scopedThroneQuery = ageStartedAt ? throneQuery.gte('captured_at', ageStartedAt) : throneQuery
+      const throneResult = await scopedThroneQuery.order('created_at', { ascending: false }).limit(40)
+      if (throneResult.error) fail(throneResult.error)
+      const throneRows = ((throneResult.data || []) as Rec[])
+        .filter(r => r.raw_text && pathOf(r.url) === '/wol/game/throne')
+      records.push(...throneRows)
     }
 
     // Time series of the province's own numbers. UtopiaIntel receipts are retained
@@ -490,32 +499,47 @@ export async function GET(request: Request) {
           : Promise.resolve({ data: [], error: null }),
       ])
       const storedHistory = historyResult.error ? [] : historyResult.data || []
+      const trainingDefs = page === 'military'
+        ? parseTrainingUnits(latestByPath(records, '/wol/game/train_army')?.raw_text || '')
+        : []
       const derivedHistory: any[] = (throneCaptureResult.error ? [] : throneCaptureResult.data || [])
         .map((capture: any) => {
           const parsed = parseThrone(String(capture.raw_text || capture.parsed_payload?.data_simple || ''))
           if (parsed.acres == null && parsed.networth == null) return null
+          const countForRole = (role: string) => {
+            const units = trainingDefs.filter(unit => unit.role === role)
+            const counts = units.map(unit => toNum(parsed.unitCounts?.[unit.name]))
+            return units.length > 0 && counts.every(value => value != null)
+              ? counts.reduce((sum, value) => sum + (value ?? 0), 0)
+              : null
+          }
+          const offSpecs = parsed.offSpecs ?? (trainingDefs.length ? countForRole('Offensive specs') : null)
+          const defSpecs = parsed.defSpecs ?? (trainingDefs.length ? countForRole('Defensive specs') : null)
+          const elites = parsed.elites ?? (trainingDefs.length ? countForRole('Elites') : null)
           return {
             observed_at: capture.captured_at,
             acres: parsed.acres,
             networth: parsed.networth,
             peons: parsed.peons,
             soldiers: parsed.soldiers,
-            off_specs: parsed.offSpecs,
-            def_specs: parsed.defSpecs,
-            elites: parsed.elites,
+            off_specs: offSpecs,
+            def_specs: defSpecs,
+            elites,
             thieves: parsed.thieves,
             wizards: parsed.wizards,
             war_horses: parsed.war_horses,
             prisoners: parsed.prisoners,
             offense: parsed.offense,
             defense: parsed.defense,
-            // Throne reports the raw per-acre TPA/WPA and, where available,
-            // the specialist offense/defense ratios. Keep reported values distinct
-            // from any later calculated or estimated effectiveness values.
-            r_tpa: parsed.ratios?.thievesPerAcre ?? null,
-            r_wpa: parsed.ratios?.wizardsPerAcre ?? null,
-            off_spa: parsed.ratios?.offSpa ?? (parsed.acres != null && parsed.acres > 0 && parsed.offSpecs != null ? parsed.offSpecs / parsed.acres : null),
-            def_spa: parsed.ratios?.defSpa ?? (parsed.acres != null && parsed.acres > 0 && parsed.defSpecs != null ? parsed.defSpecs / parsed.acres : null),
+            // Throne reports troop counts and home combat points. Derive raw TPA/WPA
+            // and OSPA/DSPA (reported offense/defense points per acre) separately;
+            // keep specialist counts distinct from combat-strength ratios.
+            r_tpa: parsed.ratios?.thievesPerAcre ?? (parsed.acres != null && parsed.acres > 0 && parsed.thieves != null ? parsed.thieves / parsed.acres : null),
+            r_wpa: parsed.ratios?.wizardsPerAcre ?? (parsed.acres != null && parsed.acres > 0 && parsed.wizards != null ? parsed.wizards / parsed.acres : null),
+            off_spa: parsed.ratios?.offSpa ?? (parsed.acres != null && parsed.acres > 0 && parsed.offense != null ? parsed.offense / parsed.acres : null),
+            def_spa: parsed.ratios?.defSpa ?? (parsed.acres != null && parsed.acres > 0 && parsed.defense != null ? parsed.defense / parsed.acres : null),
+            off_specs_per_acre: parsed.acres != null && parsed.acres > 0 && offSpecs != null ? offSpecs / parsed.acres : null,
+            def_specs_per_acre: parsed.acres != null && parsed.acres > 0 && defSpecs != null ? defSpecs / parsed.acres : null,
             build_efficiency: parsed.buildingEfficiency,
             source: 'spartan_capture_vault',
           }
@@ -549,11 +573,52 @@ export async function GET(request: Request) {
       const councils = allByPath(records, '/wol/game/council_military')
       const latest = councils[0] || null
       const train = latestByPath(records, '/wol/game/train_army')
+      const throneRec = allByPath(records, '/wol/game/throne')[0] || null
+      const throne = throneRec?.raw_text ? parseThrone(throneRec.raw_text) : null
+      const trainingUnits = train?.raw_text ? parseTrainingUnits(train.raw_text) : []
+      const countForRole = (role: string) => {
+        const units = trainingUnits.filter(unit => unit.role === role)
+        const counts = units.map(unit => toNum(throne?.unitCounts?.[unit.name]))
+        return units.length > 0 && counts.every(value => value != null)
+          ? counts.reduce((sum, value) => sum + (value ?? 0), 0)
+          : null
+      }
+      const offSpecs = throne ? (throne.offSpecs ?? (trainingUnits.length ? countForRole('Offensive specs') : null)) : null
+      const defSpecs = throne ? (throne.defSpecs ?? (trainingUnits.length ? countForRole('Defensive specs') : null)) : null
+      const elites = throne ? (throne.elites ?? (trainingUnits.length ? countForRole('Elites') : null)) : null
+      const acresNow = throne?.acres ?? null
+      const armyFromThrone = throne ? [
+        ...(throne.soldiers != null ? [{ name: 'Soldiers', home: throne.soldiers, away: null, role: 'Soldiers' }] : []),
+        ...trainingUnits
+          .filter(unit => throne.unitCounts?.[unit.name] != null)
+          .map(unit => ({
+            name: unit.name,
+            home: toNum(throne.unitCounts?.[unit.name]) ?? 0,
+            away: null,
+            role: unit.role,
+          })),
+      ] : []
+      // Throne reports current home Off./Def. Points. Training-page unit stats
+      // classify raw specialist counts; no modified ME/OME/DME is inferred.
+      const parsedCurrent = latest?.raw_text ? parseMilitary(latest.raw_text) : null
+      const throneIsNewer = Boolean(throne && throneRec && (!latest || Date.parse(when(throneRec)) >= Date.parse(when(latest))))
+      const throneCurrent = throne ? {
+        source: 'throne', generals: null, wageRate: null, efficiency: null, nonPeasantPct: null,
+        offEff: null, offPoints: throne.offense, defEff: null, defPoints: throne.defense,
+        army: armyFromThrone, horses: throne.war_horses, offSpecs, defSpecs, elites,
+        offSpa: acresNow && throne.offense != null ? throne.offense / acresNow : null,
+        defSpa: acresNow && throne.defense != null ? throne.defense / acresNow : null,
+      } : null
+      const current = throneIsNewer ? throneCurrent : parsedCurrent
+        ? { ...parsedCurrent, offSpecs, defSpecs, elites,
+            offSpa: parsedCurrent.offPoints != null && acresNow ? parsedCurrent.offPoints / acresNow : null,
+            defSpa: parsedCurrent.defPoints != null && acresNow ? parsedCurrent.defPoints / acresNow : null }
+        : throneCurrent
       body.model = {
-        current: latest?.raw_text ? parseMilitary(latest.raw_text) : null,
-        capturedAt: latest ? when(latest) : null,
-        acres: toNum(latest?.parsed_payload?.acres) ?? toNum(train?.parsed_payload?.acres),
-        networth: toNum(latest?.parsed_payload?.networth) ?? toNum(train?.parsed_payload?.networth),
+        current,
+        capturedAt: throneIsNewer ? when(throneRec!) : latest ? when(latest) : throneRec ? when(throneRec) : null,
+        acres: throneIsNewer ? throne?.acres ?? toNum(latest?.parsed_payload?.acres) ?? toNum(train?.parsed_payload?.acres) : toNum(latest?.parsed_payload?.acres) ?? toNum(train?.parsed_payload?.acres) ?? throne?.acres,
+        networth: throneIsNewer ? throne?.networth ?? toNum(latest?.parsed_payload?.networth) ?? toNum(train?.parsed_payload?.networth) : toNum(latest?.parsed_payload?.networth) ?? toNum(train?.parsed_payload?.networth) ?? throne?.networth,
         training: train ? { ...train.parsed_payload, capturedAt: when(train) } : null,
         series: councils.slice().reverse().map(r => {
           const m = parseMilitary(r.raw_text || '')
@@ -567,10 +632,11 @@ export async function GET(request: Request) {
       const councils = allByPath(records, '/wol/game/council_science')
       const latest = councils[0] || null
       const sciencePage = latestByPath(records, '/wol/game/science')
-      body.scienceStatus = { currentAge, hasCurrentAgeData: Boolean(latest), message: latest ? null : 'No current-age science data' }
+      const source = latest || sciencePage
+      body.scienceStatus = { currentAge, hasCurrentAgeData: Boolean(source), message: source ? null : 'No current-age science data' }
       body.model = {
-        current: latest?.raw_text ? parseScience(latest.raw_text) : null,
-        capturedAt: latest ? when(latest) : null,
+        current: source?.raw_text ? parseScience(source.raw_text) : null,
+        capturedAt: source ? when(source) : null,
         nextScientist: sciencePage?.parsed_payload?.category_for_next_scientist || null,
         series: councils.slice().reverse().map(r => {
           const s = parseScience(r.raw_text || '')
