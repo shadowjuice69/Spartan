@@ -39,6 +39,8 @@ test('application consumers use the archive-aware Intel read view', () => {
   const intelData = fs.readFileSync(path.join(__dirname, '../../app/api/intel-data/route.ts'), 'utf8')
   const coverage = fs.readFileSync(path.join(__dirname, '../../app/api/data-coverage/route.ts'), 'utf8')
   for (const source of [pageModels, intelData, coverage]) assert.match(source, /spartan_intel_records_with_archive/)
+  assert.match(coverage, /from\('spartan_operational_archive'\)/)
+  assert.match(coverage, /record->>user_id/)
 })
 
 test('Aid has a dedicated page consumer', () => {
