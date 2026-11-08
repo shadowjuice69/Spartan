@@ -83,7 +83,7 @@ export function buildMagicModel(records: Rec[]) {
   const pageHeader = wiz[0] ? parseMagicHeader(wiz[0].raw_text || '') : null
   const throneIsNewer = Boolean(throne && (!wiz[0] || ts(throne) >= ts(wiz[0])))
   const header = (pageHeader || throneData) ? {
-    ...pageHeader,
+    ...(pageHeader || {}),
     wizards: throneIsNewer ? wizardCount ?? pageHeader?.wizards : pageHeader?.wizards ?? wizardCount,
     runes: throneIsNewer ? throneData?.runes ?? pageHeader?.runes : pageHeader?.runes ?? throneData?.runes,
     mana: throneIsNewer ? null : pageHeader?.mana ?? null,
