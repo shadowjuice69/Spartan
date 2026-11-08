@@ -91,3 +91,20 @@ test('vault-only historical bot records are clearly marked archived', () => {
   }]);
   assert.equal(rows[0].archived, true);
 });
+
+test('Aid vertical reads moneybag bot transfers from raw vault evidence', () => {
+  const route = fs.readFileSync('app/api/intel-data/route.ts', 'utf8');
+  assert.match(route, /parseBotAidTransfers/);
+  assert.match(route, /vault-readthrough/);
+  assert.match(route, /:moneybag:/);
+});
+test('shared Intel keeps the current account own-visibility records', () => {
+  const route = fs.readFileSync('app/api/intel-data/route.ts', 'utf8');
+  assert.match(route, /row\.user_id !== user\.id && row\.user_id !== account\.id/);
+});
+test('Magic and Thievery pages can read historical vault-only bot captures without replay', () => {
+  const route = fs.readFileSync('app/api/page-models/route.ts', 'utf8');
+  assert.match(route, /from\('spartan_capture_vault'\)/);
+  assert.match(route, /vaultOnlyRows/);
+  assert.match(route, /source_vault_id: r\.id/);
+});
