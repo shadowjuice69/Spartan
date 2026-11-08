@@ -70,7 +70,8 @@ export function buildThieveryModel(records: Rec[]) {
   const plain = pages.filter(r => !isOp(r))
 
   const latest = pages.find(r => parseThieveryHeader(r.raw_text || '')) || null
-  const throne = records.filter(r => r.raw_text && pathOf(r.url) === '/wol/game/throne').sort((a, b) => ts(b) - ts(a))[0] || null
+  const throneRows = records.filter(r => r.raw_text && pathOf(r.url) === '/wol/game/throne').sort((a, b) => ts(b) - ts(a))
+  const throne = throneRows[0] || null
   const throneData = throne ? parseThrone(throne.raw_text || '') : null
   const acres = throneData?.acres ?? null
   const thiefCount = throneData?.thieves ?? null
@@ -100,8 +101,8 @@ export function buildThieveryModel(records: Rec[]) {
     forbidden: noteSrc ? noteList(norm(noteSrc.raw_text), /^([^\n.]*?) operations? (?:are|is) forbidden for diplomatic reasons/m) : [],
     targets: targetSrc ? { at: when(targetSrc), ...parseThieveryTargets(targetSrc.raw_text || '') } : null,
     results,
-    series: pages.map(r => ({ r, h: parseThieveryHeader(r.raw_text || '') })).filter(x => x.h).slice(0, 60).reverse()
-      .map(x => ({ at: when(x.r), thieves: x.h!.thieves, tpa: x.h!.tpa, stealth: x.h!.stealth })),
+    series: [...pages.map(r => ({ r, h: parseThieveryHeader(r.raw_text || ''), t: null as ReturnType<typeof parseThrone> | null })), ...throneRows.slice(0, 40).map(r => ({ r, h: null, t: parseThrone(r.raw_text || '') }))].sort((a, b) => ts(a.r) - ts(b.r)).slice(-60)
+      .map(x => ({ at: when(x.r), thieves: x.h?.thieves ?? x.t?.thieves ?? null, tpa: x.t?.acres != null && x.t.acres > 0 && x.t.thieves != null ? x.t.thieves / x.t.acres : x.h?.tpa ?? null, rawTpa: x.t?.acres != null && x.t.acres > 0 && x.t.thieves != null ? x.t.thieves / x.t.acres : x.h?.tpa ?? null, stealth: x.h?.stealth ?? null })),
     captures: { pages: plain.length, ops: results.length },
   }
 }
