@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import {
   parseBuildings, parseScience, parseMilitary, parseState, parseThrone, parseKingdomDetails,
-  parseGridRows, pathOf, toNum,
+  parseGridRows, pathOf, toNum, parseTrainingUnits,
 } from '@/lib/spartan/page-models'
 import { mergeNews, findGameDate, realTimeOf, sideOf, dayIndex, party as parseNewsParty } from '@/lib/spartan/kingdom-news'
 import { parseThroneText } from '@/lib/spartan/throne-text'
@@ -504,19 +504,28 @@ export async function GET(request: Request) {
           : Promise.resolve({ data: [], error: null }),
       ])
       const storedHistory = historyResult.error ? [] : historyResult.data || []
+      const trainingDefs = page === 'military'
+        ? parseTrainingUnits(latestByPath(records, '/wol/game/train_army')?.raw_text || '')
+        : []
       const derivedHistory: any[] = (throneCaptureResult.error ? [] : throneCaptureResult.data || [])
         .map((capture: any) => {
           const parsed = parseThrone(String(capture.raw_text || capture.parsed_payload?.data_simple || ''))
           if (parsed.acres == null && parsed.networth == null) return null
+          const countForRole = (role: string) => trainingDefs
+            .filter(unit => unit.role === role)
+            .reduce((sum, unit) => sum + (toNum(parsed.unitCounts?.[unit.name]) ?? 0), 0)
+          const offSpecs = parsed.offSpecs ?? (trainingDefs.length ? countForRole('Offensive specs') : null)
+          const defSpecs = parsed.defSpecs ?? (trainingDefs.length ? countForRole('Defensive specs') : null)
+          const elites = parsed.elites ?? (trainingDefs.length ? countForRole('Elites') : null)
           return {
             observed_at: capture.captured_at,
             acres: parsed.acres,
             networth: parsed.networth,
             peons: parsed.peons,
             soldiers: parsed.soldiers,
-            off_specs: parsed.offSpecs,
-            def_specs: parsed.defSpecs,
-            elites: parsed.elites,
+            off_specs: offSpecs,
+            def_specs: defSpecs,
+            elites,
             thieves: parsed.thieves,
             wizards: parsed.wizards,
             war_horses: parsed.war_horses,
@@ -526,10 +535,10 @@ export async function GET(request: Request) {
             // Throne reports the raw per-acre TPA/WPA and, where available,
             // the specialist offense/defense ratios. Keep reported values distinct
             // from any later calculated or estimated effectiveness values.
-            r_tpa: parsed.ratios?.thievesPerAcre ?? null,
-            r_wpa: parsed.ratios?.wizardsPerAcre ?? null,
-            off_spa: parsed.ratios?.offSpa ?? (parsed.acres != null && parsed.acres > 0 && parsed.offSpecs != null ? parsed.offSpecs / parsed.acres : null),
-            def_spa: parsed.ratios?.defSpa ?? (parsed.acres != null && parsed.acres > 0 && parsed.defSpecs != null ? parsed.defSpecs / parsed.acres : null),
+            r_tpa: parsed.ratios?.thievesPerAcre ?? (parsed.acres != null && parsed.acres > 0 && parsed.thieves != null ? parsed.thieves / parsed.acres : null),
+            r_wpa: parsed.ratios?.wizardsPerAcre ?? (parsed.acres != null && parsed.acres > 0 && parsed.wizards != null ? parsed.wizards / parsed.acres : null),
+            off_spa: parsed.ratios?.offSpa ?? (parsed.acres != null && parsed.acres > 0 && offSpecs != null ? offSpecs / parsed.acres : null),
+            def_spa: parsed.ratios?.defSpa ?? (parsed.acres != null && parsed.acres > 0 && defSpecs != null ? defSpecs / parsed.acres : null),
             build_efficiency: parsed.buildingEfficiency,
             source: 'spartan_capture_vault',
           }
@@ -565,14 +574,37 @@ export async function GET(request: Request) {
       const train = latestByPath(records, '/wol/game/train_army')
       const throneRec = allByPath(records, '/wol/game/throne')[0] || null
       const throne = throneRec?.raw_text ? parseThrone(throneRec.raw_text) : null
-      // Throne reports the province's current home Off./Def. Points. Use those
-      // as a read-only fallback when no Council → Military page has been captured;
-      // do not invent ME/OME/DME or army-role breakdowns.
-      const current = latest?.raw_text ? parseMilitary(latest.raw_text) : throne ? {
-        generals: null, wageRate: null, efficiency: null, nonPeasantPct: null,
-        offEff: null, offPoints: throne.offense, defEff: null, defPoints: throne.defense,
-        army: [], horses: throne.war_horses,
-      } : null
+      const trainingUnits = train?.raw_text ? parseTrainingUnits(train.raw_text) : []
+      const countForRole = (role: string) => trainingUnits
+        .filter(unit => unit.role === role)
+        .reduce((sum, unit) => sum + (toNum(throne?.unitCounts?.[unit.name]) ?? 0), 0)
+      const offSpecs = throne ? (throne.offSpecs ?? (trainingUnits.length ? countForRole('Offensive specs') : null)) : null
+      const defSpecs = throne ? (throne.defSpecs ?? (trainingUnits.length ? countForRole('Defensive specs') : null)) : null
+      const elites = throne ? (throne.elites ?? (trainingUnits.length ? countForRole('Elites') : null)) : null
+      const acresNow = throne?.acres ?? null
+      const armyFromThrone = throne ? [
+        ...(throne.soldiers != null ? [{ name: 'Soldiers', home: throne.soldiers, away: 0, role: 'Soldiers' }] : []),
+        ...trainingUnits.map(unit => ({
+          name: unit.name,
+          home: toNum(throne.unitCounts?.[unit.name]) ?? unit.owned,
+          away: 0,
+          role: unit.role,
+        })),
+      ] : []
+      // Throne reports current home Off./Def. Points. Training-page unit stats
+      // classify raw specialist counts; no modified ME/OME/DME is inferred.
+      const parsedCurrent = latest?.raw_text ? parseMilitary(latest.raw_text) : null
+      const current = parsedCurrent
+        ? { ...parsedCurrent, offSpecs, defSpecs, elites,
+            offSpa: acresNow && offSpecs != null ? offSpecs / acresNow : null,
+            defSpa: acresNow && defSpecs != null ? defSpecs / acresNow : null }
+        : throne ? {
+            generals: null, wageRate: null, efficiency: null, nonPeasantPct: null,
+            offEff: null, offPoints: throne.offense, defEff: null, defPoints: throne.defense,
+            army: armyFromThrone, horses: throne.war_horses, offSpecs, defSpecs, elites,
+            offSpa: acresNow && offSpecs != null ? offSpecs / acresNow : null,
+            defSpa: acresNow && defSpecs != null ? defSpecs / acresNow : null,
+          } : null
       body.model = {
         current,
         capturedAt: latest ? when(latest) : throneRec ? when(throneRec) : null,
