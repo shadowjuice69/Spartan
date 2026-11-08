@@ -30,8 +30,8 @@ const KINDS: Record<string, string[]> = {
   throne: ['throne'],
   intel: ['intel'],
   exploration: ['exploration'],
-  magic: ['magic', 'ritual', 'council_spells'],
-  thievery: ['thievery'],
+  magic: ['magic', 'ritual', 'council_spells', 'throne'],
+  thievery: ['thievery', 'throne'],
   command: [], // built by buildCommandModel below, not by the generic query
 }
 
