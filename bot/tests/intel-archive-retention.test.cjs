@@ -9,9 +9,11 @@ const migration = fs.readFileSync(
 )
 
 test('expired Intel is archived before cleanup deletes it', () => {
-  const archiveAt = migration.indexOf("insert into public.spartan_operational_archive (source_table, source_id, archived_at, record)")
-  const deleteAt = migration.indexOf('delete from public.spartan_intel_records i')
-  assert.ok(archiveAt >= 0, 'archive insert exists')
+  const functionAt = migration.indexOf('create or replace function public.spartan_retention_cleanup()')
+  const archiveAt = migration.indexOf("insert into public.spartan_operational_archive (source_table, source_id, archived_at, record)", functionAt)
+  const deleteAt = migration.indexOf('delete from public.spartan_intel_records i', functionAt)
+  assert.ok(functionAt >= 0, 'retention function exists')
+  assert.ok(archiveAt > functionAt, 'function archives Intel')
   assert.ok(deleteAt > archiveAt, 'hot-table delete follows archive insert')
   assert.match(migration, /on conflict \(source_table, source_id\) do nothing/i)
   assert.match(migration, /a\.source_id = i\.id::text/i)
@@ -30,4 +32,18 @@ test('existing daily cleanup function keeps the other retention jobs', () => {
     assert.match(migration, new RegExp('public\\.' + table))
   }
   assert.match(migration, /spartan_retention_cleanup\(\)/)
+})
+
+test('application consumers use the archive-aware Intel read view', () => {
+  const pageModels = fs.readFileSync(path.join(__dirname, '../../app/api/page-models/route.ts'), 'utf8')
+  const intelData = fs.readFileSync(path.join(__dirname, '../../app/api/intel-data/route.ts'), 'utf8')
+  const coverage = fs.readFileSync(path.join(__dirname, '../../app/api/data-coverage/route.ts'), 'utf8')
+  for (const source of [pageModels, intelData, coverage]) assert.match(source, /spartan_intel_records_with_archive/)
+})
+
+test('Aid has a dedicated page consumer', () => {
+  const vertical = fs.readFileSync(path.join(__dirname, '../../components/spartan/IntelVerticalPage.tsx'), 'utf8')
+  const route = fs.readFileSync(path.join(__dirname, '../../app/command/[section]/page.tsx'), 'utf8')
+  assert.match(vertical, /title: "AID INTELLIGENCE"/)
+  assert.match(route, /'aid'/)
 })
