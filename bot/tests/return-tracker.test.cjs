@@ -19,3 +19,29 @@ test('return tracker keeps separate same-target attacks when timestamps differ',
   const second = { ...first, at: '2026-11-08T03:11:30Z', acres: 40 }
   assert.notEqual(signature(first), signature(second))
 })
+
+const { destinationKingdomForEvent } = require('../../lib/spartan/return-time.cjs')
+
+test('outgoing army returns to the defender kingdom', () => {
+  assert.equal(destinationKingdomForEvent({
+    direction: 'out', attackerKingdom: '6:8', defenderKingdom: '3:11', fallback: '3:11',
+  }), '3:11')
+})
+
+test('incoming enemy army returns to the attacker kingdom, not our kingdom', () => {
+  assert.equal(destinationKingdomForEvent({
+    direction: 'in', attackerKingdom: '3:11', defenderKingdom: '6:8', fallback: '6:8',
+  }), '3:11')
+})
+
+test('unknown incoming destination stays unknown for conservative timing', () => {
+  assert.equal(destinationKingdomForEvent({
+    direction: 'in', attackerKingdom: null, defenderKingdom: '6:8', fallback: '6:8',
+  }), null)
+})
+
+test('other-side events retain their explicit target kingdom', () => {
+  assert.equal(destinationKingdomForEvent({
+    direction: 'other', attackerKingdom: '6:8', defenderKingdom: '3:11', fallback: '3:11',
+  }), '3:11')
+})
