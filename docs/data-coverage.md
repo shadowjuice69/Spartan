@@ -33,3 +33,12 @@ The Command Center, News, and War Room read normalized event history for the aut
 ## Province history display
 
 The Province, Military, and War Room page models combine stored `spartan_province_history` rows with current-age Throne captures retained in `spartan_capture_vault`. The retained captures are parsed at read-time into chart snapshots; this does not write to the vault, history table, or capture pipeline. Both stored history and retained captures are bounded to the current age start when an age-log marker is available.
+
+## Intel retention and archive bridge
+
+- Expired `spartan_intel_records` rows are copied in full to the private `spartan_operational_archive` table before the daily retention cleanup removes them from the hot table.
+- The cleanup function is scheduled daily by `pg_cron` at 09:00 UTC. The archive write is idempotent on (`source_table`, `source_id`) and cleanup deletes an Intel row only after its archive copy exists.
+- Application reads use `spartan_intel_records_with_archive`, a service-role-only view that returns active rows plus archived rows not present in the hot table. Active rows win if a row exists in both places.
+- The view exposes `archived` and `archived_at` metadata. Intel Vertical labels expired or archived records as **last known**, and Data Coverage reports archived and expired counts separately.
+- Archive data is a recovery bridge, not a claim that old intel is current. Page models preserve the original `captured_at` timestamp; consumers must display its age and never present archived data as live.
+- Do not delete archived Intel or retire the archive view until page-level reads have been verified against the archive and the replacement structured history is complete.
