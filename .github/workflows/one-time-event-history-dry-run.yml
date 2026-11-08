@@ -6,6 +6,7 @@ on:
       - ops/run-event-history-dry-run
     paths:
       - .github/workflows/one-time-event-history-dry-run.yml
+      - scripts/backfill-structured-event-history.js
   pull_request:
     branches:
       - main
