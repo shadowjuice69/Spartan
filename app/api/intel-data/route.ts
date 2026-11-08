@@ -80,7 +80,7 @@ function enrichBotPayload(row: any, parsed: any) {
   const magic = /<<__([^_]{2,80})__(?:\s*\*\*?\|\s*(.+?)\s*\((\d+:\d+)\)\*\*?>>)?([^\n]*)/gi
   for (const match of text.matchAll(magic)) {
     const tail = String(match[4] || '')
-    const duration = tail.match(/\*{0,2}([\d,]+)\*{0,2}/)
+    const duration = tail.match(/^\s*\*{0,2}([\d,]+)\*{0,2}\s*\|/)
     if (!duration && !/\bFAIL\b|spell fails|spell succeeds/i.test(tail)) continue
     events.push({
       kind: 'magic', spellName: match[1].replace(/_/g, ' ').trim(),
@@ -93,7 +93,7 @@ function enrichBotPayload(row: any, parsed: any) {
   for (const match of text.matchAll(kdnews)) {
     events.push({
       kind: 'news', attacker: match[1].replace(/^\d+\s*-\s*/, '').trim(), attackerKingdom: match[2],
-      targetProvince: match[3].replace(/^\d+\s*-\s*/, '').trim(), targetKingdom: match[4],
+      targetProvince: match[3].replace(/^the lands of\s+/i, '').replace(/^\d+\s*-\s*/, '').trim(), targetKingdom: match[4],
       acresCaptured: Number(String(match[5] || match[6] || '0').replace(/,/g, '')),
     })
   }
