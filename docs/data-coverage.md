@@ -36,11 +36,11 @@ The Province, Military, and War Room page models combine stored `spartan_provinc
 
 ## Intel retention and archive bridge
 
-- Expired `spartan_intel_records` rows are copied in full to the private `spartan_operational_archive` table before the daily retention cleanup removes them from the hot table.
-- The cleanup function is scheduled daily by `pg_cron` at 09:00 UTC. The archive write is idempotent on (`source_table`, `source_id`) and cleanup deletes an Intel row only after its archive copy exists.
+- Expired `spartan_intel_records` rows are copied in full to the private `spartan_operational_archive` table. During the bridge phase, the daily cleanup archives expired Intel but deliberately keeps the hot rows so the currently deployed application continues to work.
+- The cleanup function is scheduled daily by `pg_cron` at 09:00 UTC. The archive write is idempotent on (`source_table`, `source_id`). A separate retirement migration will remove expired hot rows only after archive-aware page reads have been deployed and verified.
 - Application reads use `spartan_intel_records_with_archive`, a service-role-only view that returns active rows plus archived rows not present in the hot table. Active rows win if a row exists in both places.
 
 - Aid captures are available in the dedicated `/command/aid` vertical, which extracts trade balance, resource availability, aid shipment notices, and incoming-aid settings from retained page text without changing capture ingestion.
 - The view exposes `archived` and `archived_at` metadata. Intel Vertical labels expired or archived records as **last known**, and Data Coverage reports archived and expired counts separately.
 - Archive data is a recovery bridge, not a claim that old intel is current. Page models preserve the original `captured_at` timestamp; consumers must display its age and never present archived data as live.
-- Do not delete archived Intel or retire the archive view until page-level reads have been verified against the archive and the replacement structured history is complete.
+- Do not delete expired hot Intel, archived Intel, or retire the archive view until page-level reads have been verified against the archive and the replacement structured history is complete.
