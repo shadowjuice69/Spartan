@@ -588,13 +588,13 @@ export async function GET(request: Request) {
       const elites = throne ? (throne.elites ?? (trainingUnits.length ? countForRole('Elites') : null)) : null
       const acresNow = throne?.acres ?? null
       const armyFromThrone = throne ? [
-        ...(throne.soldiers != null ? [{ name: 'Soldiers', home: throne.soldiers, away: 0, role: 'Soldiers' }] : []),
+        ...(throne.soldiers != null ? [{ name: 'Soldiers', home: throne.soldiers, away: null, role: 'Soldiers' }] : []),
         ...trainingUnits
           .filter(unit => throne.unitCounts?.[unit.name] != null)
           .map(unit => ({
             name: unit.name,
             home: toNum(throne.unitCounts?.[unit.name]) ?? 0,
-            away: 0,
+            away: null,
             role: unit.role,
           })),
       ] : []
