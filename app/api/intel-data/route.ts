@@ -46,10 +46,14 @@ function payload(row: any) {
 }
 
 function botEventBelongsToSection(row: any, section: string) {
-  if (row.source !== 'discord-bot' || row.page_kind !== 'bot_event') return true
+  if (row.source !== 'discord-bot' || row.page_kind !== 'bot_event' || section === 'intel') return true
   const parsed = payload(row)
   const classified = String(parsed?.classification?.page_kind || '').toLowerCase()
-  if (classified && classified !== 'bot_event') return classified === section
+  if (classified && classified !== 'bot_event') {
+    if (section === 'war-room') return ['attack', 'news', 'magic', 'thievery', 'aid', 'ritual', 'dragon'].includes(classified)
+    if (section === 'news') return ['news', 'attack'].includes(classified)
+    return classified === section
+  }
   const text = String(row.raw_text || '')
   if (section === 'thievery') return /<<__[^_]{2,80}__\s*\*\*?\|[^|]{1,120}\(\d+:\d+\)\*\*?>>\s*\|.{0,180}\bsent\b/i.test(text)
   if (section === 'magic') return /<<__[^_]{2,80}__\s*(?:\*\*?\|[^|]{1,120}\(\d+:\d+\)\*\*?>>)?\s*(?:\*\*)?\d+|\bspell succeeds\b|\bspell fails\b/i.test(text)
