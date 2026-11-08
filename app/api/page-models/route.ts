@@ -591,22 +591,24 @@ export async function GET(request: Request) {
       // Throne reports current home Off./Def. Points. Training-page unit stats
       // classify raw specialist counts; no modified ME/OME/DME is inferred.
       const parsedCurrent = latest?.raw_text ? parseMilitary(latest.raw_text) : null
-      const current = parsedCurrent
+      const throneIsNewer = Boolean(throneRec && (!latest || Date.parse(when(throneRec)) >= Date.parse(when(latest))))
+      const throneCurrent = throne ? {
+        generals: null, wageRate: null, efficiency: null, nonPeasantPct: null,
+        offEff: null, offPoints: throne.offense, defEff: null, defPoints: throne.defense,
+        army: armyFromThrone, horses: throne.war_horses, offSpecs, defSpecs, elites,
+        offSpa: acresNow && throne.offense != null ? throne.offense / acresNow : null,
+        defSpa: acresNow && throne.defense != null ? throne.defense / acresNow : null,
+      } : null
+      const current = throneIsNewer ? throneCurrent : parsedCurrent
         ? { ...parsedCurrent, offSpecs, defSpecs, elites,
-            offSpa: acresNow && throne?.offense != null ? throne.offense / acresNow : null,
-            defSpa: acresNow && throne?.defense != null ? throne.defense / acresNow : null }
-        : throne ? {
-            generals: null, wageRate: null, efficiency: null, nonPeasantPct: null,
-            offEff: null, offPoints: throne.offense, defEff: null, defPoints: throne.defense,
-            army: armyFromThrone, horses: throne.war_horses, offSpecs, defSpecs, elites,
-            offSpa: acresNow && throne.offense != null ? throne.offense / acresNow : null,
-            defSpa: acresNow && throne.defense != null ? throne.defense / acresNow : null,
-          } : null
+            offSpa: parsedCurrent.offPoints != null && acresNow ? parsedCurrent.offPoints / acresNow : null,
+            defSpa: parsedCurrent.defPoints != null && acresNow ? parsedCurrent.defPoints / acresNow : null }
+        : throneCurrent
       body.model = {
         current,
-        capturedAt: latest ? when(latest) : throneRec ? when(throneRec) : null,
-        acres: toNum(latest?.parsed_payload?.acres) ?? toNum(train?.parsed_payload?.acres) ?? throne?.acres,
-        networth: toNum(latest?.parsed_payload?.networth) ?? toNum(train?.parsed_payload?.networth) ?? throne?.networth,
+        capturedAt: throneIsNewer ? when(throneRec!) : latest ? when(latest) : throneRec ? when(throneRec) : null,
+        acres: throneIsNewer ? throne?.acres ?? toNum(latest?.parsed_payload?.acres) ?? toNum(train?.parsed_payload?.acres) : toNum(latest?.parsed_payload?.acres) ?? toNum(train?.parsed_payload?.acres) ?? throne?.acres,
+        networth: throneIsNewer ? throne?.networth ?? toNum(latest?.parsed_payload?.networth) ?? toNum(train?.parsed_payload?.networth) : toNum(latest?.parsed_payload?.networth) ?? toNum(train?.parsed_payload?.networth) ?? throne?.networth,
         training: train ? { ...train.parsed_payload, capturedAt: when(train) } : null,
         series: councils.slice().reverse().map(r => {
           const m = parseMilitary(r.raw_text || '')
