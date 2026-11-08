@@ -506,9 +506,13 @@ export async function GET(request: Request) {
         .map((capture: any) => {
           const parsed = parseThrone(String(capture.raw_text || capture.parsed_payload?.data_simple || ''))
           if (parsed.acres == null && parsed.networth == null) return null
-          const countForRole = (role: string) => trainingDefs
-            .filter(unit => unit.role === role)
-            .reduce((sum, unit) => sum + (toNum(parsed.unitCounts?.[unit.name]) ?? 0), 0)
+          const countForRole = (role: string) => {
+            const units = trainingDefs.filter(unit => unit.role === role)
+            const counts = units.map(unit => toNum(parsed.unitCounts?.[unit.name]))
+            return units.length > 0 && counts.every(value => value != null)
+              ? counts.reduce((sum, value) => sum + (value ?? 0), 0)
+              : null
+          }
           const offSpecs = parsed.offSpecs ?? (trainingDefs.length ? countForRole('Offensive specs') : null)
           const defSpecs = parsed.defSpecs ?? (trainingDefs.length ? countForRole('Defensive specs') : null)
           const elites = parsed.elites ?? (trainingDefs.length ? countForRole('Elites') : null)
@@ -572,21 +576,27 @@ export async function GET(request: Request) {
       const throneRec = allByPath(records, '/wol/game/throne')[0] || null
       const throne = throneRec?.raw_text ? parseThrone(throneRec.raw_text) : null
       const trainingUnits = train?.raw_text ? parseTrainingUnits(train.raw_text) : []
-      const countForRole = (role: string) => trainingUnits
-        .filter(unit => unit.role === role)
-        .reduce((sum, unit) => sum + (toNum(throne?.unitCounts?.[unit.name]) ?? 0), 0)
+      const countForRole = (role: string) => {
+        const units = trainingUnits.filter(unit => unit.role === role)
+        const counts = units.map(unit => toNum(throne?.unitCounts?.[unit.name]))
+        return units.length > 0 && counts.every(value => value != null)
+          ? counts.reduce((sum, value) => sum + (value ?? 0), 0)
+          : null
+      }
       const offSpecs = throne ? (throne.offSpecs ?? (trainingUnits.length ? countForRole('Offensive specs') : null)) : null
       const defSpecs = throne ? (throne.defSpecs ?? (trainingUnits.length ? countForRole('Defensive specs') : null)) : null
       const elites = throne ? (throne.elites ?? (trainingUnits.length ? countForRole('Elites') : null)) : null
       const acresNow = throne?.acres ?? null
       const armyFromThrone = throne ? [
         ...(throne.soldiers != null ? [{ name: 'Soldiers', home: throne.soldiers, away: 0, role: 'Soldiers' }] : []),
-        ...trainingUnits.map(unit => ({
-          name: unit.name,
-          home: toNum(throne.unitCounts?.[unit.name]) ?? unit.owned,
-          away: 0,
-          role: unit.role,
-        })),
+        ...trainingUnits
+          .filter(unit => throne.unitCounts?.[unit.name] != null)
+          .map(unit => ({
+            name: unit.name,
+            home: toNum(throne.unitCounts?.[unit.name]) ?? 0,
+            away: 0,
+            role: unit.role,
+          })),
       ] : []
       // Throne reports current home Off./Def. Points. Training-page unit stats
       // classify raw specialist counts; no modified ME/OME/DME is inferred.
