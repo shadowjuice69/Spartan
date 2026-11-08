@@ -30,8 +30,8 @@ const KINDS: Record<string, string[]> = {
   throne: ['throne'],
   intel: ['intel'],
   exploration: ['exploration'],
-  magic: ['magic', 'ritual', 'council_spells', 'throne'],
-  thievery: ['thievery', 'throne'],
+  magic: ['magic', 'ritual', 'council_spells'],
+  thievery: ['thievery'],
   command: [], // built by buildCommandModel below, not by the generic query
 }
 
@@ -460,6 +460,20 @@ export async function GET(request: Request) {
         if (r.age != null && Number.isFinite(Number(r.age))) return Number(r.age) === currentAge && Number.isFinite(startMs) && Number.isFinite(capturedMs) && capturedMs >= startMs
         return Number.isFinite(startMs) && Number.isFinite(capturedMs) && capturedMs >= startMs
       })
+    }
+
+    // Magic and Thievery also need the province's latest Throne counts for the
+    // wiki-defined raw per-acre ratios. Fetch a bounded, separate series so
+    // thousands of Throne captures cannot crowd out spell/operation captures
+    // from the normal 90-record page query.
+    if (page === 'magic' || page === 'thievery') {
+      const throneResult = await db.from('spartan_intel_records').select(COLUMNS)
+        .eq('page_kind', 'throne').ilike('url', '%/wol/game/throne%').or(scope)
+        .order('created_at', { ascending: false }).limit(40)
+      if (throneResult.error) fail(throneResult.error)
+      const throneRows = ((throneResult.data || []) as Rec[])
+        .filter(r => r.raw_text && pathOf(r.url) === '/wol/game/throne')
+      records.push(...throneRows)
     }
 
     // Time series of the province's own numbers. UtopiaIntel receipts are retained
