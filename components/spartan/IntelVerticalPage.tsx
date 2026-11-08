@@ -39,6 +39,14 @@ const verticals: Record<string, Vertical> = {
     accent: "#ffbd66",
     metrics: [["Operation",["operation","op","operationName"]],["Province",["attacker","province","province_name"]],["Target",["target","targetProvince"]],["Result",["result","success","outcome"]],["Thieves",["thievesSent","thieves"]],["Losses",["thievesLost"]]],
   },
+  aid: {
+    title: "AID INTELLIGENCE",
+    eyebrow: "SPARTAN // KINGDOM SUPPORT",
+    description: "Aid balances, available resources, shipment notices and incoming-aid settings.",
+    kinds: ["aid"],
+    accent: "#67d7e8",
+    metrics: [["Trade balance",["trade_balance"]],["Trade status",["trade_status"]],["Received-aid tax",["tax_rate"]],["Food available",["food_available"]],["Gold available",["gold_available"]],["Runes available",["runes_available"]],["Soldiers available",["soldiers_available"]],["Explorable acres",["explorable_acres"]],["Latest shipment",["shipment"]],["Incoming aid",["incoming_aid"]]],
+  },
   science: {
     title: "SCIENCE INTELLIGENCE",
     eyebrow: "SPARTAN // SCIENCE LAB",
@@ -271,8 +279,48 @@ function graphicFor(section:string,records:any[],accent:string) {
   return null
 }
 
+function recordPayload(row:any) {
+  const payload = unwrapPayload(row?.payload ?? row?.parsed_payload)
+  if (row?.page_kind !== "aid") return payload
+  const text = String(row?.raw_text || payload?.data_simple || "")
+  const valueAfter = (label:string) => {
+    const lines = text.split(/\r?\n/)
+    const index = lines.findIndex(line => line.trim().split(/\t+/)[0].trim().toLowerCase() === label.toLowerCase())
+    if (index < 0) return null
+    const sameLine = lines[index].split(/\t+/).slice(1).join(" ").trim()
+    if (sameLine) return sameLine
+    for (let i = index + 1; i < Math.min(index + 4, lines.length); i++) {
+      const value = lines[i].trim()
+      if (value) return value
+    }
+    return null
+  }
+  const numberAfter = (label:string) => {
+    const value = valueAfter(label)
+    if (!value) return null
+    const parsed = Number(value.replace(/,/g, "").replace(/[^0-9-]/g, ""))
+    return Number.isFinite(parsed) ? parsed : null
+  }
+  const status = valueAfter("Trade Balance Status")
+  const sent = text.match(/We have sent ([0-9,]+)\s+([a-z ]+?)\s+to\s+(.+?)\s+\(([0-9]+:[0-9]+)\)/i)
+  const incoming = text.match(/Incoming aid from other provinces is currently\s+([^\.\n]+)/i)
+  return {
+    ...payload,
+    trade_balance: numberAfter("Current trade balance"),
+    trade_status: status?.trim() || null,
+    tax_rate: valueAfter("Tax rate on received goods"),
+    food_available: numberAfter("Food"),
+    gold_available: numberAfter("Gold"),
+    runes_available: numberAfter("Runes"),
+    soldiers_available: numberAfter("Soldiers"),
+    explorable_acres: numberAfter("Explorable Land"),
+    shipment: sent ? sent[1] + " " + sent[2].trim() + " to " + sent[3].trim() + " (" + sent[4] + ")" : null,
+    incoming_aid: incoming?.[1]?.trim() || null,
+  }
+}
+
 function summary(row:any, vertical:Vertical) {
-  const p=unwrapPayload(row?.payload ?? row?.parsed_payload)
+  const p=recordPayload(row)
   const values = vertical.metrics.map(([label,keys]) => [label,valueAt(p,keys)] as const).filter(([,v])=>v!==null)
   if (values.length) return values.slice(0,4).map(([k,v])=>`${k}: ${scalar(v)}`).join(" · ")
   return row?.classification_reason || "Captured intelligence record"
@@ -313,7 +361,7 @@ export default function IntelVerticalPage() {
 
   const records=data?.records||[]
   const counts=data?.counts||{}
-  const latest=unwrapPayload(records[0]?.payload ?? records[0]?.parsed_payload)
+  const latest=records[0] ? recordPayload(records[0]) : {}
   const current=useMemo(()=>vertical.metrics.map(([label,keys])=>({label,value:valueAt(latest,keys)})).filter(x=>x.value!==null),[latest,vertical])
   const sourceCounts=useMemo(()=>{
     const m=new Map<string,number>()
@@ -341,8 +389,8 @@ export default function IntelVerticalPage() {
   const compareA=records.find((row:any,index:number)=>recordKey(row,index)===compareLeft)||null
   const compareB=records.find((row:any,index:number)=>recordKey(row,index)===compareRight)||null
   const compareRows=useMemo(()=>vertical.metrics.map(([label,keys])=>{
-    const left=valueAt(unwrapPayload(compareA?.payload??compareA?.parsed_payload),keys)
-    const right=valueAt(unwrapPayload(compareB?.payload??compareB?.parsed_payload),keys)
+    const left=valueAt(compareA ? recordPayload(compareA) : null,keys)
+    const right=valueAt(compareB ? recordPayload(compareB) : null,keys)
     const a=numValue(left),b=numValue(right)
     return {label,left,right,delta:a!==null&&b!==null?b-a:null}
   }).filter(row=>row.left!==null||row.right!==null),[compareA,compareB,vertical])
@@ -446,12 +494,12 @@ export default function IntelVerticalPage() {
             <button onClick={()=>setExpanded(open?null:id)} style={{width:"100%",border:0,background:"transparent",color:"#e7eef5",textAlign:"left",cursor:"pointer",padding:0}}>
               <div style={{display:"flex",justifyContent:"space-between",gap:15,alignItems:"center"}}>
                 <div><strong style={{fontSize:12,color:vertical.accent,textTransform:"uppercase"}}>{row.page_kind||section}</strong><div style={{fontSize:11,color:"#aeb9c5",marginTop:5}}>{row.province_name||row.province_id||"Unknown province"} · {row.kingdom_id||data?.kingdom||"Unknown kingdom"}</div><div style={{fontSize:10,color:"#718091",marginTop:4}}>{summary(row,vertical)}</div></div>
-                <div style={{textAlign:"right",fontSize:9,color:"#718091",whiteSpace:"nowrap"}}>{row.captured_at?new Date(row.captured_at).toLocaleString():"—"}<div style={{marginTop:4,color:open?vertical.accent:"#718091"}}>{open?"CLOSE":"OPEN DETAILS"}</div></div>
+                <div style={{textAlign:"right",fontSize:9,color:"#718091",whiteSpace:"nowrap"}}>{row.captured_at?new Date(row.captured_at).toLocaleString():"—"}{(row.archived||(row.expires_at&&Date.parse(row.expires_at)<Date.now()))&&<div style={{marginTop:4,color:"#e5b46b",fontWeight:800}}>{row.archived?"ARCHIVED · LAST KNOWN":"EXPIRED · LAST KNOWN"}</div>}<div style={{marginTop:4,color:open?vertical.accent:"#718091"}}>{open?"CLOSE":"OPEN DETAILS"}</div></div>
               </div>
             </button>
             {open&&<div style={{paddingTop:14}}>
               <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(145px,1fr))",gap:8,marginBottom:12}}>
-                {[["Province",row.province_name||row.province_id],["Kingdom",row.kingdom_id],["Source",row.source],["Source ID",row.source_id],["Game age",row.age],["Game year",row.game_year],["Tick",row.game_tick],["Classification",row.classification_source],["Confidence",row.classification_confidence]].map(([k,v])=><div key={String(k)} style={{padding:10,border:"1px solid rgba(255,255,255,.05)",borderRadius:7}}><div style={{fontSize:8,color:"#657483"}}>{k}</div><div style={{fontSize:10,marginTop:4,overflowWrap:"anywhere"}}>{scalar(v)}</div></div>)}
+                {[["Province",row.province_name||row.province_id],["Kingdom",row.kingdom_id],["Source",row.source],["Source ID",row.source_id],["Retention",row.archived?"Archived / last known":row.expires_at&&Date.parse(row.expires_at)<Date.now()?"Expired / last known":"Active"],["Archived at",row.archived_at],["Game age",row.age],["Game year",row.game_year],["Tick",row.game_tick],["Classification",row.classification_source],["Confidence",row.classification_confidence]].map(([k,v])=><div key={String(k)} style={{padding:10,border:"1px solid rgba(255,255,255,.05)",borderRadius:7}}><div style={{fontSize:8,color:"#657483"}}>{k}</div><div style={{fontSize:10,marginTop:4,overflowWrap:"anywhere"}}>{scalar(v)}</div></div>)}
               </div>
               {row.classification_reason&&<div style={{padding:10,marginBottom:12,border:`1px solid ${vertical.accent}22`,borderRadius:7,fontSize:10,color:"#9eabb8"}}><strong style={{color:vertical.accent}}>CLASSIFICATION:</strong> {row.classification_reason}</div>}
               <div style={{padding:12,border:"1px solid rgba(255,255,255,.05)",borderRadius:8}}><div style={{fontSize:8,color:"#657483",marginBottom:7}}>PARSED INTELLIGENCE</div><Value value={row.payload}/></div>

@@ -23,6 +23,7 @@ export const NAV_INTEL: NavItem[] = [
   ['Intel Backlog', '/command/intel-backlog'],
   ['Military', '/command/military'],
   ['Magic', '/command/magic'],
+  ['Aid', '/command/aid'],
   ['Thievery', '/command/thievery'],
   ['Science', '/command/science'],
   ['Buildings', '/command/buildings'],

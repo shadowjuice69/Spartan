@@ -90,8 +90,8 @@ export async function GET(request: Request) {
     let error: any = null
     if (summary && section === 'intel') {
       const result = await scopeQuery(db
-        .from('spartan_intel_records')
-        .select('id,capture_id,user_id,province_id,kingdom_id,target_province_id,target_kingdom_id,captured_at,created_at,source,url,page_kind,classification_confidence,classification_reason,classification_source,intel_type,visibility,metrics,parsed_payload')
+        .from('spartan_intel_records_with_archive')
+        .select('id,capture_id,user_id,province_id,kingdom_id,target_province_id,target_kingdom_id,captured_at,created_at,source,url,page_kind,classification_confidence,classification_reason,classification_source,intel_type,visibility,metrics,parsed_payload,expires_at,archived,archived_at')
         .in('page_kind', selectedKinds))
         .order('created_at', { ascending: false })
         .limit(120)
@@ -99,8 +99,8 @@ export async function GET(request: Request) {
       error = result.error
     } else {
       const result = await scopeQuery(db
-        .from('spartan_intel_records')
-        .select('id,capture_id,source_vault_id,user_id,province_id,kingdom_id,captured_at,created_at,updated_at,source,source_id,url,page_kind,classification_confidence,classification_reason,age,game_year,game_tick,retention_class,expires_at,raw_text,classification_source,parsed_payload,raw_payload,target_province_id,target_kingdom_id,intel_type,visibility,metrics')
+        .from('spartan_intel_records_with_archive')
+        .select('id,capture_id,source_vault_id,user_id,province_id,kingdom_id,captured_at,created_at,updated_at,source,source_id,url,page_kind,classification_confidence,classification_reason,age,game_year,game_tick,retention_class,expires_at,raw_text,classification_source,parsed_payload,raw_payload,target_province_id,target_kingdom_id,intel_type,visibility,metrics,archived,archived_at')
         .in('page_kind', selectedKinds))
         .order('created_at', { ascending: false })
         .limit(500)
@@ -152,6 +152,9 @@ export async function GET(request: Request) {
         metrics: row.metrics || {},
         captured_at: row.captured_at,
         created_at: row.created_at,
+        expires_at: row.expires_at || null,
+        archived: row.archived === true,
+        archived_at: row.archived_at || null,
         updated_at: row.updated_at,
         source: row.source,
         source_id: row.source_id,
@@ -164,7 +167,6 @@ export async function GET(request: Request) {
         game_year: row.game_year,
         game_tick: row.game_tick,
         retention_class: row.retention_class,
-        expires_at: row.expires_at,
         raw_text: row.raw_text,
         payload: parsed,
         summary: describeRecord(row, parsed),

@@ -15,7 +15,7 @@ export const dynamic = 'force-dynamic'
 
 // Lean on purpose: only small columns, never the full page capture (raw_payload).
 // The old Intel query pulled ~18 MB per request and timed out.
-const COLUMNS = 'id,user_id,province_id,kingdom_id,visibility,page_kind,url,source,captured_at,created_at,age,parsed_payload,raw_text'
+const COLUMNS = 'id,user_id,province_id,kingdom_id,visibility,page_kind,url,source,captured_at,created_at,age,expires_at,archived,archived_at,parsed_payload,raw_text'
 const CACHE = new Map<string, { at: number; body: any }>()
 const TTL_MS = 30_000
 
@@ -37,7 +37,7 @@ const KINDS: Record<string, string[]> = {
 
 type Rec = {
   id: string; user_id?: string | null; province_id?: string | null; kingdom_id?: string | null; visibility?: string | null; page_kind: string; url: string; source: string | null; captured_at: string | null
-  created_at: string; age?: number | string | null; parsed_payload: any; raw_text: string | null
+  created_at: string; age?: number | string | null; expires_at?: string | null; archived?: boolean; archived_at?: string | null; parsed_payload: any; raw_text: string | null
 }
 
 function isStructuredBotIntelText(value: unknown) {
@@ -118,6 +118,7 @@ function allByPath(records: Rec[], path: string) {
   return records.filter(r => pathOf(r.url) === path)
 }
 const when = (r: Rec) => r.captured_at || r.created_at
+const staleIntel = (r?: Rec | null) => Boolean(r && (r.archived === true || (r.expires_at && Date.parse(r.expires_at) < Date.now())))
 
 function captureLog(records: Rec[]) {
   // The full capture history remains stored in Supabase; the page only needs a compact recent activity list.
@@ -127,7 +128,7 @@ function captureLog(records: Rec[]) {
 // The newest Throne capture that shows the current game date. News events only carry game dates, so this is
 // what lets us place them on a real day (24 game ticks = one game day).
 async function gameAnchor(db: any, scope: string) {
-  const r = await db.from('spartan_intel_records').select('captured_at,created_at,raw_text').eq('page_kind', 'throne').or(scope).order('created_at', { ascending: false }).limit(8)
+  const r = await db.from('spartan_intel_records_with_archive').select('captured_at,created_at,raw_text').eq('page_kind', 'throne').or(scope).order('created_at', { ascending: false }).limit(8)
   if (r.error) return null
   for (const row of r.data || []) {
     const d = findGameDate(row.raw_text)
@@ -206,7 +207,7 @@ function discordKingdomEvents(rows: Rec[], own: { name: string; kd: string | nul
 async function newsEvents(db: any, scope: string, own: { name: string; kd: string | null }, records?: Rec[]) {
   let rows = records
   if (!rows) {
-    const r = await db.from('spartan_intel_records').select(COLUMNS).eq('page_kind', 'news').neq('source', 'discord-bot').or(scope).order('created_at', { ascending: false }).limit(100)
+    const r = await db.from('spartan_intel_records_with_archive').select(COLUMNS).eq('page_kind', 'news').neq('source', 'discord-bot').or(scope).order('created_at', { ascending: false }).limit(100)
     rows = r.error ? [] : (r.data || []) as Rec[]
   }
   const anchor = await gameAnchor(db, scope)
@@ -226,7 +227,7 @@ async function newsEvents(db: any, scope: string, own: { name: string; kd: strin
 // Discord's NEW KDNEWS notifications are already stored as bot news captures, but have no game-date prefix.
  // Parse only attack lines from that format; ignore unrelated delivery errors and bot notifications.
 async function discordAttackNews(db: any, scope: string, ownName: string) {
-  const result = await db.from('spartan_intel_records').select('created_at,captured_at,raw_text')
+  const result = await db.from('spartan_intel_records_with_archive').select('created_at,captured_at,raw_text')
     .eq('page_kind', 'news').eq('source', 'discord-bot').or(scope)
     .order('created_at', { ascending: false }).limit(100)
   if (result.error) return []
@@ -300,7 +301,7 @@ async function discordAttackNews(db: any, scope: string, ownName: string) {
 // so a missing capture only blanks that section. Only parsed game numbers are returned: no raw page text,
 // no capture log, no capture sources and no Discord/bot data.
 async function latestOf(db: any, kinds: string[], like: string, path: string, scope: string, limit = 3): Promise<Rec[] | null> {
-  const r = await db.from('spartan_intel_records').select(COLUMNS).in('page_kind', kinds).ilike('url', like).or(scope).order('created_at', { ascending: false }).limit(limit)
+  const r = await db.from('spartan_intel_records_with_archive').select(COLUMNS).in('page_kind', kinds).ilike('url', like).or(scope).order('created_at', { ascending: false }).limit(limit)
   if (r.error) return null
   return ((r.data || []) as Rec[]).filter(x => pathOf(x.url) === path)
 }
@@ -366,9 +367,9 @@ async function buildCommandModel(db: any, userId: string, account: { id: string;
       kingdom,
       events,
       freshness: [
-        { label: 'Throne', at: t ? when(t) : null }, { label: 'State', at: st ? when(st) : null },
-        { label: 'Military', at: mil ? when(mil) : null }, { label: 'Science', at: sci ? when(sci) : null },
-        { label: 'Buildings', at: bld ? when(bld) : null }, { label: 'Kingdom', at: kingdomAt },
+        { label: 'Throne', at: t ? when(t) : null, stale: staleIntel(t), archived: t?.archived === true }, { label: 'State', at: st ? when(st) : null, stale: staleIntel(st), archived: st?.archived === true },
+        { label: 'Military', at: mil ? when(mil) : null, stale: staleIntel(mil), archived: mil?.archived === true }, { label: 'Science', at: sci ? when(sci) : null, stale: staleIntel(sci), archived: sci?.archived === true },
+        { label: 'Buildings', at: bld ? when(bld) : null, stale: staleIntel(bld), archived: bld?.archived === true }, { label: 'Kingdom', at: kingdomAt }
       ],
     },
   }
@@ -440,7 +441,7 @@ export async function GET(request: Request) {
     // 90 raw-text/parsed-payload records twice for that page.
     let records: Rec[] = []
     if (page !== 'intel') {
-      const recordsResult = await db.from('spartan_intel_records').select(COLUMNS).in('page_kind', KINDS[page]).or(scope).order('created_at', { ascending: false }).limit(90)
+      const recordsResult = await db.from('spartan_intel_records_with_archive').select(COLUMNS).in('page_kind', KINDS[page]).or(scope).order('created_at', { ascending: false }).limit(90)
       if (recordsResult.error) fail(recordsResult.error)
       records = ((recordsResult.data || []) as Rec[]).filter(r =>
         !(sharedPages.has(page) && r.visibility === 'own' && r.user_id !== user.id && r.user_id !== account.id) &&
@@ -465,7 +466,7 @@ export async function GET(request: Request) {
       // an unbounded Throne fallback pull prior-age ratios into a live page.
       const ageStartMs = ageStartedAt ? Date.parse(ageStartedAt) : NaN
       if (Number.isFinite(ageStartMs)) {
-        const throneResult = await db.from('spartan_intel_records').select(COLUMNS)
+        const throneResult = await db.from('spartan_intel_records_with_archive').select(COLUMNS)
           .eq('page_kind', 'throne').ilike('url', '%/wol/game/throne%').or(scope)
           .gte('created_at', ageStartedAt!)
           .order('created_at', { ascending: false }).limit(40)
@@ -573,6 +574,12 @@ export async function GET(request: Request) {
       ok: true, page,
       province: account.province_name, kingdom: account.province_location,
       generatedAt: new Date().toISOString(), history,
+      dataFreshness: {
+        sampleSize: records.length,
+        archivedRecords: records.filter(r => r.archived === true).length,
+        staleRecords: records.filter(staleIntel).length,
+        lastKnownRecords: records.filter(staleIntel).slice(0, 12).map(r => ({ kind: r.page_kind, path: pathOf(r.url), capturedAt: when(r), archived: r.archived === true, archivedAt: r.archived_at || null })),
+      }
     }
 
     if (page === 'military') {
@@ -672,10 +679,10 @@ export async function GET(request: Request) {
       // Grids scraped from the kingdom intel site. Each capture carries its kingdom code, and viewers pick
       // different columns, so recent captures of the same kingdom are merged into one row per province.
       const [g, statsResult] = await Promise.all([
-        db.from('spartan_intel_records')
+        db.from('spartan_intel_records_with_archive')
           .select('id,url,created_at,captured_at,parsed_payload,grid:raw_payload->grid')
           .eq('page_kind', 'intel').or(scope).order('created_at', { ascending: false }).limit(60),
-        db.from('spartan_intel_records')
+        db.from('spartan_intel_records_with_archive')
           .select('raw_text,captured_at,created_at')
           .eq('page_kind', 'intel').or(scope)
           .or('raw_text.ilike.%Our KD%,raw_text.ilike.%Enemy KD%')
@@ -740,7 +747,7 @@ export async function GET(request: Request) {
       const own = { name: account.province_name, kd: account.province_location || null }
       // Keep Province Reporter captures in the feed even when recent Discord KDNEWS
       // reports occupy the generic page-model query's 90-row window.
-      const provinceNewsResult = await db.from('spartan_intel_records').select(COLUMNS)
+      const provinceNewsResult = await db.from('spartan_intel_records_with_archive').select(COLUMNS)
         .eq('page_kind', 'news').neq('source', 'discord-bot').or(scope)
         .order('created_at', { ascending: false }).limit(180)
       if (provinceNewsResult.error) fail(provinceNewsResult.error)
@@ -754,7 +761,7 @@ export async function GET(request: Request) {
       const botEvents = discordKingdomEvents(records, own)
       // Province Reporter / MPNEWS may also arrive on the bot_event stream.
       // Read that stream separately without changing ingestion.
-      const mpResult = await db.from('spartan_intel_records').select(COLUMNS)
+      const mpResult = await db.from('spartan_intel_records_with_archive').select(COLUMNS)
         .eq('page_kind', 'bot_event').or(`province_id.eq.${account.id},user_id.eq.${account.id},user_id.eq.${user.id},kingdom_id.eq.${account.province_location}`)
         .order('created_at', { ascending: false }).limit(180)
       if (mpResult.error) fail(mpResult.error)
@@ -871,7 +878,7 @@ export async function GET(request: Request) {
         const d = parseKingdomDetails(r.raw_text || '')
         if (d.code && !byCode.has(d.code)) byCode.set(d.code, { ...d, capturedAt: when(r) })
       }
-      const gridResult = await db.from('spartan_intel_records').select('id,created_at,url,grid:raw_payload->grid').eq('page_kind', 'intel').or(scope).order('created_at', { ascending: false }).limit(40)
+      const gridResult = await db.from('spartan_intel_records_with_archive').select('id,created_at,url,grid:raw_payload->grid').eq('page_kind', 'intel').or(scope).order('created_at', { ascending: false }).limit(40)
       if (gridResult.error) fail(gridResult.error)
       const gridRecs = gridResult.data || []
       const roster = new Map<string, any>()
@@ -978,7 +985,7 @@ export async function GET(request: Request) {
       events.sort((a: any, b: any) => Date.parse(b.at) - Date.parse(a.at))
       const militaryRec = allByPath(records, '/wol/game/council_military')[0] || null
       let kingdom: any = null
-      const sharedKingdomRows = await db.from('spartan_intel_records').select(COLUMNS).eq('page_kind', 'kingdom').or(kingdomScope).order('created_at', { ascending: false }).limit(20)
+      const sharedKingdomRows = await db.from('spartan_intel_records_with_archive').select(COLUMNS).eq('page_kind', 'kingdom').or(kingdomScope).order('created_at', { ascending: false }).limit(20)
       for (const r of ((sharedKingdomRows.data || []) as Rec[]).filter(x => pathOf(x.url) === '/wol/game/kingdom_details')) {
         const d = parseKingdomDetails(r.raw_text || '')
         if (d.code === account.province_location) { kingdom = { ...d, capturedAt: when(r) }; break }

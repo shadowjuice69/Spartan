@@ -5,9 +5,12 @@ import { C, Grid, Panel, Shell, Skeletons, Stat, Tag, fmt, ago } from '@/compone
 
 type Coverage = {
   account: { province: string; kingdom: string }
-  totals: { captures: number; captureLimit: number; intelRecords: number; provinceHistory: number; eventHistory: number; registryProvinces: number }
+  totals: { captures: number; captureLimit: number; intelRecords: number; archivedIntelRecords: number; expiredIntelRecords: number; provinceHistory: number; eventHistory: number; registryProvinces: number }
   coverage: {
     kinds: Array<{ page_kind: string; count: number; latest: string | null; sources: string[]; structured: number; destinations: string[] }>
+    intelKinds: Array<{ page_kind: string; count: number; latest: string | null; archived: number; stale: number; sources: string[]; fields: string[]; destinations: string[] }>
+    intelSampleLimit: number
+    intelTruncated: boolean
     sources: Array<{ source: string; count: number }>
     fields: Array<{ name: string; fields: Array<{ key: string; records: number; present: boolean }> }>
     historyFields: Array<{ key: string; records: number; present: boolean }>
@@ -43,10 +46,39 @@ export default function DataCoveragePage() {
       <p style={{fontSize:11,color:'#8993a1',margin:'0 0 14px'}}>{data.account.province} · {data.account.kingdom} · latest capture {ago(data.coverage.capturedAt)}</p>
       <Grid>
         <Stat label="Captures scanned" value={data.totals.captures} sub={data.coverage.truncated ? 'At least 1,500; may be capped' : 'All account captures'} color={C.cyan} delay={0}/>
-        <Stat label="Intel records" value={data.totals.intelRecords} sub="Structured Intel projection" color={C.violet} delay={1}/>
-        <Stat label="Province history" value={data.totals.provinceHistory} sub="Historical snapshots" color={C.lime} delay={2}/>
-        <Stat label="Event history" value={data.totals.eventHistory} sub="Normalized game events" color={C.amber} delay={3}/>
+        <Stat label="Intel records" value={data.totals.intelRecords} sub="Active + archived structured records" color={C.violet} delay={1}/>
+        <Stat label="Archived Intel" value={data.totals.archivedIntelRecords} sub="Retained last-known records" color={C.amber} delay={2}/>
+        <Stat label="Expired Intel" value={data.totals.expiredIntelRecords} sub="Past retention window; still recoverable" color={C.amber} delay={3}/>
+        <Stat label="Province history" value={data.totals.provinceHistory} sub="Historical snapshots" color={C.lime} delay={4}/>
+        <Stat label="Event history" value={data.totals.eventHistory} sub="Normalized game events" color={C.amber} delay={5}/>
       </Grid>
+      <Panel title="INTEL RETENTION & LAST-KNOWN DATA" sub="Expired Intel is archived before retention cleanup. Archived records remain readable with their original capture timestamps and are never presented as current.">
+        <div style={{display:'flex',gap:18,flexWrap:'wrap',fontSize:11,color:'#aeb9c5'}}>
+          <span><b style={{color:C.amber}}>{fmt(data.totals.archivedIntelRecords)}</b> archived records</span>
+          <span><b style={{color:C.amber}}>{fmt(data.totals.expiredIntelRecords)}</b> expired records</span>
+          <span><b style={{color:C.green}}>{fmt(Math.max(0,data.totals.intelRecords-data.totals.expiredIntelRecords))}</b> within retention window</span>
+        </div>
+        <p style={{fontSize:10,color:'#8993a1',margin:'10px 0 0'}}>Use archived or expired values as historical reference only. The original captured time—not the archive time—determines how old the intelligence is.</p>
+      </Panel>
+      <Panel title="INTEL RECORD TYPES → PAGE CONSUMERS" sub="This inventory reads the combined hot-table and archive view, so records remain visible after retention cleanup. Field names include parsed payload keys and labels recovered from tabular source text.">
+        <div style={{display:'grid',gap:9}}>
+          {data.coverage.intelKinds.map(row=><div key={row.page_kind} style={{padding:12,border:'1px solid rgba(255,255,255,.07)',borderRadius:10,background:'rgba(255,255,255,.02)'}}>
+            <div style={{display:'flex',justifyContent:'space-between',gap:10,flexWrap:'wrap',alignItems:'center'}}>
+              <b style={{fontSize:12}}>{row.page_kind}</b>
+              <div style={{display:'flex',gap:5,flexWrap:'wrap'}}>
+                <Tag color={C.violet}>{fmt(row.count)} records</Tag>
+                {row.archived>0&&<Tag color={C.amber}>{fmt(row.archived)} archived</Tag>}
+                {row.stale>0&&<Tag color={C.amber}>{fmt(row.stale)} stale</Tag>}
+              </div>
+            </div>
+            <div style={{fontSize:10,color:'#8d9baa',marginTop:6}}>Latest {ago(row.latest)} · {row.sources.join(', ') || 'source unknown'}</div>
+            <div style={{fontSize:9,color:'#b7c3ce',marginTop:7,lineHeight:1.6}}>{row.fields.slice(0,18).join(' · ') || 'No parsed field names found'}</div>
+            <div style={{display:'flex',gap:5,flexWrap:'wrap',marginTop:8}}>{row.destinations.map(dest=><Tag key={dest} color={C.green}>{dest}</Tag>)}</div>
+          </div>)}
+          {!data.coverage.intelKinds.length&&<p style={{fontSize:11,color:'#8993a1'}}>No structured Intel records are linked to this account yet.</p>}
+        </div>
+        {data.coverage.intelTruncated&&<p style={{fontSize:10,color:C.amber,marginTop:10}}>Intel inventory is capped at {fmt(data.coverage.intelSampleLimit)} records.</p>}
+      </Panel>
       <Grid>
         <Panel title="CAPTURE TYPES → SITE DESTINATIONS" sub="Captured page types and their known or candidate destinations. Verify page consumers before treating a mapping as complete.">
           <div style={{display:'grid',gap:9}}>
