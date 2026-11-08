@@ -5,7 +5,7 @@ import { C, Grid, Panel, Shell, Skeletons, Stat, Tag, fmt, ago } from '@/compone
 
 type Coverage = {
   account: { province: string; kingdom: string }
-  totals: { captures: number; captureLimit: number; intelRecords: number; provinceHistory: number; eventHistory: number; registryProvinces: number }
+  totals: { captures: number; captureLimit: number; intelRecords: number; archivedIntelRecords: number; expiredIntelRecords: number; provinceHistory: number; eventHistory: number; registryProvinces: number }
   coverage: {
     kinds: Array<{ page_kind: string; count: number; latest: string | null; sources: string[]; structured: number; destinations: string[] }>
     sources: Array<{ source: string; count: number }>
@@ -43,10 +43,20 @@ export default function DataCoveragePage() {
       <p style={{fontSize:11,color:'#8993a1',margin:'0 0 14px'}}>{data.account.province} · {data.account.kingdom} · latest capture {ago(data.coverage.capturedAt)}</p>
       <Grid>
         <Stat label="Captures scanned" value={data.totals.captures} sub={data.coverage.truncated ? 'At least 1,500; may be capped' : 'All account captures'} color={C.cyan} delay={0}/>
-        <Stat label="Intel records" value={data.totals.intelRecords} sub="Structured Intel projection" color={C.violet} delay={1}/>
-        <Stat label="Province history" value={data.totals.provinceHistory} sub="Historical snapshots" color={C.lime} delay={2}/>
-        <Stat label="Event history" value={data.totals.eventHistory} sub="Normalized game events" color={C.amber} delay={3}/>
+        <Stat label="Intel records" value={data.totals.intelRecords} sub="Active + archived structured records" color={C.violet} delay={1}/>
+        <Stat label="Archived Intel" value={data.totals.archivedIntelRecords} sub="Retained last-known records" color={C.amber} delay={2}/>
+        <Stat label="Expired Intel" value={data.totals.expiredIntelRecords} sub="Past retention window; still recoverable" color={C.amber} delay={3}/>
+        <Stat label="Province history" value={data.totals.provinceHistory} sub="Historical snapshots" color={C.lime} delay={4}/>
+        <Stat label="Event history" value={data.totals.eventHistory} sub="Normalized game events" color={C.amber} delay={5}/>
       </Grid>
+      <Panel title="INTEL RETENTION & LAST-KNOWN DATA" sub="Expired Intel is archived before retention cleanup. Archived records remain readable with their original capture timestamps and are never presented as current.">
+        <div style={{display:'flex',gap:18,flexWrap:'wrap',fontSize:11,color:'#aeb9c5'}}>
+          <span><b style={{color:C.amber}}>{fmt(data.totals.archivedIntelRecords)}</b> archived records</span>
+          <span><b style={{color:C.amber}}>{fmt(data.totals.expiredIntelRecords)}</b> expired records</span>
+          <span><b style={{color:C.green}}>{fmt(Math.max(0,data.totals.intelRecords-data.totals.expiredIntelRecords))}</b> within retention window</span>
+        </div>
+        <p style={{fontSize:10,color:'#8993a1',margin:'10px 0 0'}}>Use archived or expired values as historical reference only. The original captured time—not the archive time—determines how old the intelligence is.</p>
+      </Panel>
       <Grid>
         <Panel title="CAPTURE TYPES → SITE DESTINATIONS" sub="Captured page types and their known or candidate destinations. Verify page consumers before treating a mapping as complete.">
           <div style={{display:'grid',gap:9}}>
