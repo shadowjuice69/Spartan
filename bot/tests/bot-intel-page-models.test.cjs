@@ -50,7 +50,7 @@ test('Magic and Thievery load bot reports in a separate current-age query', () =
   const route = fs.readFileSync('app/api/page-models/route.ts', 'utf8');
   assert.match(route, /botIntelResult/);
   assert.match(route, /\.eq\('source', 'discord-bot'\)/);
-  assert.match(route, /\.in\('page_kind', \['magic', 'thievery', 'bot_event'\]\)/);
+  assert.match(route, /\.in\('page_kind', page === 'magic' \? \['magic', 'bot_event'\] : \['thievery', 'bot_event'\]\)/);
   assert.match(route, /\.gte\('created_at', ageStartedAt!\)/);
 });
 
