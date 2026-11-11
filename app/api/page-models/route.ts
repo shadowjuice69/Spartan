@@ -470,7 +470,11 @@ export async function GET(request: Request) {
       if (Number.isFinite(ageStartMs)) {
         const botIntelResult = await db.from('spartan_intel_records_with_archive').select(COLUMNS)
           .eq('source', 'discord-bot')
-          .in('page_kind', page === 'magic' ? ['magic', 'bot_event'] : ['thievery', 'bot_event'])
+          // Route mixed-format Discord messages to every page matching their raw evidence,
+          // even when the projection's primary page_kind reflects only one report type.
+          .or(page === 'magic'
+            ? 'page_kind.eq.magic,raw_text.like.%:star2:%,raw_text.like.%:comet:%'
+            : 'page_kind.eq.thievery,raw_text.like.%:detective:%')
           .or(scope)
           .gte('created_at', ageStartedAt!)
           .order('created_at', { ascending: false })
