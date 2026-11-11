@@ -470,7 +470,7 @@ export async function GET(request: Request) {
       if (Number.isFinite(ageStartMs)) {
         const botIntelResult = await db.from('spartan_intel_records_with_archive').select(COLUMNS)
           .eq('source', 'discord-bot')
-          .in('page_kind', ['magic', 'thievery', 'bot_event'])
+          .in('page_kind', page === 'magic' ? ['magic', 'bot_event'] : ['thievery', 'bot_event'])
           .or(scope)
           .gte('created_at', ageStartedAt!)
           .order('created_at', { ascending: false })
