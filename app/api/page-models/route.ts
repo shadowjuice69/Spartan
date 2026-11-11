@@ -470,7 +470,11 @@ export async function GET(request: Request) {
       if (Number.isFinite(ageStartMs)) {
         const botIntelResult = await db.from('spartan_intel_records_with_archive').select(COLUMNS)
           .eq('source', 'discord-bot')
-          .in('page_kind', ['magic', 'thievery', 'bot_event'])
+          // Route mixed-format Discord messages to every page matching their raw evidence,
+          // even when the projection's primary page_kind reflects only one report type.
+          .or(page === 'magic'
+            ? 'page_kind.eq.magic,raw_text.like.%:star2:%,raw_text.like.%:comet:%'
+            : 'page_kind.eq.thievery,raw_text.like.%:detective:%')
           .or(scope)
           .gte('created_at', ageStartedAt!)
           .order('created_at', { ascending: false })
@@ -479,9 +483,11 @@ export async function GET(request: Request) {
         const botRows = ((botIntelResult.data || []) as Rec[]).filter(r =>
           r.raw_text && Number.isFinite(Date.parse(when(r))) && Date.parse(when(r)) >= ageStartMs
         )
-        // A small number of older bot messages were safely saved in the raw vault
-        // before their flow/projection existed. Read those as historical evidence;
-        // never replay them or let them update current province state.
+        // The bounded page query cannot return every current-age bot report.
+        // Read additional matching raw-vault captures through as historical evidence.
+        // Suppress only captures already present in this page's botRows; older projected
+        // records outside that bounded result remain eligible here, exactly once.
+        // This is read-only and never replays captures or updates current province state.
         const projectedCaptureIds = new Set(botRows.map(r => r.capture_id).filter(Boolean))
         let botVaultQuery = db.from('spartan_capture_vault')
           .select('id,capture_id,source_id,user_id,province_id,kingdom_id,source,page_kind,url,captured_at,created_at,raw_text,parsed_payload')
@@ -494,7 +500,11 @@ export async function GET(request: Request) {
           : botVaultQuery.like('raw_text', '%:detective:%')
         const botVaultResult = await botVaultQuery.order('captured_at', { ascending: false }).limit(500)
         if (botVaultResult.error) fail(botVaultResult.error)
-        const vaultOnlyRows = (botVaultResult.data || [])
+        const botVaultRows = botVaultResult.data || []
+        // botRows is deliberately capped at 500. Only dedupe against records
+        // actually returned in this page response; a broader projection lookup
+        // would hide older reports that the bounded query did not return.
+        const vaultOnlyRows = botVaultRows
           .filter((r: any) => r.capture_id && !projectedCaptureIds.has(r.capture_id)
             && (r.parsed_payload?.data?.metadata?.author_bot === true || r.parsed_payload?.data?.metadata?.author_bot === 'true')
             && r.raw_text && Number.isFinite(Date.parse(r.captured_at)) && Date.parse(r.captured_at) >= ageStartMs)

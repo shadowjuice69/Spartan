@@ -50,7 +50,9 @@ test('Magic and Thievery load bot reports in a separate current-age query', () =
   const route = fs.readFileSync('app/api/page-models/route.ts', 'utf8');
   assert.match(route, /botIntelResult/);
   assert.match(route, /\.eq\('source', 'discord-bot'\)/);
-  assert.match(route, /\.in\('page_kind', \['magic', 'thievery', 'bot_event'\]\)/);
+  assert.ok(route.includes(".or(page === 'magic'"));
+  assert.ok(route.includes("page_kind.eq.magic,raw_text.like.%:star2:%,raw_text.like.%:comet:%"));
+  assert.ok(route.includes("page_kind.eq.thievery,raw_text.like.%:detective:%"));
   assert.match(route, /\.gte\('created_at', ageStartedAt!\)/);
 });
 
@@ -113,4 +115,11 @@ test('bot backfill recognizes moneybag transfers but keeps the 48-hour recovery 
   const processor = fs.readFileSync('bot/services/spartanQueueProcessor.js', 'utf8');
   assert.match(processor, /raw_text\.like\.%:moneybag:%/);
   assert.match(processor, /48 \* 60 \* 60 \* 1000/);
+});
+
+test('Magic and Thievery vault read-through dedupes only against records returned in the page response', () => {
+  const route = fs.readFileSync('app/api/page-models/route.ts', 'utf8');
+  assert.match(route, /const projectedCaptureIds = new Set\(botRows\.map/);
+  assert.match(route, /!projectedCaptureIds\.has\(r\.capture_id\)/);
+  assert.match(route, /older projected[\s\S]{0,120}outside that bounded result remain eligible/);
 });
