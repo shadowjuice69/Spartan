@@ -483,9 +483,11 @@ export async function GET(request: Request) {
         const botRows = ((botIntelResult.data || []) as Rec[]).filter(r =>
           r.raw_text && Number.isFinite(Date.parse(when(r))) && Date.parse(when(r)) >= ageStartMs
         )
-        // A small number of older bot messages were safely saved in the raw vault
-        // before their flow/projection existed. Read those as historical evidence;
-        // never replay them or let them update current province state.
+        // The bounded page query cannot return every current-age bot report.
+        // Read additional matching raw-vault captures through as historical evidence.
+        // Suppress only captures already present in this page's botRows; older projected
+        // records outside that bounded result remain eligible here, exactly once.
+        // This is read-only and never replays captures or updates current province state.
         const projectedCaptureIds = new Set(botRows.map(r => r.capture_id).filter(Boolean))
         let botVaultQuery = db.from('spartan_capture_vault')
           .select('id,capture_id,source_id,user_id,province_id,kingdom_id,source,page_kind,url,captured_at,created_at,raw_text,parsed_payload')
@@ -499,23 +501,11 @@ export async function GET(request: Request) {
         const botVaultResult = await botVaultQuery.order('captured_at', { ascending: false }).limit(500)
         if (botVaultResult.error) fail(botVaultResult.error)
         const botVaultRows = botVaultResult.data || []
-        // botRows is deliberately capped at 500 to keep the page query bounded.
-        // Check every vault candidate against the full projection table before
-        // read-through; otherwise already-projected older reports outside that
-        // first 500-row window can be re-added as apparent vault-only records.
-        const vaultCaptureIds = [...new Set(botVaultRows.map((r: any) => r.capture_id).filter(Boolean))]
-        const projectedVaultIds = new Set(projectedCaptureIds)
-        if (vaultCaptureIds.length) {
-          const vaultProjectionResult = await db.from('spartan_intel_records_with_archive')
-            .select('capture_id')
-            .in('capture_id', vaultCaptureIds)
-          if (vaultProjectionResult.error) fail(vaultProjectionResult.error)
-          for (const row of vaultProjectionResult.data || []) {
-            if (row.capture_id) projectedVaultIds.add(row.capture_id)
-          }
-        }
+        // botRows is deliberately capped at 500. Only dedupe against records
+        // actually returned in this page response; a broader projection lookup
+        // would hide older reports that the bounded query did not return.
         const vaultOnlyRows = botVaultRows
-          .filter((r: any) => r.capture_id && !projectedVaultIds.has(r.capture_id)
+          .filter((r: any) => r.capture_id && !projectedCaptureIds.has(r.capture_id)
             && (r.parsed_payload?.data?.metadata?.author_bot === true || r.parsed_payload?.data?.metadata?.author_bot === 'true')
             && r.raw_text && Number.isFinite(Date.parse(r.captured_at)) && Date.parse(r.captured_at) >= ageStartMs)
           .map((r: any) => {
