@@ -117,9 +117,9 @@ test('bot backfill recognizes moneybag transfers but keeps the 48-hour recovery 
   assert.match(processor, /48 \* 60 \* 60 \* 1000/);
 });
 
-test('Magic and Thievery vault read-through excludes projections outside the bounded bot-row window', () => {
+test('Magic and Thievery vault read-through dedupes only against records returned in the page response', () => {
   const route = fs.readFileSync('app/api/page-models/route.ts', 'utf8');
-  assert.match(route, /const botVaultRows = botVaultResult\.data \|\| \[\]/);
-  assert.match(route, /\.select\('capture_id'\)\s*\.in\('capture_id', vaultCaptureIds\)/);
-  assert.match(route, /!projectedVaultIds\.has\(r\.capture_id\)/);
+  assert.match(route, /const projectedCaptureIds = new Set\(botRows\.map/);
+  assert.match(route, /!projectedCaptureIds\.has\(r\.capture_id\)/);
+  assert.match(route, /older projected[\s\S]{0,120}outside that bounded result remain eligible/);
 });
