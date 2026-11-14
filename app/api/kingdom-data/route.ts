@@ -60,7 +60,7 @@ export async function GET() {
         .order('captured_at', { ascending: false })
         .limit(60),
       db.from('spartan_intel_records_with_archive')
-        .select('capture_id,captured_at,kingdom_id,parsed_payload,raw_text,raw_payload')
+        .select('id,capture_id,captured_at,kingdom_id,parsed_payload,raw_text,raw_payload')
         .eq('kingdom_id', account.province_location)
         .eq('page_kind', 'kingdom')
         .order('captured_at', { ascending: false })
@@ -73,8 +73,8 @@ export async function GET() {
     const byCapture = new Map<string, CaptureRow>()
     // Prefer canonical parsed Intel where both layers contain the same capture.
     for (const row of intelRows || []) {
-      const key = String(row.capture_id || '')
-      if (key) byCapture.set(key, row as CaptureRow)
+      const key = String(row.capture_id || row.id || '')
+      if (key) byCapture.set(key, { ...row, capture_id: key } as CaptureRow)
     }
     // Keep vault-only evidence visible until it has a canonical projection.
     for (const row of captures || []) {
