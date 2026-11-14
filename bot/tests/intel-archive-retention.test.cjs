@@ -35,12 +35,22 @@ test('existing daily cleanup function keeps the other retention jobs', () => {
 })
 
 test('application consumers use the archive-aware Intel read view', () => {
-  const pageModels = fs.readFileSync(path.join(__dirname, '../../app/api/page-models/route.ts'), 'utf8')
-  const intelData = fs.readFileSync(path.join(__dirname, '../../app/api/intel-data/route.ts'), 'utf8')
-  const coverage = fs.readFileSync(path.join(__dirname, '../../app/api/data-coverage/route.ts'), 'utf8')
-  for (const source of [pageModels, intelData, coverage]) assert.match(source, /spartan_intel_records_with_archive/)
+  const consumers = [
+    'app/api/page-models/route.ts',
+    'app/api/intel-data/route.ts',
+    'app/api/data-coverage/route.ts',
+    'app/api/history/route.ts',
+    'app/api/enemy-intel/route.ts',
+    'app/api/front-line/route.ts',
+    'app/api/intel-backlog/route.ts',
+    'app/api/kingdom-data/route.ts',
+  ].map(file => fs.readFileSync(path.join(__dirname, '../..', file), 'utf8'))
+  for (const source of consumers) assert.match(source, /spartan_intel_records_with_archive/)
+  const coverage = consumers[2]
   assert.match(coverage, /from\('spartan_operational_archive'\)/)
   assert.match(coverage, /record->>user_id/)
+  assert.match(consumers[7], /spartan_capture_vault/)
+  assert.match(consumers[7], /byCapture/)
 })
 
 test('Aid has a dedicated page consumer', () => {
