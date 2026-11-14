@@ -33,7 +33,7 @@ export async function GET(request: Request) {
     const ownKingdom = String(account.province_location).trim().toLowerCase()
 
     const { data, error } = await db
-      .from('spartan_intel_records')
+      .from('spartan_intel_records_with_archive')
       .select(summary
         ? 'id,capture_id,user_id,province_id,kingdom_id,target_province_id,target_kingdom_id,captured_at,created_at,source,url,page_kind,classification_source,classification_confidence,intel_type,visibility,metrics'
         : 'id,capture_id,user_id,province_id,kingdom_id,target_province_id,target_kingdom_id,captured_at,created_at,source,url,page_kind,classification_source,classification_confidence,parsed_payload,raw_payload,intel_type,visibility,metrics')
