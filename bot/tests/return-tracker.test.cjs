@@ -7,6 +7,18 @@ test('unknown kingdom uses conservative inter-kingdom base', () => assert.equal(
 
 const fs = require('node:fs')
 const source = fs.readFileSync('app/command/returns/page.tsx', 'utf8')
+const pageModelsSource = fs.readFileSync('app/api/page-models/route.ts', 'utf8')
+const frontLineRouteSource = fs.readFileSync('app/api/front-line/route.ts', 'utf8')
+
+test('canonical Bot Intel KDNEWS reports feed News and Return Tracker', () => {
+  assert.ok(pageModelsSource.includes("discordKingdomEvents([...records, ...((mpResult.data || []) as Rec[])], own)"))
+  assert.ok(pageModelsSource.includes(".eq('page_kind', 'bot_event').eq('source', 'discord-bot')"))
+  assert.ok(pageModelsSource.includes('attacked and pillaged'))
+})
+
+test('Front Line includes canonical Bot Intel combat events', () => {
+  assert.ok(frontLineRouteSource.includes(".in('page_kind', ['news', 'bot_event'])"))
+})
 test('return tracker collapses same-timestamp cross-label duplicates by attack identity', () => {
   assert.match(source, /function dedupeAttackEvents/)
   assert.ok(source.includes('Number.isFinite(stamp) ? stamp : event.at'))
