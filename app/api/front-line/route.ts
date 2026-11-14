@@ -35,7 +35,7 @@ export async function GET(request: Request) {
     const rows: Array<{ id: string; captured_at: string | null; created_at: string | null; raw_text: string | null }> = []
     for (let from = 0; from < MAX_ROWS; from += PAGE) {
       const result = await db
-        .from('spartan_intel_records')
+        .from('spartan_intel_records_with_archive')
         .select('id,captured_at,created_at,raw_text')
         .eq('page_kind', 'news').eq('source', 'discord-bot').eq('kingdom_id', ownKd)
         .gte('created_at', since)

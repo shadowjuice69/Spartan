@@ -49,41 +49,41 @@ export async function GET() {
       return NextResponse.json({ error: 'Your Spartan account is not linked to a kingdom.' }, { status: 403 })
     }
 
-    // The capture vault is evidence storage and may be compacted by retention.
-    // Kingdom intelligence is also canonicalized into spartan_intel_records, so
-    // the page must remain populated after vault cleanup.
-    const { data: captures, error: captureError } = await db
-      .from('spartan_capture_vault')
-      .select('capture_id,captured_at,kingdom_id,parsed_payload,raw_text,raw_payload')
-      .eq('kingdom_id', account.province_location)
-      .eq('page_kind', 'kingdom')
-      .order('captured_at', { ascending: false })
-      .limit(60)
-
-    if (captureError) throw captureError
-
-    let sourceRows: CaptureRow[] = (captures || []) as CaptureRow[]
-
-    if (!sourceRows.length) {
-      const { data: intelRows, error: intelError } = await db
-        .from('spartan_intel_records')
-        .select('id,captured_at,kingdom_id,parsed_payload,raw_text,raw_payload')
+    // The vault is raw evidence and may be compacted. The archive-aware
+    // canonical view must be read alongside it so old and current kingdom
+    // snapshots remain available even while a vault receipt still exists.
+    const [{ data: captures, error: captureError }, { data: intelRows, error: intelError }] = await Promise.all([
+      db.from('spartan_capture_vault')
+        .select('capture_id,captured_at,kingdom_id,parsed_payload,raw_text,raw_payload')
         .eq('kingdom_id', account.province_location)
         .eq('page_kind', 'kingdom')
         .order('captured_at', { ascending: false })
-        .limit(60)
+        .limit(60),
+      db.from('spartan_intel_records_with_archive')
+        .select('id,capture_id,captured_at,kingdom_id,parsed_payload,raw_text,raw_payload')
+        .eq('kingdom_id', account.province_location)
+        .eq('page_kind', 'kingdom')
+        .order('captured_at', { ascending: false })
+        .limit(60),
+    ])
 
-      if (intelError) throw intelError
+    if (captureError) throw captureError
+    if (intelError) throw intelError
 
-      sourceRows = (intelRows || []).map((row: any) => ({
-        capture_id: row.id,
-        captured_at: row.captured_at,
-        kingdom_id: row.kingdom_id,
-        parsed_payload: row.parsed_payload,
-        raw_text: row.raw_text,
-        raw_payload: row.raw_payload,
-      }))
+    const byCapture = new Map<string, CaptureRow>()
+    // Prefer canonical parsed Intel where both layers contain the same capture.
+    for (const row of intelRows || []) {
+      const key = String(row.capture_id || row.id || '')
+      if (key) byCapture.set(key, { ...row, capture_id: key } as CaptureRow)
     }
+    // Keep vault-only evidence visible until it has a canonical projection.
+    for (const row of captures || []) {
+      const key = String(row.capture_id || '')
+      if (key && !byCapture.has(key)) byCapture.set(key, row as CaptureRow)
+    }
+    const sourceRows: CaptureRow[] = [...byCapture.values()]
+      .sort((a, b) => Date.parse(b.captured_at) - Date.parse(a.captured_at))
+      .slice(0, 60)
 
     const snapshots = sourceRows
       .map((row: any) => {
