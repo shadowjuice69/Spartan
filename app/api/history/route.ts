@@ -76,7 +76,7 @@ export async function GET(request: Request) {
       db.from('spartan_province_history').select('*').eq('province_id', province.province_id).order('observed_at', { ascending: true }).limit(limit),
       db.from('spartan_state_projection').select('province_id,kingdom_id,state,version,updated_at').eq('province_id', province.province_id).order('updated_at', { ascending: false }).limit(1),
       db.from('spartan_event_history').select('*').eq('province_id', province.province_id).order('occurred_at', { ascending: false }).limit(4),
-      db.from('spartan_intel_records').select('captured_at,raw_text,raw_payload,parsed_payload').eq('province_id', province.province_id).eq('page_kind','throne').order('captured_at', { ascending: false }).limit(20),
+      db.from('spartan_intel_records_with_archive').select('captured_at,raw_text,raw_payload,parsed_payload').eq('province_id', province.province_id).eq('page_kind','throne').order('captured_at', { ascending: false }).limit(20),
     ])
     if (historyResult.error) throw historyResult.error; if (directProjectionResult.error) throw directProjectionResult.error; if (eventsResult.error) throw eventsResult.error; if (liveThroneResult.error) throw liveThroneResult.error
     let direct = directProjectionResult.data?.[0] || null; let kingdomProjection: any = null
