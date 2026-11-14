@@ -61,7 +61,7 @@ export async function GET(_request: NextRequest) {
         .or(`kingdom_id.eq.${kingdom},kingdom_id.is.null`)
         .order('captured_at', { ascending: false })
         .limit(1000),
-      db.from('spartan_intel_records')
+      db.from('spartan_intel_records_with_archive')
         .select('id,capture_id,source_vault_id,page_kind,kingdom_id,captured_at,created_at,classification_confidence,classification_reason,parsed_payload')
         .eq('source', 'discord-bot')
         .or(`kingdom_id.eq.${kingdom},kingdom_id.is.null`)
