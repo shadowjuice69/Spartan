@@ -155,43 +155,58 @@ function discordKingdomEvents(rows: Rec[], own: { name: string; kd: string | nul
       let defenderKd = ''
       let amount = 0
       let amountKind: 'acres' | 'books' = 'acres'
-      let match = line.match(/^(\d+\s*-\s*.+?)\s*\((\d+:\d+)\)\s+invaded\s+(\d+\s*-\s*.+?)\s*\((\d+:\d+)\)\s+and captured\s+([\d,]+) acres of land\.?/i)
+      let match = line.match(/^(?:\d+\s*-\s*)?(.+?)\s*\((\d+:\d+)\)\s+invaded\s+(?:\d+\s*-\s*)?(.+?)\s*\((\d+:\d+)\)\s+and captured\s+([\d,]+) acres of land\.?/i)
       if (match) {
-        [, attackerText, attackerKd, defenderText, defenderKd] = match
+        attackerText = match[1]; attackerKd = match[2]; defenderText = match[3]; defenderKd = match[4]
         amount = Number(match[5].replace(/,/g, ''))
       } else {
-        match = line.match(/^(\d+\s*-\s*.+?)\s*\((\d+:\d+)\)\s+(recaptured|captured)\s+([\d,]+) acres of land from\s+(\d+\s*-\s*.+?)\s*\((\d+:\d+)\)/i)
+        match = line.match(/^(?:\d+\s*-\s*)?(.+?)\s*\((\d+:\d+)\)\s+(recaptured|captured)\s+([\d,]+) acres of land from\s+(?:\d+\s*-\s*)?(.+?)\s*\((\d+:\d+)\)/i)
         if (match) {
           attackerText = match[1]; attackerKd = match[2]; type = match[3].toLowerCase()
           amount = Number(match[4].replace(/,/g, '')); defenderText = match[5]; defenderKd = match[6]
         } else {
-          match = line.match(/^(\d+\s*-\s*.+?)\s*\((\d+:\d+)\)\s+ambushed armies from\s+(\d+\s*-\s*.+?)\s*\((\d+:\d+)\)\s+and took\s+([\d,]+) acres of land/i)
+          match = line.match(/^(?:\d+\s*-\s*)?(.+?)\s*\((\d+:\d+)\)\s+ambushed armies from\s+(?:\d+\s*-\s*)?(.+?)\s*\((\d+:\d+)\)\s+and took\s+([\d,]+) acres of land/i)
           if (match) {
-            [, attackerText, attackerKd, defenderText, defenderKd] = match
+            attackerText = match[1]; attackerKd = match[2]; defenderText = match[3]; defenderKd = match[4]
             type = 'ambush'; amount = Number(match[5].replace(/,/g, ''))
           } else {
-            match = line.match(/^(\d+\s*-\s*.+?)\s*\((\d+:\d+)\)\s+attacked and looted\s+([\d,]+) books from\s+(\d+\s*-\s*.+?)\s*\((\d+:\d+)\)/i)
+            match = line.match(/^(?:\d+\s*-\s*)?(.+?)\s*\((\d+:\d+)\)\s+attacked and looted\s+([\d,]+) books from\s+(?:\d+\s*-\s*)?(.+?)\s*\((\d+:\d+)\)/i)
             if (match) {
               attackerText = match[1]; attackerKd = match[2]; amount = Number(match[3].replace(/,/g, ''))
               amountKind = 'books'; type = 'plunder'; defenderText = match[4]; defenderKd = match[5]
-            } else continue
+            } else {
+              match = line.match(/^(?:\d+\s*-\s*)?(.+?)\s*\((\d+:\d+)\)\s+attacked and pillaged the lands of\s+(?:\d+\s*-\s*)?(.+?)\s*\((\d+:\d+)\)/i)
+              if (match) {
+                attackerText = match[1]; attackerKd = match[2]; defenderText = match[3]; defenderKd = match[4]
+                type = 'pillage'; amount = 0
+              } else {
+                match = line.match(/^(?:\d+\s*-\s*)?(.+?)\s*\((\d+:\d+)\)\s+attempted to invade\s+(?:\d+\s*-\s*)?(.+?)\s*\((\d+:\d+)\)/i)
+                if (match) {
+                  attackerText = match[1]; attackerKd = match[2]; defenderText = match[3]; defenderKd = match[4]
+                  type = 'invade'; amount = 0
+                } else continue
+              }
+            }
           }
         }
       }
       if (!Number.isFinite(amount) || amount < 0) continue
-      const attacker = parseNewsParty(`${attackerText} (${attackerKd})`)
-      const defender = parseNewsParty(`${defenderText} (${defenderKd})`)
+      const attacker = parseNewsParty(attackerText + ' (' + attackerKd + ')')
+      const defender = parseNewsParty(defenderText + ' (' + defenderKd + ')')
       const at = row.captured_at || row.created_at
       const timestamp = Date.parse(at || '')
       const date = new Date(Number.isFinite(timestamp) ? timestamp : Date.now())
-      const gameDate = `Captured ${date.toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric' })}`
+      const gameDate = 'Captured ' + date.toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric' })
       const event = {
         at: at || null, approx: true, gameDate, type, attacker, defender,
         acres: amountKind === 'acres' ? amount : 0, books: amountKind === 'books' ? amount : 0,
         troopsLost: 0, thievesLost: 0, wizardsLost: 0, side: sideOf({ attacker, defender } as any, own),
         text: line, order: Number.isFinite(timestamp) ? timestamp : 0,
       }
-      const key = [type, attacker.name.toLowerCase(), attacker.kd || '', defender.name.toLowerCase(), defender.kd || '', event.acres, event.books].join('|')
+      // Captures of the same Discord report collapse, but separate identical hits
+      // on different days remain distinct.
+      const day = Number.isFinite(timestamp) ? date.toISOString().slice(0, 10) : ''
+      const key = [day, type, attacker.name.toLowerCase(), attacker.kd || '', defender.name.toLowerCase(), defender.kd || '', event.acres, event.books].join('|')
       const prior = perCapture.get(key)
       if (prior) prior.count += 1
       else perCapture.set(key, { event, count: 1 })
@@ -826,13 +841,13 @@ export async function GET(request: Request) {
       for (const r of [...records, ...provinceNewsRows]) newsRowMap.set(r.id, r)
       const newsRows = [...newsRowMap.values()]
       const n = await newsEvents(db, scope, own, newsRows)
-      const botEvents = discordKingdomEvents(records, own)
-      // Province Reporter / MPNEWS may also arrive on the bot_event stream.
+      // Province Reporter / MPNEWS and KDNEWS may also arrive on the bot_event stream.
       // Read that stream separately without changing ingestion.
       const mpResult = await db.from('spartan_intel_records_with_archive').select(COLUMNS)
         .eq('page_kind', 'bot_event').or(`province_id.eq.${account.id},user_id.eq.${account.id},user_id.eq.${user.id},kingdom_id.eq.${account.province_location}`)
         .order('created_at', { ascending: false }).limit(180)
       if (mpResult.error) fail(mpResult.error)
+      const botEvents = discordKingdomEvents([...records, ...((mpResult.data || []) as Rec[])], own)
       const mpRows = ((mpResult.data || []) as Rec[]).filter(r =>
         !(r.visibility === 'own' && r.user_id !== user.id && r.user_id !== account.id) &&
         /Forces from .+?\(\d+:\d+\) came through and ravaged our lands! They captured [\d,]+ acres!/i.test(String(r.raw_text || ''))
@@ -1042,12 +1057,47 @@ export async function GET(request: Request) {
       // Bot notifications contain attacks the web news feed may not have captured. Avoid adding
       // a bot duplicate when the same attacker/defender/acres event already came from game news.
       const botNews = await discordAttackNews(db, kingdomScope, account.province_name)
-      const signature = (e: any) => [String(e.attacker || '').toLowerCase(), String(e.defender || '').toLowerCase(), Number(e.acres || 0)].join('|')
-      const siteSignatures = new Set(fromNews.map(signature))
+      const botEventResult = await db.from('spartan_intel_records_with_archive').select(COLUMNS)
+        .eq('page_kind', 'bot_event').eq('source', 'discord-bot').or(kingdomScope)
+        .order('created_at', { ascending: false }).limit(180)
+      if (botEventResult.error) fail(botEventResult.error)
+      const botEventReports = discordKingdomEvents((botEventResult.data || []) as Rec[], own2)
+        .filter(e => e.side !== 'other' && e.at)
+        .map(e => ({
+          at: e.at, type: e.type, attacker: e.attacker?.name || null, defender: e.defender?.name || null,
+          targetKingdom: (e.side === 'out' ? e.defender?.kd : e.attacker?.kd) || null, direction: e.side,
+          acres: e.acres, books: e.books || 0, troops: e.troopsLost || 0, thieves: e.thievesLost || 0, wizards: e.wizardsLost || 0,
+          gold: 0, food: 0, runes: 0, ...attackTravelInfo(null, e.text),
+        }))
+      const signature = (e: any) => [
+        String(e.type || '').toLowerCase(), String(e.attacker?.name || e.attacker || '').toLowerCase(),
+        String(e.defender?.name || e.defender || '').toLowerCase(), String(e.direction || ''),
+        String(e.targetKingdom || ''), Number(e.acres || 0), Number(e.books || 0),
+        e.at && Number.isFinite(Date.parse(e.at)) ? new Date(Date.parse(e.at)).toISOString().slice(0, 10) : '',
+      ].join('|')
+      const groupBySignature = (list: any[]) => {
+        const grouped = new Map<string, any[]>()
+        for (const event of list) {
+          const key = signature(event)
+          const group = grouped.get(key) || []
+          group.push(event)
+          grouped.set(key, group)
+        }
+        return grouped
+      }
+      const newsGroups = groupBySignature(botNews)
+      const eventGroups = groupBySignature(botEventReports)
+      const botReports: any[] = []
+      for (const key of new Set([...newsGroups.keys(), ...eventGroups.keys()])) {
+        const a = newsGroups.get(key) || []
+        const b = eventGroups.get(key) || []
+        const preferred = b.length > a.length ? b : a.length > b.length ? a : (a.some(e => e.travelHours) ? a : b.length ? b : a)
+        botReports.push(...preferred)
+      }
       // Keep Kingdom News as the canonical event/timestamp, but retain the bot report's
       // explicit return duration when both sources describe the same attack.
       const mergedNews = fromNews.map((event: any) => {
-        const report = botNews.find((bot: any) =>
+        const report = botReports.find((bot: any) =>
           signature(bot) === signature(event) &&
           Number.isFinite(Number(bot.travelHours)) &&
           Number(bot.travelHours) > 0
@@ -1056,7 +1106,8 @@ export async function GET(request: Request) {
           ? { ...event, travelHours: Number(report.travelHours), returnAt: report.returnAt || event.returnAt || null }
           : event
       })
-      events.push(...mergedNews, ...botNews.filter((e: any) => !siteSignatures.has(signature(e))))
+      const siteSignatures = new Set(mergedNews.map(signature))
+      events.push(...mergedNews, ...botReports.filter((e: any) => !siteSignatures.has(signature(e))))
       events.sort((a: any, b: any) => Date.parse(b.at) - Date.parse(a.at))
       const militaryRec = allByPath(records, '/wol/game/council_military')[0] || null
       let kingdom: any = null
