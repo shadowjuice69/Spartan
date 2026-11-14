@@ -37,7 +37,7 @@ export async function GET(request: Request) {
       const result = await db
         .from('spartan_intel_records_with_archive')
         .select('id,captured_at,created_at,raw_text')
-        .eq('page_kind', 'news').eq('source', 'discord-bot').eq('kingdom_id', ownKd)
+        .in('page_kind', ['news', 'bot_event']).eq('source', 'discord-bot').eq('kingdom_id', ownKd)
         .gte('created_at', since)
         .order('created_at', { ascending: false })
         .range(from, from + PAGE - 1)
