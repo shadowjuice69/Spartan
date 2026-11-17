@@ -382,13 +382,18 @@ async function buildCommandModel(db: any, userId: string, account: { id: string;
   const buildingCouncil = bld?.raw_text ? parseBuildings(bld.raw_text) : null
   const buildingConstruction = construction?.raw_text ? parseBuildPage(construction.raw_text) : null
   const buildingRowsByName = new Map((buildingConstruction?.rows || []).map(row => [row.name.toLowerCase(), row]))
+  const militaryFresh = newest(mil, militaryTraining, t)
+  const buildingFresh = newest(bld, construction)
   const buildings = buildingCouncil ? {
     ...buildingCouncil,
     stats: { ...buildingCouncil.stats, totalLand: buildingConstruction?.stats.totalLand ?? buildingCouncil.stats.totalLand },
-    rows: buildingCouncil.rows.map(row => {
-      const fresh = buildingRowsByName.get(row.name.toLowerCase())
-      return fresh ? { ...row, qty: fresh.qty, pct: fresh.pct, inProgress: fresh.inProgress } : row
-    }),
+    rows: [
+      ...buildingCouncil.rows.map(row => {
+        const fresh = buildingRowsByName.get(row.name.toLowerCase())
+        return fresh ? { ...row, qty: fresh.qty, pct: fresh.pct, inProgress: fresh.inProgress } : row
+      }),
+      ...(buildingConstruction?.rows || []).filter(row => !buildingCouncil.rows.some(existing => existing.name.toLowerCase() === row.name.toLowerCase())),
+    ],
     totalAcres: buildingConstruction?.totalAcres ?? buildingCouncil.totalAcres,
   } : buildingConstruction
 
@@ -471,8 +476,8 @@ async function buildCommandModel(db: any, userId: string, account: { id: string;
       events,
       freshness: [
         { label: 'Throne', at: t ? when(t) : null, stale: staleIntel(t), archived: t?.archived === true }, { label: 'State', at: st ? when(st) : null, stale: staleIntel(st), archived: st?.archived === true },
-        { label: 'Military', at: mil ? when(mil) : militaryTraining ? when(militaryTraining) : null, stale: staleIntel(mil || militaryTraining), archived: (mil || militaryTraining)?.archived === true }, { label: 'Science', at: sci ? when(sci) : null, stale: staleIntel(sci), archived: sci?.archived === true },
-        { label: 'Buildings', at: bld ? when(bld) : construction ? when(construction) : null, stale: staleIntel(bld || construction), archived: (bld || construction)?.archived === true }, { label: 'Kingdom', at: kingdomAt }
+        { label: 'Military', at: militaryFresh ? when(militaryFresh) : null, stale: staleIntel(militaryFresh), archived: militaryFresh?.archived === true }, { label: 'Science', at: sci ? when(sci) : null, stale: staleIntel(sci), archived: sci?.archived === true },
+        { label: 'Buildings', at: buildingFresh ? when(buildingFresh) : null, stale: staleIntel(buildingFresh), archived: buildingFresh?.archived === true }, { label: 'Kingdom', at: kingdomAt }
       ],
     },
   }
@@ -838,10 +843,13 @@ export async function GET(request: Request) {
       const current = councilModel ? {
         ...councilModel,
         stats: { ...councilModel.stats, totalLand: buildModel?.stats.totalLand ?? councilModel.stats.totalLand },
-        rows: councilModel.rows.map(row => {
-          const fresh = buildRowsByName.get(row.name.toLowerCase())
-          return fresh ? { ...row, qty: fresh.qty, pct: fresh.pct, inProgress: fresh.inProgress } : row
-        }),
+        rows: [
+          ...councilModel.rows.map(row => {
+            const fresh = buildRowsByName.get(row.name.toLowerCase())
+            return fresh ? { ...row, qty: fresh.qty, pct: fresh.pct, inProgress: fresh.inProgress } : row
+          }),
+          ...(buildModel?.rows || []).filter(row => !councilModel.rows.some(existing => existing.name.toLowerCase() === row.name.toLowerCase())),
+        ],
         totalAcres: buildModel?.totalAcres ?? councilModel.totalAcres,
       } : buildModel
       body.model = {
