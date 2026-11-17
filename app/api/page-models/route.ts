@@ -318,9 +318,31 @@ async function discordAttackNews(db: any, scope: string, ownName: string) {
 // so a missing capture only blanks that section. Only parsed game numbers are returned: no raw page text,
 // no capture log, no capture sources and no Discord/bot data.
 async function latestOf(db: any, kinds: string[], like: string, path: string, scope: string, limit = 3): Promise<Rec[] | null> {
-  const r = await db.from('spartan_intel_records_with_archive').select(COLUMNS).in('page_kind', kinds).ilike('url', like).or(scope).order('created_at', { ascending: false }).limit(limit)
+  const r = await db.from('spartan_intel_records_with_archive').select(COLUMNS).in('page_kind', kinds).ilike('url', like).or(scope).order('captured_at', { ascending: false }).order('created_at', { ascending: false }).limit(limit)
   if (r.error) return null
   return ((r.data || []) as Rec[]).filter(x => pathOf(x.url) === path)
+}
+
+function parseBuildPage(text: string) {
+  const lines = String(text || '').split(/\r?\n/)
+  const totalLandMatch = String(text || '').match(/Total Land\s+([\d,]+) acres/i)
+  const totalLand = toNum(totalLandMatch?.[1]) ?? null
+  const rows: Array<{ name: string; qty: number; inProgress: number; pct: number | null; group: string; effects: string }> = []
+  const header = lines.findIndex(line => /Building\s+You Own\s+In Progress/i.test(line))
+  if (header >= 0) {
+    for (const line of lines.slice(header + 1)) {
+      const cells = line.split(/\t+/).map(value => value.trim()).filter(Boolean)
+      for (let i = 0; i + 2 < cells.length; i += 3) {
+        const name = cells[i]
+        const qty = toNum(cells[i + 1])
+        const inProgress = toNum(cells[i + 2])
+        if (!name || qty == null || inProgress == null || /^(?:building|homes|farms|mills|banks|training grounds|armouries|military barracks|forts|castles|hospitals|guilds|towers|thieves' dens|watch towers|universities|libraries|dungeons)$/i.test(name) === false) continue
+        if (/^building$/i.test(name)) continue
+        rows.push({ name, qty, inProgress, pct: totalLand && totalLand > 0 ? qty / totalLand * 100 : null, group: 'Other', effects: '' })
+      }
+    }
+  }
+  return { stats: { totalLand }, rows, totalAcres: rows.reduce((sum, row) => sum + row.qty, 0) }
 }
 
 async function buildCommandModel(db: any, userId: string, account: { id: string; province_name: string; province_location: string }, ownScope: string, kingdomScope: string) {
@@ -330,12 +352,15 @@ async function buildCommandModel(db: any, userId: string, account: { id: string;
     if (rows === null) { unavailable.push(label); return [] as Rec[] }
     return rows
   }
-  const [throneRows, stateRows, militaryRows, scienceRows, buildingRows, kingdomRows, historyRes, eventRes] = await Promise.all([
+  const [throneRows, stateRows, militaryRows, militaryTrainingRows, scienceRows, sciencePageRows, buildingRows, constructionRows, kingdomRows, historyRes, eventRes] = await Promise.all([
     grab('throne', KINDS.province, '%/wol/game/throne%', '/wol/game/throne'),
     grab('state', KINDS.province, '%/wol/game/council_state%', '/wol/game/council_state'),
     grab('military', KINDS.military, '%/wol/game/council_military%', '/wol/game/council_military'),
+    grab('militaryTraining', KINDS.military, '%/wol/game/train_army%', '/wol/game/train_army'),
     grab('science', KINDS.science, '%/wol/game/council_science%', '/wol/game/council_science'),
+    grab('sciencePage', KINDS.science, '%/wol/game/science%', '/wol/game/science'),
     grab('buildings', KINDS.buildings, '%/wol/game/council_internal%', '/wol/game/council_internal'),
+    grab('construction', KINDS.buildings, '%/wol/game/build%', '/wol/game/build'),
     latestOf(db, KINDS.kingdom, '%/wol/game/kingdom_details%', '/wol/game/kingdom_details', kingdomScope, 8).then(rows => rows || []),
     db.from('spartan_province_history')
       .select('observed_at,acres,networth,population,peons,soldiers,off_specs,def_specs,elites,thieves,wizards,generals,war_horses,offense,defense,defense_home,build_efficiency,wages,r_tpa,o_tpa,d_tpa,r_wpa,o_wpa,d_wpa')
@@ -348,8 +373,10 @@ async function buildCommandModel(db: any, userId: string, account: { id: string;
   const t = throneRows[0] || null
   const st = stateRows[0] || null
   const mil = militaryRows[0] || null
-  const sci = scienceRows[0] || null
+  const militaryTraining = militaryTrainingRows[0] || null
+  const sci = scienceRows[0] || sciencePageRows[0] || null
   const bld = buildingRows[0] || null
+  const construction = constructionRows[0] || null
 
   let kingdom: any = null
   let kingdomAt: string | null = null
@@ -378,15 +405,16 @@ async function buildCommandModel(db: any, userId: string, account: { id: string;
       throne: t?.raw_text ? parseThrone(t.raw_text) : null,
       throneFields: t?.parsed_payload || null,
       state: st?.raw_text ? parseState(st.raw_text) : null,
-      military: mil?.raw_text ? parseMilitary(mil.raw_text) : null,
+      military: mil?.raw_text ? parseMilitary(mil.raw_text) : militaryTraining?.raw_text ? { army: parseTrainingUnits(militaryTraining.raw_text).map(unit => ({ name: unit.name, home: unit.owned, away: unit.training, role: unit.role })), source: 'train_army' } : null,
+      militaryTraining: militaryTraining?.raw_text ? parseTrainingUnits(militaryTraining.raw_text) : [],
       science: sci?.raw_text ? parseScience(sci.raw_text) : null,
-      buildings: bld?.raw_text ? parseBuildings(bld.raw_text) : null,
+      buildings: bld?.raw_text ? parseBuildings(bld.raw_text) : construction?.raw_text ? parseBuildPage(construction.raw_text) : null,
       kingdom,
       events,
       freshness: [
         { label: 'Throne', at: t ? when(t) : null, stale: staleIntel(t), archived: t?.archived === true }, { label: 'State', at: st ? when(st) : null, stale: staleIntel(st), archived: st?.archived === true },
-        { label: 'Military', at: mil ? when(mil) : null, stale: staleIntel(mil), archived: mil?.archived === true }, { label: 'Science', at: sci ? when(sci) : null, stale: staleIntel(sci), archived: sci?.archived === true },
-        { label: 'Buildings', at: bld ? when(bld) : null, stale: staleIntel(bld), archived: bld?.archived === true }, { label: 'Kingdom', at: kingdomAt }
+        { label: 'Military', at: mil ? when(mil) : militaryTraining ? when(militaryTraining) : null, stale: staleIntel(mil || militaryTraining), archived: (mil || militaryTraining)?.archived === true }, { label: 'Science', at: sci ? when(sci) : null, stale: staleIntel(sci), archived: sci?.archived === true },
+        { label: 'Buildings', at: bld ? when(bld) : construction ? when(construction) : null, stale: staleIntel(bld || construction), archived: (bld || construction)?.archived === true }, { label: 'Kingdom', at: kingdomAt }
       ],
     },
   }
@@ -747,9 +775,9 @@ export async function GET(request: Request) {
       const latest = councils[0] || null
       const construction = latestByPath(records, '/wol/game/build')
       body.model = {
-        current: latest?.raw_text ? parseBuildings(latest.raw_text) : null,
-        capturedAt: latest ? when(latest) : null,
-        construction: construction ? { ...construction.parsed_payload, capturedAt: when(construction) } : null,
+        current: latest?.raw_text ? parseBuildings(latest.raw_text) : construction?.raw_text ? parseBuildPage(construction.raw_text) : null,
+        capturedAt: latest ? when(latest) : construction ? when(construction) : null,
+        construction: construction ? { ...construction.parsed_payload, parsed: parseBuildPage(construction.raw_text || ''), capturedAt: when(construction) } : null,
         series: councils.slice().reverse().map(r => {
           const b = parseBuildings(r.raw_text || '')
           return { at: when(r), rows: b.rows.map(x => ({ name: x.name, pct: x.pct, qty: x.qty })) }
