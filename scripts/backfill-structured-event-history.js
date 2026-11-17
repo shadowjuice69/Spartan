@@ -67,7 +67,7 @@ async function main() {
           target_kingdom: event.target_kingdom || null, acres_change: event.acres_change,
           troops_lost: event.troops_lost, thieves_lost: event.thieves_lost, wizards_lost: event.wizards_lost,
           payload: { ...event.payload, original_source: 'discord-bot', backfilled: true },
-          raw_text: event.raw_text, created_at: new Date().toISOString(),
+          raw_text: event.raw_text,
         });
       }
     }

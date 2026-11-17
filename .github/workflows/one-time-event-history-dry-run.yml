@@ -1,0 +1,78 @@
+name: One-time Spartan event history dry run
+
+on:
+  push:
+    branches:
+      - ops/run-event-history-dry-run
+    paths:
+      - .github/workflows/one-time-event-history-dry-run.yml
+      - scripts/backfill-structured-event-history.js
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/one-time-event-history-dry-run.yml
+
+permissions:
+  contents: read
+
+jobs:
+  dry-run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out isolated backfill branch
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install production dependencies
+        run: npm ci --omit=dev
+      - name: Verify required secrets are configured
+        env:
+          SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+        run: |
+          test -n "$SUPABASE_URL" || { echo "Missing GitHub Actions secret NEXT_PUBLIC_SUPABASE_URL"; exit 1; }
+          test -n "$SUPABASE_SERVICE_ROLE_KEY$SUPABASE_SECRET_KEY" || { echo "Missing GitHub Actions secret SUPABASE_SERVICE_ROLE_KEY or SUPABASE_SECRET_KEY"; exit 1; }
+      - name: Diagnose Supabase URL format without exposing it
+        env:
+          SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+        run: |
+          node - <<'NODE'
+          const raw = process.env.SUPABASE_URL || '';
+          const value = raw.trim();
+          let parsed;
+          try { parsed = new URL(value); } catch {}
+          console.log(JSON.stringify({
+            present: Boolean(raw),
+            length: raw.length,
+            leadingOrTrailingWhitespace: raw !== value,
+            startsWithHttps: value.startsWith('https://'),
+            validUrl: Boolean(parsed && ['http:', 'https:'].includes(parsed.protocol)),
+            hostname: parsed?.hostname || null,
+          }, null, 2));
+          NODE
+      - name: Run read-only structured event history dry run
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+        run: |
+          set -o pipefail
+          node scripts/backfill-structured-event-history.js --dry-run | tee backfill-dry-run.json
+      - name: Save dry-run report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: spartan-event-history-dry-run
+          path: backfill-dry-run.json
+          if-no-files-found: ignore
+          retention-days: 3
+
+# Re-run after repository Actions secrets were configured.
+
+# Retry after confirming repository-level Actions secrets.
