@@ -328,6 +328,9 @@ function parseBuildPage(text: string) {
   const totalLandMatch = String(text || '').match(/Total Land\s+([\d,]+) acres/i)
   const totalLand = toNum(totalLandMatch?.[1]) ?? null
   const rows: Array<{ name: string; qty: number; inProgress: number; pct: number | null; group: string; effects: string }> = []
+  const undevelopedMatch = String(text || '').match(/Total Undeveloped land\s+([\d,]+) acres/i)
+  const undeveloped = toNum(undevelopedMatch?.[1])
+  if (undeveloped != null) rows.push({ name: 'Barren Land', qty: undeveloped, inProgress: 0, pct: totalLand && totalLand > 0 ? undeveloped / totalLand * 100 : null, group: 'Other', effects: '' })
   const header = lines.findIndex(line => /Building\s+You Own\s+In Progress/i.test(line))
   if (header >= 0) {
     for (const line of lines.slice(header + 1)) {
