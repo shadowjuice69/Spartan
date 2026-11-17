@@ -130,7 +130,7 @@ function captureLog(records: Rec[]) {
 // The newest Throne capture that shows the current game date. News events only carry game dates, so this is
 // what lets us place them on a real day (24 game ticks = one game day).
 async function gameAnchor(db: any, scope: string) {
-  const r = await db.from('spartan_intel_records_with_archive').select('captured_at,created_at,raw_text').eq('page_kind', 'throne').or(scope).order('created_at', { ascending: false }).limit(8)
+  const r = await db.from('spartan_intel_records_with_archive').select('captured_at,created_at,raw_text').eq('page_kind', 'throne').or(scope).order('captured_at', { ascending: false }).order('created_at', { ascending: false }).limit(8)
   if (r.error) return null
   for (const row of r.data || []) {
     const d = findGameDate(row.raw_text)
@@ -318,9 +318,34 @@ async function discordAttackNews(db: any, scope: string, ownName: string) {
 // so a missing capture only blanks that section. Only parsed game numbers are returned: no raw page text,
 // no capture log, no capture sources and no Discord/bot data.
 async function latestOf(db: any, kinds: string[], like: string, path: string, scope: string, limit = 3): Promise<Rec[] | null> {
-  const r = await db.from('spartan_intel_records_with_archive').select(COLUMNS).in('page_kind', kinds).ilike('url', like).or(scope).order('created_at', { ascending: false }).limit(limit)
+  const r = await db.from('spartan_intel_records_with_archive').select(COLUMNS).in('page_kind', kinds).ilike('url', like).or(scope).order('captured_at', { ascending: false }).order('created_at', { ascending: false }).limit(limit)
   if (r.error) return null
   return ((r.data || []) as Rec[]).filter(x => pathOf(x.url) === path)
+}
+
+function parseBuildPage(text: string) {
+  const lines = String(text || '').split(/\r?\n/)
+  const totalLandMatch = String(text || '').match(/Total Land\s+([\d,]+) acres/i)
+  const totalLand = toNum(totalLandMatch?.[1]) ?? null
+  const rows: Array<{ name: string; qty: number; inProgress: number; pct: number | null; group: string; effects: string }> = []
+  const undevelopedMatch = String(text || '').match(/Total Undeveloped land\s+([\d,]+) acres/i)
+  const undeveloped = toNum(undevelopedMatch?.[1])
+  if (undeveloped != null) rows.push({ name: 'Barren Land', qty: undeveloped, inProgress: 0, pct: totalLand && totalLand > 0 ? undeveloped / totalLand * 100 : null, group: 'Other', effects: '' })
+  const header = lines.findIndex(line => /Building\s+You Own\s+In Progress/i.test(line))
+  if (header >= 0) {
+    for (const line of lines.slice(header + 1)) {
+      const cells = line.split(/\t+/).map(value => value.trim()).filter(Boolean)
+      for (let i = 0; i + 2 < cells.length; i += 3) {
+        const name = cells[i]
+        const qty = toNum(cells[i + 1])
+        const inProgress = toNum(cells[i + 2])
+        if (!name || qty == null || inProgress == null || /^(?:building|homes|farms|mills|banks|training grounds|armouries|military barracks|forts|castles|hospitals|guilds|towers|thieves' dens|watch towers|universities|libraries|dungeons)$/i.test(name) === false) continue
+        if (/^building$/i.test(name)) continue
+        rows.push({ name, qty, inProgress, pct: totalLand && totalLand > 0 ? qty / totalLand * 100 : null, group: 'Other', effects: '' })
+      }
+    }
+  }
+  return { stats: { totalLand }, rows, totalAcres: rows.reduce((sum, row) => sum + row.qty, 0) }
 }
 
 async function buildCommandModel(db: any, userId: string, account: { id: string; province_name: string; province_location: string }, ownScope: string, kingdomScope: string) {
@@ -330,16 +355,19 @@ async function buildCommandModel(db: any, userId: string, account: { id: string;
     if (rows === null) { unavailable.push(label); return [] as Rec[] }
     return rows
   }
-  const [throneRows, stateRows, militaryRows, scienceRows, buildingRows, kingdomRows, historyRes, eventRes] = await Promise.all([
+  const [throneRows, stateRows, militaryRows, militaryTrainingRows, scienceRows, sciencePageRows, buildingRows, constructionRows, kingdomRows, historyRes, eventRes] = await Promise.all([
     grab('throne', KINDS.province, '%/wol/game/throne%', '/wol/game/throne'),
     grab('state', KINDS.province, '%/wol/game/council_state%', '/wol/game/council_state'),
     grab('military', KINDS.military, '%/wol/game/council_military%', '/wol/game/council_military'),
+    grab('militaryTraining', KINDS.military, '%/wol/game/train_army%', '/wol/game/train_army'),
     grab('science', KINDS.science, '%/wol/game/council_science%', '/wol/game/council_science'),
+    grab('sciencePage', KINDS.science, '%/wol/game/science%', '/wol/game/science'),
     grab('buildings', KINDS.buildings, '%/wol/game/council_internal%', '/wol/game/council_internal'),
+    grab('construction', KINDS.buildings, '%/wol/game/build%', '/wol/game/build'),
     latestOf(db, KINDS.kingdom, '%/wol/game/kingdom_details%', '/wol/game/kingdom_details', kingdomScope, 8).then(rows => rows || []),
     db.from('spartan_province_history')
       .select('observed_at,acres,networth,population,peons,soldiers,off_specs,def_specs,elites,thieves,wizards,generals,war_horses,offense,defense,defense_home,build_efficiency,wages,r_tpa,o_tpa,d_tpa,r_wpa,o_wpa,d_wpa')
-      .eq('user_id', userId).order('observed_at', { ascending: true }).limit(240),
+      .eq('user_id', userId).order('observed_at', { ascending: false }).limit(240),
     db.from('spartan_event_history')
       .select('occurred_at,event_type,source,attacker,defender,target_kingdom,acres_change,troops_lost,thieves_lost,wizards_lost,gold_change,food_change,runes_change')
       .eq('user_id', userId).order('occurred_at', { ascending: false }).limit(30),
@@ -348,8 +376,29 @@ async function buildCommandModel(db: any, userId: string, account: { id: string;
   const t = throneRows[0] || null
   const st = stateRows[0] || null
   const mil = militaryRows[0] || null
-  const sci = scienceRows[0] || null
+  const militaryTraining = militaryTrainingRows[0] || null
+  const newest = (...rows: Array<Rec | null | undefined>) => rows.filter((row): row is Rec => Boolean(row))
+    .sort((a, b) => Date.parse(when(b)) - Date.parse(when(a)))[0] || null
+  const sci = newest(scienceRows[0], sciencePageRows[0])
   const bld = buildingRows[0] || null
+  const construction = constructionRows[0] || null
+  const buildingCouncil = bld?.raw_text ? parseBuildings(bld.raw_text) : null
+  const buildingConstruction = construction?.raw_text ? parseBuildPage(construction.raw_text) : null
+  const buildingRowsByName = new Map((buildingConstruction?.rows || []).map(row => [row.name.toLowerCase(), row]))
+  const militaryFresh = newest(mil, militaryTraining, t)
+  const buildingFresh = newest(bld, construction)
+  const buildings = buildingCouncil ? {
+    ...buildingCouncil,
+    stats: { ...buildingCouncil.stats, totalLand: buildingConstruction?.stats.totalLand ?? null },
+    rows: [
+      ...buildingCouncil.rows.map(row => {
+        const fresh = buildingRowsByName.get(row.name.toLowerCase())
+        return fresh ? { ...row, qty: fresh.qty, pct: fresh.pct, inProgress: fresh.inProgress } : row
+      }),
+      ...(buildingConstruction?.rows || []).filter(row => !buildingCouncil.rows.some(existing => existing.name.toLowerCase() === row.name.toLowerCase())),
+    ],
+    totalAcres: buildingConstruction?.totalAcres ?? buildingCouncil.totalAcres,
+  } : buildingConstruction
 
   let kingdom: any = null
   let kingdomAt: string | null = null
@@ -359,6 +408,70 @@ async function buildCommandModel(db: any, userId: string, account: { id: string;
   }
 
   const num = (v: unknown) => toNum(v) ?? 0
+  const history = (historyRes.error ? [] : historyRes.data || []).map((row: any) => ({ ...row }))
+  const throneData = t?.raw_text ? parseThrone(t.raw_text) : null
+  const troopPopulation = Object.entries(throneData?.unitCounts || {})
+    .filter(([name]) => !/^(?:thieves?|wizards?|war horses?|horses?|prisoners?|generals?)$/i.test(name))
+    .reduce((sum, [, count]) => sum + (toNum(count) ?? 0), 0)
+  const throneThieves = throneData?.thieves ?? toNum(throneData?.unitCounts?.Thieves)
+  const throneWizards = throneData?.wizards ?? toNum(throneData?.unitCounts?.Wizards)
+  const throneArmyPopulation = troopPopulation + (throneThieves ?? 0) + (throneWizards ?? 0)
+  const state = st?.raw_text ? parseState(st.raw_text) : throneData ? {
+    land: throneData.acres,
+    networth: throneData.networth,
+    population: {
+      peasants: throneData.peons,
+      army: throneArmyPopulation,
+      thieves: throneThieves,
+      wizards: throneWizards,
+      total: throneData.peons == null ? null : throneData.peons + throneArmyPopulation,
+      max: null,
+    },
+    trends: [],
+    source: 'throne',
+  } : null
+  const storedHistoryAt = history.reduce((latest: number, row: any) => Math.max(latest, Date.parse(row.observed_at || '') || 0), 0)
+  const throneCapturedAt = t ? Date.parse(when(t)) : 0
+  // Mirror the Province page's read-time Throne fallback so the Command Center
+  // does not wait for a separate history writer to persist UtopiaIntel snapshots.
+  // This is display-only: it never inserts, updates, or rewrites historical rows.
+  if (throneData && throneCapturedAt > storedHistoryAt) {
+    history.push({
+      observed_at: when(t!),
+      acres: throneData.acres,
+      networth: throneData.networth,
+      offense: throneData.offense,
+      defense: throneData.defense,
+      peons: throneData.peons,
+      soldiers: throneData.soldiers,
+      thieves: throneData.thieves,
+      wizards: throneData.wizards,
+      build_efficiency: throneData.buildingEfficiency,
+      source: 'utopiaintel_throne_readthrough',
+    })
+  }
+  const trainingUnits = militaryTraining?.raw_text ? parseTrainingUnits(militaryTraining.raw_text) : []
+  const throneArmy = trainingUnits.map(unit => ({
+    name: unit.name,
+    home: toNum(throneData?.unitCounts?.[unit.name]) ?? unit.owned,
+    away: null,
+    role: unit.role,
+  }))
+  const parsedMilitary = mil?.raw_text ? parseMilitary(mil.raw_text) : null
+  const military = parsedMilitary ? {
+    ...parsedMilitary,
+    offPoints: throneData?.offense ?? parsedMilitary.offPoints,
+    defPoints: throneData?.defense ?? parsedMilitary.defPoints,
+    army: throneArmy.length ? throneArmy : parsedMilitary.army,
+    source: throneArmy.length ? 'council_military+latest_throne' : 'council_military',
+  } : throneData ? {
+    army: throneArmy,
+    offPoints: throneData.offense,
+    defPoints: throneData.defense,
+    offEff: null,
+    defEff: null,
+    source: 'throne+train_army',
+  } : null
   const events = (eventRes.error ? [] : eventRes.data || [])
     .filter((e: any) => !/discord|bot/i.test(String(e.source || '')))
     .slice(0, 12)
@@ -372,21 +485,22 @@ async function buildCommandModel(db: any, userId: string, account: { id: string;
     ok: true, page: 'command',
     province: account.province_name, kingdom: account.province_location,
     generatedAt: new Date().toISOString(),
-    history: historyRes.error ? [] : historyRes.data || [],
+    history: history.sort((a: any, b: any) => Date.parse(a.observed_at) - Date.parse(b.observed_at)).slice(-240),
     unavailable,
     model: {
       throne: t?.raw_text ? parseThrone(t.raw_text) : null,
       throneFields: t?.parsed_payload || null,
-      state: st?.raw_text ? parseState(st.raw_text) : null,
-      military: mil?.raw_text ? parseMilitary(mil.raw_text) : null,
+      state,
+      military,
+      militaryTraining: trainingUnits,
       science: sci?.raw_text ? parseScience(sci.raw_text) : null,
-      buildings: bld?.raw_text ? parseBuildings(bld.raw_text) : null,
+      buildings,
       kingdom,
       events,
       freshness: [
         { label: 'Throne', at: t ? when(t) : null, stale: staleIntel(t), archived: t?.archived === true }, { label: 'State', at: st ? when(st) : null, stale: staleIntel(st), archived: st?.archived === true },
-        { label: 'Military', at: mil ? when(mil) : null, stale: staleIntel(mil), archived: mil?.archived === true }, { label: 'Science', at: sci ? when(sci) : null, stale: staleIntel(sci), archived: sci?.archived === true },
-        { label: 'Buildings', at: bld ? when(bld) : null, stale: staleIntel(bld), archived: bld?.archived === true }, { label: 'Kingdom', at: kingdomAt }
+        { label: 'Military', at: militaryFresh ? when(militaryFresh) : null, stale: staleIntel(militaryFresh), archived: militaryFresh?.archived === true }, { label: 'Science', at: sci ? when(sci) : null, stale: staleIntel(sci), archived: sci?.archived === true },
+        { label: 'Buildings', at: buildingFresh ? when(buildingFresh) : null, stale: staleIntel(buildingFresh), archived: buildingFresh?.archived === true }, { label: 'Kingdom', at: kingdomAt }
       ],
     },
   }
@@ -462,7 +576,7 @@ export async function GET(request: Request) {
       // Discord bot reports are loaded separately for Magic/Thievery so a busy bot
       // feed cannot crowd the actual Utopia page captures out of the 90-row window.
       if (page === 'magic' || page === 'thievery') recordsQuery = recordsQuery.neq('source', 'discord-bot')
-      const recordsResult = await recordsQuery.or(scope).order('created_at', { ascending: false }).limit(90)
+      const recordsResult = await recordsQuery.or(scope).order('captured_at', { ascending: false }).order('created_at', { ascending: false }).limit(90)
       if (recordsResult.error) fail(recordsResult.error)
       records = ((recordsResult.data || []) as Rec[]).filter(r =>
         !(sharedPages.has(page) && r.visibility === 'own' && r.user_id !== user.id && r.user_id !== account.id) &&
@@ -746,10 +860,25 @@ export async function GET(request: Request) {
       const councils = allByPath(records, '/wol/game/council_internal')
       const latest = councils[0] || null
       const construction = latestByPath(records, '/wol/game/build')
+      const councilModel = latest?.raw_text ? parseBuildings(latest.raw_text) : null
+      const buildModel = construction?.raw_text ? parseBuildPage(construction.raw_text) : null
+      const buildRowsByName = new Map((buildModel?.rows || []).map(row => [row.name.toLowerCase(), row]))
+      const current = councilModel ? {
+        ...councilModel,
+        stats: { ...councilModel.stats, totalLand: buildModel?.stats.totalLand ?? null },
+        rows: [
+          ...councilModel.rows.map(row => {
+            const fresh = buildRowsByName.get(row.name.toLowerCase())
+            return fresh ? { ...row, qty: fresh.qty, pct: fresh.pct, inProgress: fresh.inProgress } : row
+          }),
+          ...(buildModel?.rows || []).filter(row => !councilModel.rows.some(existing => existing.name.toLowerCase() === row.name.toLowerCase())),
+        ],
+        totalAcres: buildModel?.totalAcres ?? councilModel.totalAcres,
+      } : buildModel
       body.model = {
-        current: latest?.raw_text ? parseBuildings(latest.raw_text) : null,
-        capturedAt: latest ? when(latest) : null,
-        construction: construction ? { ...construction.parsed_payload, capturedAt: when(construction) } : null,
+        current,
+        capturedAt: latest ? when(latest) : construction ? when(construction) : null,
+        construction: construction ? { ...construction.parsed_payload, parsed: buildModel, capturedAt: when(construction) } : null,
         series: councils.slice().reverse().map(r => {
           const b = parseBuildings(r.raw_text || '')
           return { at: when(r), rows: b.rows.map(x => ({ name: x.name, pct: x.pct, qty: x.qty })) }

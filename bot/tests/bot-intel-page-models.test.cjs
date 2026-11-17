@@ -123,3 +123,73 @@ test('Magic and Thievery vault read-through dedupes only against records returne
   assert.match(route, /!projectedCaptureIds\.has\(r\.capture_id\)/);
   assert.match(route, /older projected[\s\S]{0,120}outside that bounded result remain eligible/);
 });
+
+
+test('command overview reads UtopiaIntel fallback pages when Council pages were not captured', () => {
+  const route = fs.readFileSync('app/api/page-models/route.ts', 'utf8');
+  assert.match(route, /grab\('militaryTraining', KINDS\.military, '%\/wol\/game\/train_army%'/);
+  assert.match(route, /grab\('sciencePage', KINDS\.science, '%\/wol\/game\/science%'/);
+  assert.match(route, /grab\('construction', KINDS\.buildings, '%\/wol\/game\/build%'/);
+  assert.match(route, /const trainingUnits = militaryTraining\?\.raw_text \? parseTrainingUnits/);
+  assert.ok(route.includes("source: 'throne+train_army'"));
+  assert.match(route, /sci\?\.raw_text \? parseScience/);
+});
+
+test('latest page capture selection uses capture time before database insertion time', () => {
+  const route = fs.readFileSync('app/api/page-models/route.ts', 'utf8');
+  assert.match(route, /\.order\('captured_at', \{ ascending: false \}\)\.order\('created_at', \{ ascending: false \}\)/);
+});
+
+test('Buildings page can use the current Build screen when Council Internal Affairs is absent', () => {
+  const route = fs.readFileSync('app/api/page-models/route.ts', 'utf8');
+  assert.match(route, /function parseBuildPage\(text: string\)/);
+  assert.match(route, /const buildModel = construction\?\.raw_text \? parseBuildPage/);
+  assert.match(route, /const current = councilModel \? \{/);
+});
+
+
+test('Command Center uses the same fresh Throne values as the Province page', () => {
+  const page = fs.readFileSync('app/page.tsx', 'utf8');
+  assert.match(page, /f\.acres \?\? t\?\.acres/);
+  assert.match(page, /f\.networth \?\? t\?\.networth/);
+  assert.match(page, /f\.offense \?\? t\?\.offense/);
+  assert.match(page, /f\.defense \?\? t\?\.defense/);
+  assert.match(page, /f\.peons \?\? t\?\.peons/);
+});
+
+test('Command Center derives a read-only history point from a newer Throne receipt', () => {
+  const route = fs.readFileSync('app/api/page-models/route.ts', 'utf8');
+  assert.match(route, /const storedHistoryAt = history\.reduce/);
+  assert.match(route, /if \(throneData && throneCapturedAt > storedHistoryAt\)/);
+  assert.match(route, /source: 'utopiaintel_throne_readthrough'/);
+  assert.match(route, /never inserts, updates, or rewrites historical rows/);
+});
+
+test('Command Center military data prefers current Throne unit counts over stale training-page counts', () => {
+  const route = fs.readFileSync('app/api/page-models/route.ts', 'utf8');
+  assert.match(route, /home: toNum\(throneData\?\.unitCounts\?\.\[unit\.name\]\) \?\? unit\.owned/);
+  assert.match(route, /offPoints: throneData\?\.offense \?\? parsedMilitary\.offPoints/);
+  assert.match(route, /defPoints: throneData\?\.defense \?\? parsedMilitary\.defPoints/);
+});
+
+
+test('Command Center fetches the newest 240 history snapshots before chronological display', () => {
+  const route = fs.readFileSync('app/api/page-models/route.ts', 'utf8');
+  assert.match(route, /\.eq\('user_id', userId\)\.order\('observed_at', \{ ascending: false \}\)\.limit\(240\)/);
+  assert.match(route, /history\.sort\(\(a: any, b: any\) => Date\.parse\(a\.observed_at\) - Date\.parse\(b\.observed_at\)\)/);
+});
+
+
+test('Command Center derives population slices from current Throne troop counts when Council State is absent', () => {
+  const route = fs.readFileSync('app/api/page-models/route.ts', 'utf8');
+  assert.match(route, /const troopPopulation = Object\.entries\(throneData\?\.unitCounts \|\| \{\}\)/);
+  assert.match(route, /const throneArmyPopulation = troopPopulation \+ \(throneThieves \?\? 0\) \+ \(throneWizards \?\? 0\)/);
+  assert.match(route, /const state = st\?\.raw_text \? parseState\(st\.raw_text\) : throneData \?/);
+  assert.match(route, /source: 'throne'/);
+});
+
+
+test('all command-page record windows prioritize Utopia capture time', () => {
+  const route = fs.readFileSync('app/api/page-models/route.ts', 'utf8');
+  assert.match(route, /const recordsResult = await recordsQuery\.or\(scope\)\.order\('captured_at', \{ ascending: false \}\)\.order\('created_at', \{ ascending: false \}\)\.limit\(90\)/);
+});
