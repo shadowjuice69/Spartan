@@ -9,6 +9,19 @@ const fs = require('node:fs')
 const source = fs.readFileSync('app/command/returns/page.tsx', 'utf8')
 const pageModelsSource = fs.readFileSync('app/api/page-models/route.ts', 'utf8')
 const frontLineRouteSource = fs.readFileSync('app/api/front-line/route.ts', 'utf8')
+const throneRouteSource = fs.readFileSync('app/api/throne/route.ts', 'utf8')
+
+test('Throne API reads province history by both registry and account identity', () => {
+  assert.ok(throneRouteSource.includes(".select('id,auth_user_id,discord_user_id,screen_name,province_name,province_location,role')"))
+  assert.ok(throneRouteSource.includes(".in('province_id', historyIds)"))
+  assert.ok(throneRouteSource.includes('province.province_name === account.province_name && account.id'))
+})
+
+test('Throne API chooses the newer province history instead of stale projection', () => {
+  assert.ok(throneRouteSource.includes('historyTime > projectionTime'))
+  assert.ok(throneRouteSource.includes('const captured = historyIsNewer ?'))
+  assert.ok(throneRouteSource.includes('created_at: snapshotTime'))
+})
 
 test('canonical Bot Intel KDNEWS reports feed News and Return Tracker', () => {
   assert.ok(pageModelsSource.includes("discordKingdomEvents([...records, ...((mpResult.data || []) as Rec[])], own)"))
