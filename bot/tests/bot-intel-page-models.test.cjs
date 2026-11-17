@@ -144,3 +144,28 @@ test('Buildings page can use the current Build screen when Council Internal Affa
   assert.match(route, /function parseBuildPage\(text: string\)/);
   assert.match(route, /latest\?\.raw_text \? parseBuildings\(latest\.raw_text\) : construction\?\.raw_text \? parseBuildPage/);
 });
+
+
+test('Command Center uses the same fresh Throne values as the Province page', () => {
+  const page = fs.readFileSync('app/page.tsx', 'utf8');
+  assert.match(page, /f\.acres \?\? t\?\.acres/);
+  assert.match(page, /f\.networth \?\? t\?\.networth/);
+  assert.match(page, /f\.offense \?\? t\?\.offense/);
+  assert.match(page, /f\.defense \?\? t\?\.defense/);
+  assert.match(page, /f\.peons \?\? t\?\.peons/);
+});
+
+test('Command Center derives a read-only history point from a newer Throne receipt', () => {
+  const route = fs.readFileSync('app/api/page-models/route.ts', 'utf8');
+  assert.match(route, /const storedHistoryAt = history\.reduce/);
+  assert.match(route, /if \(throneData && throneCapturedAt > storedHistoryAt\)/);
+  assert.match(route, /source: 'utopiaintel_throne_readthrough'/);
+  assert.match(route, /never inserts, updates, or rewrites historical rows/);
+});
+
+test('Command Center military data prefers current Throne unit counts over stale training-page counts', () => {
+  const route = fs.readFileSync('app/api/page-models/route.ts', 'utf8');
+  assert.match(route, /home: toNum\(throneData\?\.unitCounts\?\.\[unit\.name\]\) \?\? unit\.owned/);
+  assert.match(route, /offPoints: throneData\?\.offense \?\? parsedMilitary\.offPoints/);
+  assert.match(route, /defPoints: throneData\?\.defense \?\? parsedMilitary\.defPoints/);
+});
