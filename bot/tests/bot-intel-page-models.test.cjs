@@ -143,7 +143,8 @@ test('latest page capture selection uses capture time before database insertion 
 test('Buildings page can use the current Build screen when Council Internal Affairs is absent', () => {
   const route = fs.readFileSync('app/api/page-models/route.ts', 'utf8');
   assert.match(route, /function parseBuildPage\(text: string\)/);
-  assert.match(route, /latest\?\.raw_text \? parseBuildings\(latest\.raw_text\) : construction\?\.raw_text \? parseBuildPage/);
+  assert.match(route, /const buildModel = construction\?\.raw_text \? parseBuildPage/);
+  assert.match(route, /const current = councilModel \? \{/);
 });
 
 
