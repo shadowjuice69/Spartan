@@ -178,3 +178,12 @@ test('Command Center fetches the newest 240 history snapshots before chronologic
   assert.match(route, /\.eq\('user_id', userId\)\.order\('observed_at', \{ ascending: false \}\)\.limit\(240\)/);
   assert.match(route, /history\.sort\(\(a: any, b: any\) => Date\.parse\(a\.observed_at\) - Date\.parse\(b\.observed_at\)\)/);
 });
+
+
+test('Command Center derives population slices from current Throne troop counts when Council State is absent', () => {
+  const route = fs.readFileSync('app/api/page-models/route.ts', 'utf8');
+  assert.match(route, /const troopPopulation = Object\.entries\(throneData\?\.unitCounts \|\| \{\}\)/);
+  assert.match(route, /const throneArmyPopulation = troopPopulation \+ \(throneThieves \?\? 0\) \+ \(throneWizards \?\? 0\)/);
+  assert.match(route, /const state = st\?\.raw_text \? parseState\(st\.raw_text\) : throneData \?/);
+  assert.match(route, /source: 'throne'/);
+});
