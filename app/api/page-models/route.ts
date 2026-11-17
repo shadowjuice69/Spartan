@@ -374,9 +374,23 @@ async function buildCommandModel(db: any, userId: string, account: { id: string;
   const st = stateRows[0] || null
   const mil = militaryRows[0] || null
   const militaryTraining = militaryTrainingRows[0] || null
-  const sci = scienceRows[0] || sciencePageRows[0] || null
+  const newest = (...rows: Array<Rec | null | undefined>) => rows.filter((row): row is Rec => Boolean(row))
+    .sort((a, b) => Date.parse(when(b)) - Date.parse(when(a)))[0] || null
+  const sci = newest(scienceRows[0], sciencePageRows[0])
   const bld = buildingRows[0] || null
   const construction = constructionRows[0] || null
+  const buildingCouncil = bld?.raw_text ? parseBuildings(bld.raw_text) : null
+  const buildingConstruction = construction?.raw_text ? parseBuildPage(construction.raw_text) : null
+  const buildingRowsByName = new Map((buildingConstruction?.rows || []).map(row => [row.name.toLowerCase(), row]))
+  const buildings = buildingCouncil ? {
+    ...buildingCouncil,
+    stats: { ...buildingCouncil.stats, totalLand: buildingConstruction?.stats.totalLand ?? buildingCouncil.stats.totalLand },
+    rows: buildingCouncil.rows.map(row => {
+      const fresh = buildingRowsByName.get(row.name.toLowerCase())
+      return fresh ? { ...row, qty: fresh.qty, pct: fresh.pct, inProgress: fresh.inProgress } : row
+    }),
+    totalAcres: buildingConstruction?.totalAcres ?? buildingCouncil.totalAcres,
+  } : buildingConstruction
 
   let kingdom: any = null
   let kingdomAt: string | null = null
@@ -408,7 +422,7 @@ async function buildCommandModel(db: any, userId: string, account: { id: string;
       military: mil?.raw_text ? parseMilitary(mil.raw_text) : militaryTraining?.raw_text ? { army: parseTrainingUnits(militaryTraining.raw_text).map(unit => ({ name: unit.name, home: unit.owned, away: unit.training, role: unit.role })), source: 'train_army' } : null,
       militaryTraining: militaryTraining?.raw_text ? parseTrainingUnits(militaryTraining.raw_text) : [],
       science: sci?.raw_text ? parseScience(sci.raw_text) : null,
-      buildings: bld?.raw_text ? parseBuildings(bld.raw_text) : construction?.raw_text ? parseBuildPage(construction.raw_text) : null,
+      buildings,
       kingdom,
       events,
       freshness: [
@@ -774,10 +788,22 @@ export async function GET(request: Request) {
       const councils = allByPath(records, '/wol/game/council_internal')
       const latest = councils[0] || null
       const construction = latestByPath(records, '/wol/game/build')
+      const councilModel = latest?.raw_text ? parseBuildings(latest.raw_text) : null
+      const buildModel = construction?.raw_text ? parseBuildPage(construction.raw_text) : null
+      const buildRowsByName = new Map((buildModel?.rows || []).map(row => [row.name.toLowerCase(), row]))
+      const current = councilModel ? {
+        ...councilModel,
+        stats: { ...councilModel.stats, totalLand: buildModel?.stats.totalLand ?? councilModel.stats.totalLand },
+        rows: councilModel.rows.map(row => {
+          const fresh = buildRowsByName.get(row.name.toLowerCase())
+          return fresh ? { ...row, qty: fresh.qty, pct: fresh.pct, inProgress: fresh.inProgress } : row
+        }),
+        totalAcres: buildModel?.totalAcres ?? councilModel.totalAcres,
+      } : buildModel
       body.model = {
-        current: latest?.raw_text ? parseBuildings(latest.raw_text) : construction?.raw_text ? parseBuildPage(construction.raw_text) : null,
+        current,
         capturedAt: latest ? when(latest) : construction ? when(construction) : null,
-        construction: construction ? { ...construction.parsed_payload, parsed: parseBuildPage(construction.raw_text || ''), capturedAt: when(construction) } : null,
+        construction: construction ? { ...construction.parsed_payload, parsed: buildModel, capturedAt: when(construction) } : null,
         series: councils.slice().reverse().map(r => {
           const b = parseBuildings(r.raw_text || '')
           return { at: when(r), rows: b.rows.map(x => ({ name: x.name, pct: x.pct, qty: x.qty })) }
