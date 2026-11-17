@@ -42,11 +42,11 @@ export default function Home() {
     return d == null ? undefined : `${signedFmt(d)} since last capture`;
   };
 
-  const acres = f.acres ?? s?.land ?? last?.acres;
-  const nw = f.networth ?? s?.networth ?? last?.networth;
-  const off = f.offense ?? mil?.offPoints ?? last?.offense;
-  const def = f.defense ?? mil?.defPoints ?? last?.defense;
-  const peasants = s?.population?.peasants ?? f.peons ?? last?.peons;
+  const acres = f.acres ?? t?.acres ?? s?.land ?? last?.acres;
+  const nw = f.networth ?? t?.networth ?? s?.networth ?? last?.networth;
+  const off = f.offense ?? t?.offense ?? mil?.offPoints ?? last?.offense;
+  const def = f.defense ?? t?.defense ?? mil?.defPoints ?? last?.defense;
+  const peasants = s?.population?.peasants ?? f.peons ?? t?.peons ?? last?.peons;
   const pop = s?.population;
   const trends: any[] = s?.trends || [];
   const net = (name: string) => trends.find((x) => x.label === name);
