@@ -400,6 +400,50 @@ async function buildCommandModel(db: any, userId: string, account: { id: string;
   }
 
   const num = (v: unknown) => toNum(v) ?? 0
+  const history = (historyRes.error ? [] : historyRes.data || []).map((row: any) => ({ ...row }))
+  const throneData = t?.raw_text ? parseThrone(t.raw_text) : null
+  const storedHistoryAt = history.reduce((latest: number, row: any) => Math.max(latest, Date.parse(row.observed_at || '') || 0), 0)
+  const throneCapturedAt = t ? Date.parse(when(t)) : 0
+  // Mirror the Province page's read-time Throne fallback so the Command Center
+  // does not wait for a separate history writer to persist UtopiaIntel snapshots.
+  // This is display-only: it never inserts, updates, or rewrites historical rows.
+  if (throneData && throneCapturedAt > storedHistoryAt) {
+    history.push({
+      observed_at: when(t!),
+      acres: throneData.acres,
+      networth: throneData.networth,
+      offense: throneData.offense,
+      defense: throneData.defense,
+      peons: throneData.peons,
+      soldiers: throneData.soldiers,
+      thieves: throneData.thieves,
+      wizards: throneData.wizards,
+      build_efficiency: throneData.buildingEfficiency,
+      source: 'utopiaintel_throne_readthrough',
+    })
+  }
+  const trainingUnits = militaryTraining?.raw_text ? parseTrainingUnits(militaryTraining.raw_text) : []
+  const throneArmy = trainingUnits.map(unit => ({
+    name: unit.name,
+    home: toNum(throneData?.unitCounts?.[unit.name]) ?? unit.owned,
+    away: null,
+    role: unit.role,
+  }))
+  const parsedMilitary = mil?.raw_text ? parseMilitary(mil.raw_text) : null
+  const military = parsedMilitary ? {
+    ...parsedMilitary,
+    offPoints: throneData?.offense ?? parsedMilitary.offPoints,
+    defPoints: throneData?.defense ?? parsedMilitary.defPoints,
+    army: throneArmy.length ? throneArmy : parsedMilitary.army,
+    source: throneArmy.length ? 'council_military+latest_throne' : 'council_military',
+  } : throneData ? {
+    army: throneArmy,
+    offPoints: throneData.offense,
+    defPoints: throneData.defense,
+    offEff: null,
+    defEff: null,
+    source: 'throne+train_army',
+  } : null
   const events = (eventRes.error ? [] : eventRes.data || [])
     .filter((e: any) => !/discord|bot/i.test(String(e.source || '')))
     .slice(0, 12)
@@ -413,14 +457,14 @@ async function buildCommandModel(db: any, userId: string, account: { id: string;
     ok: true, page: 'command',
     province: account.province_name, kingdom: account.province_location,
     generatedAt: new Date().toISOString(),
-    history: historyRes.error ? [] : historyRes.data || [],
+    history: history.sort((a: any, b: any) => Date.parse(a.observed_at) - Date.parse(b.observed_at)).slice(-240),
     unavailable,
     model: {
       throne: t?.raw_text ? parseThrone(t.raw_text) : null,
       throneFields: t?.parsed_payload || null,
       state: st?.raw_text ? parseState(st.raw_text) : null,
-      military: mil?.raw_text ? parseMilitary(mil.raw_text) : militaryTraining?.raw_text ? { army: parseTrainingUnits(militaryTraining.raw_text).map(unit => ({ name: unit.name, home: unit.owned, away: unit.training, role: unit.role })), source: 'train_army' } : null,
-      militaryTraining: militaryTraining?.raw_text ? parseTrainingUnits(militaryTraining.raw_text) : [],
+      military,
+      militaryTraining: trainingUnits,
       science: sci?.raw_text ? parseScience(sci.raw_text) : null,
       buildings,
       kingdom,
