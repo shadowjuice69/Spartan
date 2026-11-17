@@ -130,7 +130,7 @@ function captureLog(records: Rec[]) {
 // The newest Throne capture that shows the current game date. News events only carry game dates, so this is
 // what lets us place them on a real day (24 game ticks = one game day).
 async function gameAnchor(db: any, scope: string) {
-  const r = await db.from('spartan_intel_records_with_archive').select('captured_at,created_at,raw_text').eq('page_kind', 'throne').or(scope).order('created_at', { ascending: false }).limit(8)
+  const r = await db.from('spartan_intel_records_with_archive').select('captured_at,created_at,raw_text').eq('page_kind', 'throne').or(scope).order('captured_at', { ascending: false }).order('created_at', { ascending: false }).limit(8)
   if (r.error) return null
   for (const row of r.data || []) {
     const d = findGameDate(row.raw_text)
@@ -576,7 +576,7 @@ export async function GET(request: Request) {
       // Discord bot reports are loaded separately for Magic/Thievery so a busy bot
       // feed cannot crowd the actual Utopia page captures out of the 90-row window.
       if (page === 'magic' || page === 'thievery') recordsQuery = recordsQuery.neq('source', 'discord-bot')
-      const recordsResult = await recordsQuery.or(scope).order('created_at', { ascending: false }).limit(90)
+      const recordsResult = await recordsQuery.or(scope).order('captured_at', { ascending: false }).order('created_at', { ascending: false }).limit(90)
       if (recordsResult.error) fail(recordsResult.error)
       records = ((recordsResult.data || []) as Rec[]).filter(r =>
         !(sharedPages.has(page) && r.visibility === 'own' && r.user_id !== user.id && r.user_id !== account.id) &&
