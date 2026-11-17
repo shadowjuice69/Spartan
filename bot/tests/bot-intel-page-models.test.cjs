@@ -171,3 +171,10 @@ test('Command Center military data prefers current Throne unit counts over stale
   assert.match(route, /offPoints: throneData\?\.offense \?\? parsedMilitary\.offPoints/);
   assert.match(route, /defPoints: throneData\?\.defense \?\? parsedMilitary\.defPoints/);
 });
+
+
+test('Command Center fetches the newest 240 history snapshots before chronological display', () => {
+  const route = fs.readFileSync('app/api/page-models/route.ts', 'utf8');
+  assert.match(route, /\.eq\('user_id', userId\)\.order\('observed_at', \{ ascending: false \}\)\.limit\(240\)/);
+  assert.match(route, /history\.sort\(\(a: any, b: any\) => Date\.parse\(a\.observed_at\) - Date\.parse\(b\.observed_at\)\)/);
+});
