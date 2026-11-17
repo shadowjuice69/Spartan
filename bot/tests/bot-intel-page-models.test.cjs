@@ -130,7 +130,8 @@ test('command overview reads UtopiaIntel fallback pages when Council pages were 
   assert.match(route, /grab\('militaryTraining', KINDS\.military, '%\/wol\/game\/train_army%'/);
   assert.match(route, /grab\('sciencePage', KINDS\.science, '%\/wol\/game\/science%'/);
   assert.match(route, /grab\('construction', KINDS\.buildings, '%\/wol\/game\/build%'/);
-  assert.match(route, /militaryTraining\?\.raw_text \? \{ army:/);
+  assert.match(route, /const trainingUnits = militaryTraining\?\.raw_text \? parseTrainingUnits/);
+  assert.match(route, /source: 'throne\\+train_army'/);
   assert.match(route, /sci\?\.raw_text \? parseScience/);
 });
 
