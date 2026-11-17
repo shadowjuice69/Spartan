@@ -410,6 +410,26 @@ async function buildCommandModel(db: any, userId: string, account: { id: string;
   const num = (v: unknown) => toNum(v) ?? 0
   const history = (historyRes.error ? [] : historyRes.data || []).map((row: any) => ({ ...row }))
   const throneData = t?.raw_text ? parseThrone(t.raw_text) : null
+  const troopPopulation = Object.entries(throneData?.unitCounts || {})
+    .filter(([name]) => !/^(?:thieves?|wizards?|war horses?|horses?|prisoners?|generals?)$/i.test(name))
+    .reduce((sum, [, count]) => sum + (toNum(count) ?? 0), 0)
+  const throneThieves = throneData?.thieves ?? toNum(throneData?.unitCounts?.Thieves)
+  const throneWizards = throneData?.wizards ?? toNum(throneData?.unitCounts?.Wizards)
+  const throneArmyPopulation = troopPopulation + (throneThieves ?? 0) + (throneWizards ?? 0)
+  const state = st?.raw_text ? parseState(st.raw_text) : throneData ? {
+    land: throneData.acres,
+    networth: throneData.networth,
+    population: {
+      peasants: throneData.peons,
+      army: throneArmyPopulation,
+      thieves: throneThieves,
+      wizards: throneWizards,
+      total: throneData.peons == null ? null : throneData.peons + throneArmyPopulation,
+      max: null,
+    },
+    trends: [],
+    source: 'throne',
+  } : null
   const storedHistoryAt = history.reduce((latest: number, row: any) => Math.max(latest, Date.parse(row.observed_at || '') || 0), 0)
   const throneCapturedAt = t ? Date.parse(when(t)) : 0
   // Mirror the Province page's read-time Throne fallback so the Command Center
@@ -470,7 +490,7 @@ async function buildCommandModel(db: any, userId: string, account: { id: string;
     model: {
       throne: t?.raw_text ? parseThrone(t.raw_text) : null,
       throneFields: t?.parsed_payload || null,
-      state: st?.raw_text ? parseState(st.raw_text) : null,
+      state,
       military,
       militaryTraining: trainingUnits,
       science: sci?.raw_text ? parseScience(sci.raw_text) : null,
