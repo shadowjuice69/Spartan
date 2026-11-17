@@ -123,3 +123,24 @@ test('Magic and Thievery vault read-through dedupes only against records returne
   assert.match(route, /!projectedCaptureIds\.has\(r\.capture_id\)/);
   assert.match(route, /older projected[\s\S]{0,120}outside that bounded result remain eligible/);
 });
+
+
+test('command overview reads UtopiaIntel fallback pages when Council pages were not captured', () => {
+  const route = fs.readFileSync('app/api/page-models/route.ts', 'utf8');
+  assert.match(route, /grab\('militaryTraining', KINDS\.military, '%\/wol\/game\/train_army%'/);
+  assert.match(route, /grab\('sciencePage', KINDS\.science, '%\/wol\/game\/science%'/);
+  assert.match(route, /grab\('construction', KINDS\.buildings, '%\/wol\/game\/build%'/);
+  assert.match(route, /militaryTraining\?\.raw_text \? \{ army:/);
+  assert.match(route, /sci\?\.raw_text \? parseScience/);
+});
+
+test('latest page capture selection uses capture time before database insertion time', () => {
+  const route = fs.readFileSync('app/api/page-models/route.ts', 'utf8');
+  assert.match(route, /\.order\('captured_at', \{ ascending: false \}\)\.order\('created_at', \{ ascending: false \}\)/);
+});
+
+test('Buildings page can use the current Build screen when Council Internal Affairs is absent', () => {
+  const route = fs.readFileSync('app/api/page-models/route.ts', 'utf8');
+  assert.match(route, /function parseBuildPage\(text: string\)/);
+  assert.match(route, /latest\?\.raw_text \? parseBuildings\(latest\.raw_text\) : construction\?\.raw_text \? parseBuildPage/);
+});
