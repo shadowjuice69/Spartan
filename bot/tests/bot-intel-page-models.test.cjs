@@ -187,3 +187,9 @@ test('Command Center derives population slices from current Throne troop counts 
   assert.match(route, /const state = st\?\.raw_text \? parseState\(st\.raw_text\) : throneData \?/);
   assert.match(route, /source: 'throne'/);
 });
+
+
+test('all command-page record windows prioritize Utopia capture time', () => {
+  const route = fs.readFileSync('app/api/page-models/route.ts', 'utf8');
+  assert.match(route, /const recordsResult = await recordsQuery\.or\(scope\)\.order\('captured_at', \{ ascending: false \}\)\.order\('created_at', \{ ascending: false \}\)\.limit\(90\)/);
+});
