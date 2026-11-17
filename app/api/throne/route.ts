@@ -36,7 +36,7 @@ export async function GET(request: Request) {
 
     const { data: account, error: accountError } = await db
       .from('spartan_accounts')
-      .select('auth_user_id,discord_user_id,screen_name,province_name,province_location,role')
+      .select('id,auth_user_id,discord_user_id,screen_name,province_name,province_location,role')
       .eq('auth_user_id', user.id)
       .maybeSingle()
     if (accountError) throw accountError
@@ -67,19 +67,62 @@ export async function GET(request: Request) {
       .limit(100)
     if (projectionError) throw projectionError
 
-    const projection = projections?.find((p: any) => String(p.province_id).trim().toLowerCase() === province.province_name.trim().toLowerCase())
+    const provinceIds = new Set([province.province_id, province.province_name === account.province_name ? account.id : null]
+      .filter(Boolean).map((id: string) => String(id).trim().toLowerCase()))
+    const projection = projections?.find((p: any) => provinceIds.has(String(p.province_id).trim().toLowerCase()))
       || projections?.find((p: any) => projectionData(p)?.raw_kind === 'kingdom_details')
       || null
     const data = projectionData(projection)
-    const captured = Array.isArray(data?.provinces) ? findProvince(data, province.province_name) : (data || {})
+    const projected = Array.isArray(data?.provinces) ? findProvince(data, province.province_name) : (data || {})
 
+    // The capture engine historically keyed the signed-in province's history by
+    // spartan_accounts.id, while the registry has its own province_id. Read both
+    // identifiers for the account's own province so a valid recent snapshot is not
+    // hidden by that identifier mismatch.
+    const historyIds = [
+      province.province_id,
+      ...(province.province_name === account.province_name && account.id ? [account.id] : []),
+    ]
     const { data: history, error: historyError } = await db
       .from('spartan_province_history')
       .select('*')
-      .eq('province_id', province.province_id)
+      .in('province_id', historyIds)
       .order('observed_at', { ascending: false })
       .limit(1)
     if (historyError) throw historyError
+
+    const latestHistory = history?.[0] ?? null
+    const projectionTime = projection?.updated_at ? Date.parse(projection.updated_at) : 0
+    const historyTime = latestHistory?.observed_at ? Date.parse(latestHistory.observed_at) : 0
+    const historyIsNewer = Boolean(latestHistory && historyTime > projectionTime)
+    const captured = historyIsNewer ? {
+      ...projected,
+      acres: latestHistory.acres,
+      networth: latestHistory.networth,
+      offense: latestHistory.offense,
+      defense: latestHistory.defense,
+      peons: latestHistory.peons,
+      thieves: latestHistory.thieves,
+      wizards: latestHistory.wizards,
+      mana: latestHistory.mana,
+      stealth: latestHistory.stealth,
+      build_efficiency: latestHistory.build_efficiency,
+      wages: latestHistory.wages,
+      tpa: latestHistory.r_tpa ?? latestHistory.o_tpa ?? latestHistory.d_tpa,
+      wpa: latestHistory.r_wpa ?? latestHistory.o_wpa ?? latestHistory.d_wpa,
+      soldiers: latestHistory.soldiers,
+      off_specs: latestHistory.off_specs,
+      def_specs: latestHistory.def_specs,
+      elites: latestHistory.elites,
+      war_horses: latestHistory.war_horses,
+      prisoners: latestHistory.prisoners,
+    } : projected
+    const snapshotSource = historyIsNewer
+      ? (latestHistory.source || 'spartan_province_history')
+      : projection ? 'spartan_state_projection' : 'spartan_province_registry'
+    const snapshotTime = historyIsNewer
+      ? latestHistory.observed_at
+      : projection?.updated_at ?? latestHistory?.observed_at ?? province.updated_at ?? null
 
     const snapshot = {
       province: province.province_name,
@@ -107,9 +150,9 @@ export async function GET(request: Request) {
         war_horses: captured.war_horses ?? captured.warHorses ?? null,
         prisoners: captured.prisoners ?? null,
       },
-      created_at: projection?.updated_at ?? history?.[0]?.observed_at ?? province.updated_at ?? null,
-      source: projection ? 'spartan_state_projection' : 'spartan_province_registry',
-      projectionVersion: projection?.version ?? null,
+      created_at: snapshotTime,
+      source: snapshotSource,
+      projectionVersion: historyIsNewer ? null : projection?.version ?? null,
     }
 
     return NextResponse.json({
@@ -125,7 +168,7 @@ export async function GET(request: Request) {
         role: account?.role ?? null,
       },
       throne: snapshot,
-      province: { ...province, state: captured, projectionUpdatedAt: projection?.updated_at ?? null },
+      province: { ...province, state: captured, projectionUpdatedAt: projection?.updated_at ?? null, historyObservedAt: latestHistory?.observed_at ?? null },
     })
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Throne data unavailable' }, { status: 500 })
