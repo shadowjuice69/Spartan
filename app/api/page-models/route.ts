@@ -389,7 +389,7 @@ async function buildCommandModel(db: any, userId: string, account: { id: string;
   const buildingFresh = newest(bld, construction)
   const buildings = buildingCouncil ? {
     ...buildingCouncil,
-    stats: { ...buildingCouncil.stats, totalLand: buildingConstruction?.stats.totalLand ?? buildingCouncil.stats.totalLand },
+    stats: { ...buildingCouncil.stats, totalLand: buildingConstruction?.stats.totalLand ?? null },
     rows: [
       ...buildingCouncil.rows.map(row => {
         const fresh = buildingRowsByName.get(row.name.toLowerCase())
@@ -865,7 +865,7 @@ export async function GET(request: Request) {
       const buildRowsByName = new Map((buildModel?.rows || []).map(row => [row.name.toLowerCase(), row]))
       const current = councilModel ? {
         ...councilModel,
-        stats: { ...councilModel.stats, totalLand: buildModel?.stats.totalLand ?? councilModel.stats.totalLand },
+        stats: { ...councilModel.stats, totalLand: buildModel?.stats.totalLand ?? null },
         rows: [
           ...councilModel.rows.map(row => {
             const fresh = buildRowsByName.get(row.name.toLowerCase())
