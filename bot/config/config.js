@@ -13,6 +13,10 @@ module.exports = {
   botSpamChannelId: process.env.BOT_SPAM_CHANNEL_ID || null,
   ageUpdateChannelId: process.env.AGE_UPDATE_CHANNEL_ID || null,
 
+  // !clearbot stays disabled unless both values are configured in the service environment.
+  cleanupChannelId: process.env.CLEANUP_CHANNEL_ID || null,
+  cleanupAuthorId: process.env.CLEANUP_AUTHOR_ID || null,
+
   xp: {
     amountPerMessage: 5,
     cooldown: 60000,
