@@ -84,7 +84,7 @@ function categoryLines(category, sciences, currentBooks = {}) {
 function buildPlanLines({ provinceName, build, currentBooks = {} }) {
   const inactiveNote =
     build.active === false
-      ? '\\n⚠️ This build is **inactive** in the library; plan may be outdated.'
+      ? '\n⚠️ This build is **inactive** in the library; plan may be outdated.'
       : '';
 
   const lines = [
@@ -101,7 +101,7 @@ function buildPlanLines({ provinceName, build, currentBooks = {} }) {
     '_Ranks each science by how far its current book share sits below its weight target within the category — not by raw book counts alone. Fixed-% sciences are listed but not ranked; work those toward their stated target directly._'
   );
 
-  return lines.join('\\n').slice(0, 1900);
+  return lines.join('\n').slice(0, 1900);
 }
 
 module.exports = {
