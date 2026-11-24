@@ -98,7 +98,7 @@ module.exports = async function investHandler(interaction) {
     if (!scienceRow) {
       return reply(
         interaction,
-        `❌ No own website Science capture found for **${provinceName}** (`${kingdomCode}`). Capture Science from the site first.`
+        '❌ No own website Science capture found for **' + provinceName + '** (`' + kingdomCode + '`). Capture Science from the site first.'
       );
     }
 
