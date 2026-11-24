@@ -2,6 +2,8 @@ const permissionService=require('../services/permissionService');
 const commandAccess=require('../services/commandAccessService');
 const commandRegistry=require('../services/commandRegistry');
 const spartanAccess=require('../services/spartanAccessService');
+const logger=require('../services/logger');
+const errorHandler=require('../services/errorHandler');
 const spartanHandler=require('./commands/spartanHandler');
 const spartanRegister=require('./commands/spartanRegisterHandler');
 const spartanStatus=require('./commands/spartanStatusHandler');
@@ -64,7 +66,7 @@ function forceEphemeralInteraction(interaction){
 }
 module.exports=async function commandHandler(interaction){
  const command=interaction.commandName;let sub='';try{sub=interaction.options.getSubcommand(false)||'';}catch(_){sub='';}
- const entry=commandRegistry.get(command,sub);console.log(`[SPARTAN COMMAND] /${command}${sub?` ${sub}`:''} entry=${entry?'found':'missing'}`);
+ const entry=commandRegistry.get(command,sub);logger.info(`[SPARTAN COMMAND] /${command}${sub?` ${sub}`:''} entry=${entry?'found':'missing'}`);
  if(!entry)return interaction.reply({content:`❌ Unknown Spartan command: /${command}${sub?` ${sub}`:''}`,ephemeral:true});
  if(!['spartan','spartan-music','spartan-intel','spartan-calc','spartan-war','spartan-admin'].includes(command))return interaction.reply({content:'❌ This command surface has been retired. Use the new `/spartan` commands.',ephemeral:true});
  interaction=forceEphemeralInteraction(interaction);
@@ -76,9 +78,10 @@ module.exports=async function commandHandler(interaction){
   if(entry.access==='registered'&&!permissionService.isOwner(interaction.user.id)&&!(await hasSpartanAccess(interaction.user.id)))return interaction.reply({content:'❌ Spartan access is required. Use `/spartan register`.',ephemeral:true});
   return await entry.handler(interaction);
  }catch(e){
-  console.error(`[SPARTAN COMMAND] /${command} ${sub}`,e);
-  if(!interaction.replied&&!interaction.deferred)return interaction.reply({content:`❌ ${e.message||'Spartan command failed.'}`,ephemeral:true});
-  if(interaction.deferred&&!interaction.replied)return interaction.editReply({content:`❌ ${e.message||'Spartan command failed.'}`});
+  errorHandler.handle(e,{source:'spartan.command',command,sub});
+  const safeMessage=errorHandler.userMessage(e,'Spartan command failed.');
+  if(!interaction.replied&&!interaction.deferred)return interaction.reply({content:`❌ ${safeMessage}`,ephemeral:true});
+  if(interaction.deferred&&!interaction.replied)return interaction.editReply({content:`❌ ${safeMessage}`});
   throw e;
  }
 };
