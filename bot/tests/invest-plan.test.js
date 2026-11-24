@@ -83,7 +83,7 @@ test('buildPlanLines formats build metadata and inactive warning', () => {
     currentBooks: { alchemy: 250 },
   });
 
-  assert.match(output, /Investment Plan — Finkster/);
+  assert.ok(output.includes('Investment Plan — Finkster'));
   assert.match(output, /Mystic \\(Elf Mystic\\)/);
-  assert.match(output, /inactive/);
+  assert.ok(output.includes('inactive'));
 });
