@@ -65,8 +65,8 @@ test('categoryLines shows ranked recommendations and fixed targets', () => {
     { alchemy: 900, channeling: 100 }
   );
 
-  assert.match(lines.join('\\n'), /Invest next: \\*\\*Channeling\\*\\*/);
-  assert.match(lines.join('\\n'), /Crime — target 10%/);
+  assert.ok(lines.some((item) => item.includes('Invest next: **Channeling**')));
+  assert.ok(lines.some((item) => item.includes('Crime — target 10%')));
   assert.match(lines[0], /🔮/);
 });
 
@@ -84,6 +84,6 @@ test('buildPlanLines formats build metadata and inactive warning', () => {
   });
 
   assert.ok(output.includes('Investment Plan — Finkster'));
-  assert.match(output, /Mystic \\(Elf Mystic\\)/);
+  assert.ok(output.includes('Build: **Mystic** (Elf Mystic)'));
   assert.ok(output.includes('inactive'));
 });
