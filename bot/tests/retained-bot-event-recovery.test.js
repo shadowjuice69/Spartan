@@ -30,7 +30,7 @@ function makeEvent(eventId = AID_EVENT_ID, overrides = {}) {
 
 function makeFlow(event = makeEvent()) {
   return {
-    flow_id: 'flow-test',
+    flow_id: RETAINED_BOT_EVENT_ALLOWLIST[event.event_id]?.flowId || 'flow-test',
     source: 'discord-bot',
     page_kind: 'bot_event',
     capture_id: `bot-${event.event_id}`,
@@ -53,6 +53,7 @@ function makeSupabase({ event = makeEvent(), flow = makeFlow(event), records = [
       const query = { filters: {}, operation: null, row: null };
       query.select = () => { query.operation = 'select'; return query; };
       query.eq = (key, value) => { query.filters[key] = value; return query; };
+      query.limit = () => query;
       query.maybeSingle = async () => {
         const found = (tables[table] || []).find(row =>
           Object.entries(query.filters).every(([key, value]) => row[key] === value)
