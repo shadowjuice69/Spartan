@@ -165,6 +165,62 @@ test('event must be authored by the verified bot', async () => {
   assert.equal(sb.tables.spartan_intel_records.length, 0);
 });
 
+test('all six retained messages classify through the existing Bot Intel classifier', async () => {
+  const fixtures = [
+    {
+      eventId: '0c975d16-094c-4d5b-80b8-498ed6234fb5',
+      sourceId: '1564522035852349561',
+      content: ':moneybag: Sky [sk#] sent __8,809 gold coins__ to Chapter One [mezl]',
+      pageKind: 'aid',
+    },
+    {
+      eventId: '1a5e34ca-7248-4bfc-b777-8caf0b93d000',
+      sourceId: '1564522293000929331',
+      content: ':detective::green_heart: waterfall rive#  <<__spy on defense__ **| sexy dryad (6:7)**>> **7033**|5 sent (0.02)|0.4 (m.0.46) vs 3.49 (m.3.6)|rNW 1.01',
+      pageKind: 'thievery',
+    },
+    {
+      eventId: '038c6d6d-8bdf-4135-8118-9762c25e0910',
+      sourceId: '1564522337460682854',
+      content: ':crossed_swords: waterfall [**rive#**] attacked __sexy dryad__ (6:7)|captured: **22**|loss: **18 Skeletons and 18 horses**|kills: **6 (+9 prisoners)**|return: 10.59|21 spec creds|56 peasants|7124off (1 gens)',
+      pageKind: 'news',
+    },
+    {
+      eventId: 'b248deca-1a6d-4c72-9cbd-b895a0791842',
+      sourceId: '1564522380750233632',
+      content: ':detective::green_heart: waterfall rive#  <<__spy on defense__ **| sexy dryad (6:7)**>> **6905**|5 sent (0.02)|0.4 (m.0.46) vs 3.49 (m.3.6)|rNW 1.01',
+      pageKind: 'thievery',
+    },
+    {
+      eventId: 'edf8edf3-7ec5-478a-96ab-87782077c0a1',
+      sourceId: '1564522509087539261',
+      content: ':detective::green_heart: waterfall rive#  <<__spy on defense__ **| sexy dryad (6:7)**>> **6728**|5 sent (0.02)|0.4 (m.0.46) vs 3.49 (m.3.6)|rNW 1.01',
+      pageKind: 'thievery',
+    },
+    {
+      eventId: 'd5e2d94d-19bd-4b17-9173-036159680afd',
+      sourceId: '1564560942488879216',
+      content: ':detective::green_heart: Hearthstone legole#  <<__spy on defense__ **| Do you Swallow (6:7)**>> **10544**|17 sent (0.05)|0.95 (m.1.09) vs 2.74 (m.2.82)|rNW 1.06',
+      pageKind: 'thievery',
+    },
+  ];
+
+  for (const fixture of fixtures) {
+    const event = makeEvent(fixture.eventId, {
+      message_id: fixture.sourceId,
+      content: fixture.content,
+    });
+    const sb = makeSupabase({ event, flow: makeFlow(event) });
+    const result = await recoverRetainedBotEvent(sb, fixture.eventId, {
+      execute: true,
+      projectBotIntel: syncBotIntelRecord,
+    });
+    assert.equal(result.status, 'inserted', fixture.eventId);
+    assert.equal(result.pageKind, fixture.pageKind, fixture.eventId);
+    assert.equal(sb.tables.spartan_intel_records.length, 1, fixture.eventId);
+  }
+});
+
 test('dry run reports candidates but never calls the projector', async () => {
   const sb = makeSupabase();
   let called = false;
