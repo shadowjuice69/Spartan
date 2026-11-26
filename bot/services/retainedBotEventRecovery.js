@@ -1,10 +1,10 @@
 const RETAINED_BOT_EVENT_ALLOWLIST = Object.freeze({
-  '0c975d16-094c-4d5b-80b8-498ed6234fb5': { queueId: 11480, sourceId: '1564522035852349561' },
-  '1a5e34ca-7248-4bfc-b777-8caf0b93d000': { queueId: 11483, sourceId: '1564522293000929331' },
-  '038c6d6d-8bdf-4135-8118-9762c25e0910': { queueId: 11484, sourceId: '1564522337460682854' },
-  'b248deca-1a6d-4c72-9cbd-b895a0791842': { queueId: 11485, sourceId: '1564522380750233632' },
-  'edf8edf3-7ec5-478a-96ab-87782077c0a1': { queueId: 11487, sourceId: '1564522509087539261' },
-  'd5e2d94d-19bd-4b17-9173-036159680afd': { queueId: 11490, sourceId: '1564560942488879216' },
+  '0c975d16-094c-4d5b-80b8-498ed6234fb5': { queueId: 11480, flowId: '5bd8321d-a3df-4de7-aa19-ab02a0e471c9', sourceId: '1564522035852349561' },
+  '1a5e34ca-7248-4bfc-b777-8caf0b93d000': { queueId: 11483, flowId: 'a5667004-c6a2-45cd-b3a7-75d14819904b', sourceId: '1564522293000929331' },
+  '038c6d6d-8bdf-4135-8118-9762c25e0910': { queueId: 11484, flowId: '3dfcc31b-0d8b-449e-b443-b8816b547224', sourceId: '1564522337460682854' },
+  'b248deca-1a6d-4c72-9cbd-b895a0791842': { queueId: 11485, flowId: '94b20c96-ca63-488b-bec7-135208a826b2', sourceId: '1564522380750233632' },
+  'edf8edf3-7ec5-478a-96ab-87782077c0a1': { queueId: 11487, flowId: '040cc1c5-f51a-4644-94de-5c08795421af', sourceId: '1564522509087539261' },
+  'd5e2d94d-19bd-4b17-9173-036159680afd': { queueId: 11490, flowId: '6b7bbf50-6289-4741-92b5-e7c86157cdab', sourceId: '1564560942488879216' },
 });
 
 function captureIdForEvent(eventId) {
@@ -26,6 +26,7 @@ async function findExistingIntel(sb, captureId, sourceId) {
     const { data, error } = await sb.from('spartan_intel_records')
       .select('id,capture_id,source_id')
       .eq('source_id', sourceId)
+      .limit(1)
       .maybeSingle();
     if (error) throw new Error(`recovery source_id pre-check failed: ${error.message}`);
     if (data) return { reason: 'source_id', row: data };
@@ -51,6 +52,7 @@ async function recoverRetainedBotEvent(sb, eventId, options = {}) {
   const captureId = captureIdForEvent(eventId);
   const { data: flow, error: flowError } = await sb.from('spartan_data_flow')
     .select('*')
+    .eq('flow_id', allowlisted.flowId)
     .eq('capture_id', captureId)
     .eq('source', 'discord-bot')
     .eq('page_kind', 'bot_event')
@@ -60,7 +62,7 @@ async function recoverRetainedBotEvent(sb, eventId, options = {}) {
   if (flow.source_id !== allowlisted.sourceId) {
     return { eventId, status: 'rejected', reason: 'flow_source_id_mismatch' };
   }
-  if (flow.capture_id !== captureId) {
+  if (flow.flow_id !== allowlisted.flowId || flow.capture_id !== captureId) {
     return { eventId, status: 'rejected', reason: 'capture_id_mismatch' };
   }
 
