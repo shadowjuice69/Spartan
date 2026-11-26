@@ -42,6 +42,7 @@ async function recoverRetainedBotEvent(sb, eventId, options = {}) {
   const { data: event, error: eventError } = await sb.from('spartan_bot_events')
     .select('event_id,direction,event_type,discord_user_id,discord_channel_id,discord_guild_id,message_id,content,metadata,created_at')
     .eq('event_id', eventId)
+    .limit(1)
     .maybeSingle();
   if (eventError) throw new Error(`source event lookup failed for ${eventId}: ${eventError.message}`);
   if (!event) return { eventId, status: 'skipped', reason: 'source_missing' };
@@ -56,6 +57,7 @@ async function recoverRetainedBotEvent(sb, eventId, options = {}) {
     .eq('capture_id', captureId)
     .eq('source', 'discord-bot')
     .eq('page_kind', 'bot_event')
+    .limit(1)
     .maybeSingle();
   if (flowError) throw new Error(`source flow lookup failed for ${eventId}: ${flowError.message}`);
   if (!flow) return { eventId, status: 'skipped', reason: 'source_flow_missing' };
