@@ -46,25 +46,37 @@ Do not rerun the confirmed call just because a client timed out. First inspect `
 
 ## Post-transition verification
 
-Use read-only checks:
+Run these checks only after a confirmed transition. They are read-only. Replace `<ending_age>` in the archive query with the actual numeric age schema suffix (for example, schema `age_117`).
 
 ```sql
--- The new age should be current.
-select key, value, updated_at
-from public.bot_settings
-where key = 'current_age';
-
--- Confirm the transition was logged.
-select ending_age, new_age, action, created_at, summary
+-- Latest transition log entries.
+select *
 from public.spartan_age_log
 order by created_at desc
 limit 5;
+
+-- Current age setting.
+select *
+from public.bot_settings
+where key = 'current_age';
 
 -- Confirm the archive schema exists.
 select schema_name
 from information_schema.schemata
 where schema_name = 'age_<ending_age>';
+
+-- Confirm archived Intel count.
+-- Replace age_<ending_age> with the actual schema identifier before running.
+select count(*) as archived_intel_count
+from age_<ending_age>.spartan_intel_records;
+
+-- Live Intel should be empty immediately after reset, or contain only
+-- legitimate captures created after the transition.
+select count(*) as live_intel_count
+from public.spartan_intel_records;
 ```
+
+Compare `archived_intel_count` with the preview's `rows_before` count for `spartan_intel_records`. Investigate any discrepancy; account for any legitimate writes between preview and transition rather than assuming counts must match exactly. For live Intel, distinguish post-reset captures from rows that should have been archived; do not delete rows to force a zero count.
 
 Then verify that expected archive tables exist and contain the rows indicated by the preview, and that the live tables were cleared as described by `will_clear`. Check the bot's age/rules status and confirm builds were recalculated for the new age.
 
