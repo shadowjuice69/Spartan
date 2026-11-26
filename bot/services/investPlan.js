@@ -39,7 +39,7 @@ function rankCategory(sciences, currentBooks = {}) {
     .map(([name, value]) => {
       const have = Number(currentBooks[bookKey(name)]) || 0;
       const targetShare = totalWeight ? (Number(value.value) || 0) / totalWeight : 0;
-      const haveShare = totalBooks ? have / totalBooks : 0;
+      const haveShare = totalWeight > 0 && totalBooks > 0 ? have / totalBooks : 0;
       return {
         name,
         weight: Number(value.value) || 0,
