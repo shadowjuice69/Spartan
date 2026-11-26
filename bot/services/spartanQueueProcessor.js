@@ -274,6 +274,7 @@ async function syncBotIntelRecord(sb, flow, capture, state, options = {}) {
       const { data: existing, error: existingError } = await sb.from('spartan_intel_records')
         .select('id,capture_id,source_id')
         .eq('source_id', sourceId)
+        .limit(1)
         .maybeSingle();
       if (existingError) throw new Error(`bot Intel recovery source_id check: ${existingError.message}`);
       if (existing) return { skippedExisting: true, reason: 'source_id', pageKind: null };
