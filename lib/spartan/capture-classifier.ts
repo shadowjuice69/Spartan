@@ -41,7 +41,7 @@ export function classifyCapture(urlValue: unknown, rawTextValue: unknown, scrape
     [/\/council_science(?:$|[?#/])/, 'science', 0.95, 'Utopia council science summary URL'],
     [/\/council_internal(?:$|[?#/])/, 'buildings', 0.95, 'Utopia council internal (buildings) summary URL'],
     [/(?:^|_)news(?:$|[?#/])/, 'news', 0.98, 'Utopia news URL'],
-    [/\/war(?:$|[?#/])|war/, 'war', 0.9, 'War-related URL'],
+    [/\/war(?:$|[?#/])|\/war_forum(?:$|[?#/])/, 'war', 0.9, 'Utopia war path URL'],
     [/\/age(?:$|[?#/])|age.?stats|hall.?of.?fame/, 'age_stats', 0.9, 'Age statistics URL'],
     [/\/province(?:$|[?#/])|\/state(?:$|[?#/])|\/overview(?:$|[?#/])/, 'province_state', 0.9, 'Province/state URL'],
   ]
@@ -64,6 +64,11 @@ export function classifyCapture(urlValue: unknown, rawTextValue: unknown, scrape
   for (const [pattern, pageKind, confidence, reason] of contentRules) {
     if (pattern.test(raw)) return { pageKind, source: 'url+content', confidence, reason, retentionClass: 'intel_48h' }
   }
-  if (scraper) return { pageKind: scraper.replace(/[^a-z0-9_-]+/g, '_') || 'unknown', source: 'fallback', confidence: 0.35, reason: 'URL/content did not identify the page; scraper label retained only as a low-confidence fallback', retentionClass: 'intel_48h' }
+  if (scraper) {
+    const kind = scraper.replace(/[^a-z0-9_-]+/g, '_') || 'unknown'
+    const warScraperKinds = new Set(['war', 'war_forum'])
+    const retentionClass = warScraperKinds.has(kind) ? 'war_until_age_end' : 'intel_48h'
+    return { pageKind: kind, source: 'fallback', confidence: 0.35, reason: 'URL/content did not identify the page; scraper label retained only as a low-confidence fallback', retentionClass }
+  }
   return { pageKind: 'unknown', source: 'fallback', confidence: 0.1, reason: 'No reliable page classification was available; raw capture preserved', retentionClass: 'intel_48h' }
 }
