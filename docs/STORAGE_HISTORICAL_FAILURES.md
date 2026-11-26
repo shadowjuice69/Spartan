@@ -46,9 +46,56 @@ A historical-failure list is also stored under:
 
 It contains the six capture IDs, documentation timestamp, policy, and disposition note. The registry metadata update did not modify the six storage rows or the lifetime counters.
 
-## Active storage failure query
+## Verification checklist
 
-Use this query for operational active-incident lists and counts. It excludes only the six documented IDs from the registry metadata; any other failed row (including a row with a null capture ID) remains visible.
+Run these read-only checks before calling the historical-failure documentation complete.
+
+### Six rows remain unchanged
+
+```sql
+select capture_id, processing_status, failure_reason, failed_at, processing_attempts
+from public.spartan_internal_storage
+where capture_id in (
+  '2cae1328-4607-4cd6-be2c-c9f202949202',
+  'ce15f3af-594a-4df4-b065-b4f5c829cceb',
+  '0e459fa9-ba9f-43e0-aefc-e8714a72c5e0',
+  '6c202ff5-51ea-431d-94ad-98f88e22f346',
+  'ed25f197-a8dc-4e84-b9d1-ccaeb982ea77',
+  '3a94f784-f515-4b0e-9c64-174ce84f3710'
+)
+order by failed_at;
+```
+
+Expected: exactly six rows, all still `failed`, with their original reasons/timestamps and one attempt. Compare with the capture-ID table above.
+
+### Worker selection remains unchanged
+
+Inspect `lib/spartan/internal-storage.ts` and confirm `processStorageQueue` still selects only:
+
+```ts
+.eq('processing_status', 'stored')
+```
+
+Do not broaden the worker query to include failed rows.
+
+### Latest steward cycle
+
+```sql
+select
+  steward_key,
+  last_status,
+  metadata -> 'last_cycle' as last_cycle,
+  error_count,
+  processed_count
+from public.spartan_steward_registry
+where steward_key = 'storage';
+```
+
+`last_cycle` should describe the latest worker run (including its timestamp and per-cycle failed count); it should not count the six historical rows again. `error_count` remains lifetime cumulative.
+
+### Active-failure query
+
+Use this query for operational active-incident lists and counts. It excludes only the six documented IDs from registry metadata; any other failed row (including a row with a null capture ID) remains visible.
 
 ```sql
 select
@@ -74,4 +121,4 @@ where s.processing_status = 'failed'
 order by coalesce(s.failed_at, s.updated_at) desc;
 ```
 
-For an active count, wrap the same filtered query in `select count(*)`. Do not use the raw count of every `processing_status = 'failed'` row as the active-incident total.
+Expected at the verification checkpoint: zero rows, unless genuine new failures have occurred. For an active count, wrap the same filtered query in `select count(*)`. Do not use the raw count of every `processing_status = 'failed'` row as the active-incident total.
