@@ -256,6 +256,30 @@ async function syncBotIntelRecord(sb, flow, capture, state, options = {}) {
     return null;
   }
 
+  // The one-time retained-event recovery uses stricter identity checks than the
+  // live vault-backed path. Never let a composite upsert bypass capture_id's
+  // separate production UNIQUE constraint.
+  const sourceId = flow.source_id || discord.message_id || flow.capture_id;
+  if (options.recoveryMode) {
+    const captureIds = [...new Set([flow.capture_id, String(flow.capture_id || '').replace(/^bot-/, '')])];
+    for (const candidate of captureIds) {
+      const { data: existing, error: existingError } = await sb.from('spartan_intel_records')
+        .select('id,capture_id,source_id')
+        .eq('capture_id', candidate)
+        .maybeSingle();
+      if (existingError) throw new Error(`bot Intel recovery capture_id check: ${existingError.message}`);
+      if (existing) return { skippedExisting: true, reason: 'capture_id', pageKind: null };
+    }
+    if (sourceId) {
+      const { data: existing, error: existingError } = await sb.from('spartan_intel_records')
+        .select('id,capture_id,source_id')
+        .eq('source_id', sourceId)
+        .maybeSingle();
+      if (existingError) throw new Error(`bot Intel recovery source_id check: ${existingError.message}`);
+      if (existing) return { skippedExisting: true, reason: 'source_id', pageKind: null };
+    }
+  }
+
   // These vocabularies are derived directly from the Magic/Mystics and
   // Thievery sections of utopia-wiki.html. The message operation name is
   // normalized before matching, so Discord formatting such as
@@ -392,9 +416,9 @@ async function syncBotIntelRecord(sb, flow, capture, state, options = {}) {
 
   // Keep each source capture as historical evidence. Do not delete older
   // projections merely because a later operation has the same identity.
-  const { error } = await sb.from('spartan_intel_records').upsert({
+  const intelRow = {
     capture_id: flow.capture_id,
-    source_vault_id: capture.id,
+    source_vault_id: options.recoveryMode ? null : capture.id,
     user_id: capture.user_id || null,
     province_id: flow.province_id || null,
     kingdom_id: sourceKingdom,
@@ -402,7 +426,7 @@ async function syncBotIntelRecord(sb, flow, capture, state, options = {}) {
     target_kingdom_id: targetKingdom,
     captured_at: capturedAt,
     source: 'discord-bot',
-    source_id: flow.source_id || discord.message_id || flow.capture_id,
+    source_id: sourceId,
     url: capture.url || null,
     page_kind: pageKind,
     intel_type: intelType,
@@ -420,7 +444,21 @@ async function syncBotIntelRecord(sb, flow, capture, state, options = {}) {
     parsed_payload: parsedPayload,
     content_hash: capture.content_hash || null,
     updated_at: new Date().toISOString()
-  }, { onConflict: 'capture_id,intel_type,province_id,kingdom_id' });
+  };
+
+  let error;
+  if (options.recoveryMode) {
+    // Plain INSERT is intentional: production has UNIQUE(capture_id) as well
+    // as the composite unique index used by the live projection path.
+    ({ error } = await sb.from('spartan_intel_records').insert(intelRow));
+    if (error?.code === '23505') {
+      return { pageKind, confidence, intelKey, kingdomId: sourceKingdom, skippedExisting: true, reason: 'unique_conflict' };
+    }
+  } else {
+    ({ error } = await sb.from('spartan_intel_records').upsert(intelRow, {
+      onConflict: 'capture_id,intel_type,province_id,kingdom_id'
+    }));
+  }
 
   if (error) throw new Error(`bot intel projection: ${error.message}`);
   return { pageKind, confidence, intelKey, kingdomId: sourceKingdom, skippedExisting: false };
@@ -759,4 +797,4 @@ async function runBacklogSteward() {
 }
 function start() { if (timer || startupBackfillRunning) return; if (process.env.SPARTAN_PROCESSOR_ENABLED === 'false') { logger.info('[SPARTAN PROCESSOR] disabled by SPARTAN_PROCESSOR_ENABLED=false'); return; } stewardSystem.start(); logger.info(`[SPARTAN PROCESSOR] starting worker=${WORKER_ID} interval=${INTERVAL_MS}ms batch=${BATCH_SIZE}`); const sb = supabaseService.getClient(); startupBackfillRunning = true; backfillMissingBotIntel(sb).catch(error => logger.error(`[SPARTAN INTEL BACKFILL] failed: ${error.stack || error.message}`)).finally(() => { startupBackfillRunning = false; processBatch(); timer = setInterval(processBatch, INTERVAL_MS); backlogStewardTimer = setInterval(runBacklogSteward, BACKLOG_STEWARD_INTERVAL_MS); logger.info(`[SPARTAN BACKLOG STEWARD] scheduled interval=${BACKLOG_STEWARD_INTERVAL_MS}ms`); }); }
 function stop() { if (timer) clearInterval(timer); if (backlogStewardTimer) clearInterval(backlogStewardTimer); timer = null; backlogStewardTimer = null; }
-module.exports = { start, stop, processBatch, processOne, runBacklogSteward, isStructuredGameIntelMessage, extractBotOperationMarkers, mergeProjectionState };
+module.exports = { start, stop, processBatch, processOne, runBacklogSteward, isStructuredGameIntelMessage, extractBotOperationMarkers, mergeProjectionState, syncBotIntelRecord };
