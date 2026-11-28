@@ -74,10 +74,39 @@ async function resolveAnchor(): Promise<Anchor> {
   }
   if (!registry?.province_id) throw new Error('Your Spartan province is not linked to the Utopia clock.')
 
-  const { data: captures, error: captureError } = await db.from('spartan_intel_records').select('id,captured_at,raw_text,parsed_payload,page_kind,age,game_year,game_tick').in('province_id', [...new Set([String(account.id), String(registry.province_id)].filter(Boolean))]).eq('kingdom_id', account.province_location || '').eq('page_kind', 'throne').order('captured_at', { ascending: false }).limit(5)
+  const provinceIds = [...new Set([String(account.id), String(registry.province_id)].filter(Boolean))]
+  const kingdomId = account.province_location || ''
+
+  // Prefer light rows that already have game_tick/year (no raw_text egress).
+  const light = await db.from('spartan_intel_records')
+    .select('id,captured_at,page_kind,age,game_year,game_tick')
+    .in('province_id', provinceIds)
+    .eq('kingdom_id', kingdomId)
+    .eq('page_kind', 'throne')
+    .not('game_tick', 'is', null)
+    .order('captured_at', { ascending: false })
+    .limit(5)
+  if (light.error) throw light.error
+  for (const capture of light.data ?? []) {
+    const gameDate = parseGameDate(capture.game_tick)
+    const captured = new Date(capture.captured_at)
+    if (!gameDate || !Number.isFinite(captured.getTime())) continue
+    const nextTickAt = new Date(Math.floor(captured.getTime() / TICK_MS) * TICK_MS + TICK_MS)
+    if (!Number.isFinite(nextTickAt.getTime())) continue
+    return { ...gameDate, capturedAt: captured.toISOString(), nextTickAt: nextTickAt.toISOString(), source: 'spartan_intel_records.throne.light' }
+  }
+
+  // Fallback: small batch with body text only if light rows had no parseable date.
+  const { data: captures, error: captureError } = await db.from('spartan_intel_records')
+    .select('id,captured_at,raw_text,parsed_payload,page_kind,age,game_year,game_tick')
+    .in('province_id', provinceIds)
+    .eq('kingdom_id', kingdomId)
+    .eq('page_kind', 'throne')
+    .order('captured_at', { ascending: false })
+    .limit(5)
   if (captureError) throw captureError
   for (const capture of captures ?? []) {
-    const gameDate = findGameDate(capture.raw_text) ?? findGameDate(capture.parsed_payload)
+    const gameDate = findGameDate(capture.raw_text) ?? findGameDate(capture.parsed_payload) ?? parseGameDate(capture.game_tick)
     const captured = new Date(capture.captured_at)
     if (!gameDate || !Number.isFinite(captured.getTime())) continue
     const gameAge = findAge(capture.raw_text) ?? findAge(capture.parsed_payload)
