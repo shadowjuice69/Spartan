@@ -203,7 +203,7 @@ export async function GET(request: Request) {
         .select('id,capture_id,source_vault_id,user_id,province_id,kingdom_id,captured_at,created_at,updated_at,source,source_id,url,page_kind,classification_confidence,classification_reason,age,game_year,game_tick,retention_class,expires_at,raw_text,classification_source,parsed_payload,raw_payload,target_province_id,target_kingdom_id,intel_type,visibility,metrics,archived,archived_at')
         .in('page_kind', selectedKinds))
         .order('created_at', { ascending: false })
-        .limit(500)
+        .limit(200)
       data = result.data as any[] | null
       error = result.error
     }
@@ -227,7 +227,7 @@ export async function GET(request: Request) {
       else if (section === 'aid') vaultQuery = vaultQuery.or('raw_text.like.%:moneybag:%,raw_text.ilike.%We have sent%')
       else if (section === 'news') vaultQuery = vaultQuery.or('raw_text.ilike.%NEW KDNEWS:%,raw_text.ilike.%attacked%,raw_text.ilike.%invaded%')
       else if (section === 'war-room') vaultQuery = vaultQuery.or('raw_text.like.%:star2:%,raw_text.like.%:comet:%,raw_text.like.%:detective:%,raw_text.like.%:moneybag:%,raw_text.ilike.%NEW KDNEWS:%,raw_text.ilike.%Ritual:%,raw_text.ilike.%Dragon at us%,raw_text.like.%:dragon_face:%')
-      const vaultResult = await vaultQuery.order('captured_at', { ascending: false }).limit(500)
+      const vaultResult = await vaultQuery.order('captured_at', { ascending: false }).limit(200)
       if (vaultResult.error) throw vaultResult.error
       const projectedCaptureIds = new Set((data || []).map((row: any) => row.capture_id).filter(Boolean))
       const vaultOnlyRows = (vaultResult.data || [])
